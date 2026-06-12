@@ -12,7 +12,7 @@ Documents live at `~/plans/src/projects/<project>/<slug>.md`; the landing page i
 /plan:setup                                     # installs the local render stack
 ```
 
-`/plan:setup` may print a hint to run `make -C <plugin>/server system-install` (sudo) for the `/etc/hosts` entry + Caddy unit — run that yourself. Re-run `/plan:setup` after each `/plugin marketplace update plans`.
+The render stack installs in portability tiers: Tier 0 (any OS, no sudo) is config + venv + `make -C <plugin>/server serve` (foreground render at http://127.0.0.1:8001); Tier 1 (Linux/systemd) adds the per-user `plans-render` unit; Tier 2 (Linux/systemd, sudo) is `make -C <plugin>/server system-install` for the `/etc/hosts` entry + Caddy unit at http://plans.claude — run that yourself. On macOS only Tier 0 ships (launchd/hostname tiers are designed, not built). Templating uses `python3` (no `envsubst`/gettext dependency). Re-run `/plan:setup` after each `/plugin marketplace update plans`.
 
 ## Skills
 

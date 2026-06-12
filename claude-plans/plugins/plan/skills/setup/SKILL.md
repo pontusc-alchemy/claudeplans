@@ -16,6 +16,8 @@ make -C "${CLAUDE_PLUGIN_ROOT}/server" install
 
 Renders configs, copies assets, installs the landing-page stub if absent, creates/refreshes the venv, and enables the per-user `plans-render` unit.
 
+On macOS / non-systemd hosts only the portable tier applies: `make install` sets up config + venv, then the user runs `make -C "${CLAUDE_PLUGIN_ROOT}/server" serve` (foreground render at http://127.0.0.1:8001). The render-unit and system-install tiers below are Linux-only.
+
 ## 2 — Verify
 
 ```shell
