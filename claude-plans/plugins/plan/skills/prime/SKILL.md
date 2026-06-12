@@ -1,13 +1,13 @@
 ---
 name: prime
-description: Bootstrap session context from a saved plans document or project. Given a project name, enumerate its docs and brief from the active ones; given a slug, brief that document. Delegates the reading to a Haiku agent.
+description: Bootstrap session context from a saved plans document or project. Given a project name, enumerate its docs and brief from the active ones; given a slug, brief that document.
 user-invocable: true
 model-invocable: true
 allowed-tools: Bash, Agent
-model: haiku
+model: sonnet
 ---
 
-Load context from a saved document under `~/plans/src/projects/` by delegating the reads to a Haiku agent — never read large files in the main thread. The argument is a project name or a slug.
+Load context from a saved document under `~/plans/src/projects/` by delegating the reads to an agent — never read large files in the main thread. The argument is a project name or a slug.
 
 ## Resolve the source
 
@@ -30,9 +30,9 @@ For each `type: plan` doc, get the current phase deterministically:
 
 → `{current, phases:[{n,name,anchor,pill,tasks}]}`.
 
-## Brief (delegate, haiku)
+## Brief (delegate)
 
-Spawn one `Agent` (`general-purpose`, `haiku`) to read the resolved doc(s) and return a DENSE briefing — the `phases` output already supplies the current phase and task states, so the agent focuses on:
+Spawn one `Agent` (`general-purpose`, `sonnet`) to read the resolved doc(s) and return a DENSE briefing — the `phases` output already supplies the current phase and task states, so the agent focuses on:
 
 - title + intro; section list (level-2 `##`) in order;
 - locked decisions (`<span class="pill ok">`);

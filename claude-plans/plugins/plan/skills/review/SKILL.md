@@ -1,12 +1,12 @@
 ---
 name: review
-description: Reconcile a saved plan under ~/plans/src/projects against reality — verify which gaps, decisions, and phase tasks were actually implemented, report the drift, and on approval revise the document in place. Takes a plan slug. Closes the loop after implementation.
+description: Reconcile a saved plan under ~/plans/src/projects against reality — verify which gaps, decisions, and phase tasks were actually implemented, report the drift, and on approval revise the document in place. Can also deep-verify a chosen part of a plan on request. Takes a plan slug. Closes the loop after implementation.
 user-invocable: true
 model-invocable: false
 allowed-tools: Bash, Agent, Read, Edit
 ---
 
-Audit a plan document against the current state of the world, then bring the document back in sync — per `${CLAUDE_PLUGIN_ROOT}/AUTHORING.md`. The reverse loop: reconcile after work happened without the document. (`/plan:iterate` is the forward loop that mutates the doc as work happens.)
+Audit a plan document against the current state of the world, then bring the document back in sync — per `${CLAUDE_PLUGIN_ROOT}/AUTHORING.md`. The reverse loop: reconcile after work happened without the document. (`/plan:iterate` is the forward loop that mutates the doc as work happens.) Reconciliation is the default mode; the user may instead ask to strongly verify a specific part of the plan — same report-then-STOP shape, deeper verification.
 
 <!-- This skill uses portable `general-purpose` agent names, not the house scout/investigator roster — a deliberate divergence so it works without those agents installed. -->
 
@@ -28,6 +28,8 @@ For each claim, spawn read-only `general-purpose` (`sonnet`) agents to check wha
 - Are version pins still current? Check live (web/registry) — never trust training data.
 
 Verdict per claim: **done** / **drifted** (exists but differs — say how) / **still open**.
+
+**Deep verification:** when the user asks to strongly verify part of the plan — or a claim is high-stakes — escalate to an `opus` agent with a targeted brief: challenge the approach itself (correctness, assumptions, missed constraints), not just whether the artifacts exist. Include its findings in the report.
 
 ## 3 — Report, then revise on approval
 
