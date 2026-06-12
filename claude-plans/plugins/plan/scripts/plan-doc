@@ -1,0 +1,423 @@
+#!/usr/bin/env python3
+"""Create/lookup/metadata/lint helper for plan documents.
+
+Stdlib only — runs before the render venv exists. The frontmatter contract is
+six flat single-line `key: value` pairs; parsed by split-on-first-colon, not
+pyyaml. JSON to stdout, diagnostics to stderr, exit 0 / 1 (violation) / 2 (usage).
+"""
+
+import argparse
+import datetime
+import json
+import re
+import sys
+from pathlib import Path
+
+DOCS_ROOT = Path.home() / "plans" / "src"
+TEMPLATES = Path(__file__).resolve().parent.parent / "templates"
+PROJECTS_GLOB = "projects/*/*.md"
+
+TYPES = {"research", "plan"}
+STATUSES = {"draft", "active", "done"}
+REQUIRED_FIELDS = ["title", "description", "type", "status", "date"]
+PILL_CLASSES = {"ok", "gap", "partial"}
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+PHASE_RE = re.compile(r"^## Phase\s+(\d+)\s*[—-]\s*(.*?)\s*\{#([A-Za-z0-9-]+)\}\s*$")
+ANCHOR_RE = re.compile(r"\{#([A-Za-z0-9-]+)\}")
+PILL_RE = re.compile(r'<span class="pill (\w+)"')
+CHECKBOX_RE = re.compile(r"^\s*- \[([ xX])\]\s*(.*)$")
+
+
+def die(msg, code=2):
+  print(msg, file=sys.stderr)
+  sys.exit(code)
+
+
+def slugify(text):
+  s = text.strip().lower()
+  s = re.sub(r"[^a-z0-9]+", "-", s)
+  return s.strip("-")
+
+
+def today():
+  return datetime.date.today().isoformat()
+
+
+def parse_frontmatter(text):
+  if not text.startswith("---"):
+    return {}
+  parts = text.split("---", 2)
+  if len(parts) < 3:
+    return {}
+  fm = {}
+  for line in parts[1].splitlines():
+    line = line.strip()
+    if not line or ":" not in line:
+      continue
+    key, _, value = line.partition(":")
+    fm[key.strip()] = strip_quotes(value.strip())
+  return fm
+
+
+def strip_quotes(value):
+  if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+    inner = value[1:-1]
+    if value[0] == "'":
+      inner = inner.replace("''", "'")
+    return inner
+  return value
+
+
+def quote_value(value):
+  """Single-quote a value when bare YAML would misparse it; else emit as-is.
+
+  The lenient reader (strip_quotes) reverses this, so writes round-trip.
+  """
+  needs_quote = (
+    not value
+    or value != value.strip()
+    or value[0] in "\"'!&*?|>%@`#-[]{},"
+    or ": " in value
+    or value.endswith(":")
+    or "#" in value
+  )
+  if needs_quote:
+    return "'" + value.replace("'", "''") + "'"
+  return value
+
+
+def card(path):
+  fm = parse_frontmatter(path.read_text(encoding="utf-8"))
+  return {
+    "project": path.parent.name,
+    "slug": path.stem,
+    "path": str(path),
+    "title": fm.get("title", ""),
+    "description": fm.get("description", ""),
+    "type": fm.get("type", ""),
+    "status": fm.get("status", ""),
+    "date": fm.get("date", ""),
+  }
+
+
+def all_docs():
+  return sorted(DOCS_ROOT.glob(PROJECTS_GLOB))
+
+
+def _ensure_under_root(path):
+  resolved = path.resolve()
+  root = DOCS_ROOT.resolve()
+  if not resolved.is_relative_to(root):
+    die(f"path '{resolved}' is outside docs root '{root}'")
+  return resolved
+
+
+def resolve_path(arg):
+  p = Path(arg)
+  if p.is_file():
+    return _ensure_under_root(p)
+  matches = [d for d in all_docs() if d.stem == arg]
+  if len(matches) == 1:
+    return _ensure_under_root(matches[0])
+  if len(matches) > 1:
+    die(f"ambiguous slug '{arg}': {', '.join(str(m) for m in matches)}")
+  die(f"no document matches '{arg}'")
+
+
+def write_card(path):
+  print(json.dumps(card(path)))
+
+
+def replace_field(text, key, value):
+  parts = text.split("---", 2)
+  lines = parts[1].splitlines()
+  written = f"{key}: {quote_value(value)}"
+  out = []
+  found = False
+  for line in lines:
+    stripped = line.strip()
+    if stripped and ":" in stripped and stripped.partition(":")[0].strip() == key:
+      out.append(written)
+      found = True
+    else:
+      out.append(line)
+  if not found:
+    out.append(written)
+  # Rebuild the block deterministically: drop blank edge lines from the split,
+  # then re-emit with a single leading/trailing newline so the closing fence
+  # always lands on its own line regardless of how many fields were rewritten.
+  while out and not out[0].strip():
+    out.pop(0)
+  while out and not out[-1].strip():
+    out.pop()
+  parts[1] = "\n" + "\n".join(out) + "\n"
+  return "---".join(parts)
+
+
+def cmd_new(args):
+  slug = args.slug or slugify(args.title)
+  if not slug:
+    die("could not derive a slug; pass --slug")
+  project_dir = DOCS_ROOT / "projects" / args.project
+  is_new = not project_dir.exists()
+  project_dir.mkdir(parents=True, exist_ok=True)
+  if is_new:
+    print(f"creating new project '{args.project}'", file=sys.stderr)
+  target = project_dir / f"{slug}.md"
+  if target.exists():
+    die(f"'{target}' exists — revise in place, never -v2")
+  template = TEMPLATES / f"{args.kind}.md"
+  text = template.read_text(encoding="utf-8")
+  text = replace_field(text, "title", args.title)
+  if args.description:
+    text = replace_field(text, "description", args.description)
+  text = replace_field(text, "type", args.kind)
+  text = replace_field(text, "status", "draft")
+  text = replace_field(text, "date", today())
+  target.write_text(text, encoding="utf-8")
+  print(json.dumps({
+    "path": str(target),
+    "slug": slug,
+    "project": args.project,
+    "url": f"http://plans.claude/projects/{args.project}/{slug}.html",
+  }))
+
+
+def cmd_list(args):
+  out = []
+  for path in all_docs():
+    c = card(path)
+    if args.project and c["project"] != args.project:
+      continue
+    if args.status and c["status"] != args.status:
+      continue
+    out.append(c)
+  print(json.dumps(out))
+
+
+def cmd_resolve(args):
+  arg = args.arg
+  project_dir = DOCS_ROOT / "projects" / arg
+  if project_dir.is_dir():
+    docs = [card(p) for p in sorted(project_dir.glob("*.md"))]
+    print(json.dumps({"kind": "project", "docs": docs}))
+    return
+  exact = [card(p) for p in all_docs() if p.stem == arg]
+  if len(exact) == 1:
+    print(json.dumps({"kind": "doc", "docs": exact}))
+    return
+  if len(exact) > 1:
+    print(json.dumps({"kind": "ambiguous", "docs": exact}))
+    return
+  substr = [card(p) for p in all_docs() if arg in p.stem]
+  if len(substr) == 1:
+    print(json.dumps({"kind": "doc", "docs": substr}))
+  elif len(substr) > 1:
+    print(json.dumps({"kind": "ambiguous", "docs": substr}))
+  else:
+    print(json.dumps({"kind": "none", "docs": []}))
+
+
+def cmd_status(args):
+  if args.value not in STATUSES:
+    die(f"status must be one of {sorted(STATUSES)}")
+  path = resolve_path(args.target)
+  text = path.read_text(encoding="utf-8")
+  text = replace_field(text, "status", args.value)
+  text = replace_field(text, "date", today())
+  path.write_text(text, encoding="utf-8")
+  write_card(path)
+
+
+def cmd_touch(args):
+  path = resolve_path(args.target)
+  text = path.read_text(encoding="utf-8")
+  text = replace_field(text, "date", today())
+  path.write_text(text, encoding="utf-8")
+  write_card(path)
+
+
+def parse_phases(text):
+  lines = text.splitlines()
+  starts = []
+  for i, line in enumerate(lines):
+    m = PHASE_RE.match(line)
+    if m:
+      starts.append((i, int(m.group(1)), m.group(2).strip(), m.group(3)))
+  phases = []
+  for idx, (i, n, name, anchor) in enumerate(starts):
+    end = starts[idx + 1][0] if idx + 1 < len(starts) else len(lines)
+    block = lines[i + 1:end]
+    pill = None
+    for line in block:
+      pm = PILL_RE.search(line)
+      if pm:
+        pill = pm.group(1)
+        break
+    tasks = []
+    for offset, line in enumerate(block):
+      cm = CHECKBOX_RE.match(line)
+      if cm:
+        tasks.append({
+          "line": i + 1 + offset + 1,
+          "checked": cm.group(1).lower() == "x",
+          "text": cm.group(2).strip(),
+        })
+    # Pill class is primary; when absent (house style keeps phase status in the
+    # exec-summary table), derive an effective status from the checkboxes:
+    # nonzero tasks all checked -> "ok", otherwise "open".
+    if pill is not None:
+      effective = "ok" if pill == "ok" else "open"
+    elif tasks and all(t["checked"] for t in tasks):
+      effective = "ok"
+    else:
+      effective = "open"
+    phases.append({
+      "n": n,
+      "name": name,
+      "anchor": anchor,
+      "pill": pill,
+      "effective": effective,
+      "tasks": tasks,
+    })
+  return phases
+
+
+def cmd_phases(args):
+  path = resolve_path(args.target)
+  fm = parse_frontmatter(path.read_text(encoding="utf-8"))
+  if fm.get("type") != "plan":
+    die(f"'{path}' is type: {fm.get('type')!r}, not plan")
+  phases = parse_phases(path.read_text(encoding="utf-8"))
+  current = None
+  for p in phases:
+    if p["effective"] != "ok":
+      current = p["n"]
+      break
+  print(json.dumps({"current": current, "phases": phases}))
+
+
+def check_doc(path):
+  errors = []
+  warnings = []
+  text = path.read_text(encoding="utf-8")
+  fm = parse_frontmatter(text)
+  for field in REQUIRED_FIELDS:
+    if not fm.get(field):
+      errors.append((1, f"missing required frontmatter field '{field}'"))
+  if fm.get("type") and fm["type"] not in TYPES:
+    errors.append((1, f"type '{fm['type']}' not in {sorted(TYPES)}"))
+  if fm.get("status") and fm["status"] not in STATUSES:
+    errors.append((1, f"status '{fm['status']}' not in {sorted(STATUSES)}"))
+  if fm.get("date") and not DATE_RE.match(fm["date"]):
+    errors.append((1, f"date '{fm['date']}' is not YYYY-MM-DD"))
+
+  body_start = 0
+  if text.startswith("---"):
+    parts = text.split("---", 2)
+    if len(parts) >= 3:
+      body_start = len(parts[0].splitlines()) + len(parts[1].splitlines()) + 2
+
+  lines = text.splitlines()
+  in_fence = False
+  for i, line in enumerate(lines):
+    n = i + 1
+    stripped = line.lstrip()
+    if stripped.startswith("```") or stripped.startswith("~~~"):
+      in_fence = not in_fence
+      continue
+    if in_fence:
+      continue
+    indent = len(line) - len(stripped)
+    if i >= body_start and indent <= 3 and stripped.startswith("# "):
+      errors.append((n, "body '# ' h1 — the page h1 comes from frontmatter title"))
+    for pm in PILL_RE.finditer(line):
+      if pm.group(1) not in PILL_CLASSES:
+        errors.append((n, f"pill class '{pm.group(1)}' not in {sorted(PILL_CLASSES)}"))
+    if line.startswith("## Phase"):
+      if not ANCHOR_RE.search(line):
+        errors.append((n, "phase heading missing {#anchor}"))
+    if "{#checklist}" in line:
+      warnings.append((n, "legacy anchor {#checklist} — current is {#gaps}"))
+
+  if fm.get("type") == "plan":
+    plan_phases = parse_phases(text)
+    if not plan_phases:
+      warnings.append((1, "type: plan with no phases"))
+    for ph in plan_phases:
+      if ph["pill"] is None and not ph["tasks"]:
+        warnings.append((
+          1,
+          f"phase {ph['n']} '{ph['name']}' has neither a pill nor tasks — status undeterminable",
+        ))
+
+  return errors, warnings
+
+
+def cmd_check(args):
+  if args.all:
+    targets = all_docs()
+  else:
+    targets = [resolve_path(a) for a in args.targets]
+  if not targets:
+    die("nothing to check; pass slugs/paths or --all")
+  had_error = False
+  for path in targets:
+    errors, warnings = check_doc(path)
+    for line, msg in errors:
+      print(f"{path}:{line}: error: {msg}", file=sys.stderr)
+      had_error = True
+    for line, msg in warnings:
+      print(f"{path}:{line}: warning: {msg}", file=sys.stderr)
+  sys.exit(1 if had_error else 0)
+
+
+def build_parser():
+  p = argparse.ArgumentParser(prog="plan-doc")
+  sub = p.add_subparsers(dest="cmd", required=True)
+
+  n = sub.add_parser("new")
+  n.add_argument("project")
+  n.add_argument("kind", choices=["research", "plan"])
+  n.add_argument("title")
+  n.add_argument("--slug")
+  n.add_argument("--description")
+  n.set_defaults(func=cmd_new)
+
+  l = sub.add_parser("list")
+  l.add_argument("project", nargs="?")
+  l.add_argument("--status", choices=sorted(STATUSES))
+  l.set_defaults(func=cmd_list)
+
+  r = sub.add_parser("resolve")
+  r.add_argument("arg")
+  r.set_defaults(func=cmd_resolve)
+
+  s = sub.add_parser("status")
+  s.add_argument("target")
+  s.add_argument("value")
+  s.set_defaults(func=cmd_status)
+
+  t = sub.add_parser("touch")
+  t.add_argument("target")
+  t.set_defaults(func=cmd_touch)
+
+  ph = sub.add_parser("phases")
+  ph.add_argument("target")
+  ph.set_defaults(func=cmd_phases)
+
+  c = sub.add_parser("check")
+  c.add_argument("targets", nargs="*")
+  c.add_argument("--all", action="store_true")
+  c.set_defaults(func=cmd_check)
+
+  return p
+
+
+def main():
+  args = build_parser().parse_args()
+  args.func(args)
+
+
+if __name__ == "__main__":
+  main()

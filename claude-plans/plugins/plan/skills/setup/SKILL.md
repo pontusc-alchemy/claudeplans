@@ -10,21 +10,20 @@ Install the bundled hosting idempotently into the stable runtime dir `~/.config/
 
 ## 1 — User-scoped install (no sudo)
 
-Run:
-
 ```shell
 make -C "${CLAUDE_PLUGIN_ROOT}/server" install
 ```
 
-This renders `mkdocs.yml`, copies the configs/assets, creates/refreshes the venv, and enables the per-user `plans-render` unit.
+Renders configs, copies assets, installs the landing-page stub if absent, creates/refreshes the venv, and enables the per-user `plans-render` unit.
 
 ## 2 — Verify
 
 ```shell
 make -C "${CLAUDE_PLUGIN_ROOT}/server" status
+"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" check --all
 ```
 
-Units active + the landing page probe (`grid cards`) passing means the stack is healthy.
+Units active, the landing-page probe (`grid cards`) passing, and `check` clean means the stack is healthy.
 
 ## 3 — System step (sudo — the user runs it)
 

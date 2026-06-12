@@ -29,13 +29,17 @@ Documents live at `~/plans/src/projects/<project>/<slug>.md`; the landing page i
 .claude-plugin/marketplace.json   # marketplace "plans"
 plugins/plan/
 ├── .claude-plugin/plugin.json    # plugin "plan" (commit-SHA versioned, no version field)
+├── AUTHORING.md                  # the agent authoring contract (read by skills)
 ├── skills/{setup,research,write,prime,iterate,review}/SKILL.md
+├── scripts/plan-doc              # stdlib create/lookup/metadata/lint helper
 ├── templates/{research.md,plan.md}   # output contracts
 └── server/                        # render infra → ~/.config/plans-server/ via `make install`
-    ├── Makefile mkdocs.yml.tmpl gen_index.py extra.css
-    ├── AUTHORING.md requirements.txt Caddyfile
-    └── plans-render.service plans.service
+    ├── Makefile mkdocs.yml.tmpl gen_index.py extra.css index.md
+    ├── requirements.txt Caddyfile
+    └── plans-render.service plans.service.tmpl
 ```
+
+Operational note: `gen_index.py` hook changes require `systemctl --user restart plans-render` to take effect; docs and config changes hot-reload.
 
 ## Provenance
 

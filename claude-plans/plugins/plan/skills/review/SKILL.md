@@ -6,21 +6,18 @@ model-invocable: false
 allowed-tools: Bash, Agent, Read, Edit
 ---
 
-Audit a plan document against the current state of the world, then bring the document back in sync — per `${CLAUDE_PLUGIN_ROOT}/server/AUTHORING.md`. The reverse loop: reconcile after work happened without the document. (`/plan:iterate` is the forward loop that mutates the doc as work happens.)
+Audit a plan document against the current state of the world, then bring the document back in sync — per `${CLAUDE_PLUGIN_ROOT}/AUTHORING.md`. The reverse loop: reconcile after work happened without the document. (`/plan:iterate` is the forward loop that mutates the doc as work happens.)
 
-## Input
+<!-- This skill uses portable `general-purpose` agent names, not the house scout/investigator roster — a deliberate divergence so it works without those agents installed. -->
 
-Match the argument against `~/plans/src/projects/*/*.md` — same rule as `/plan:prime`: no clear single match → `ls ~/plans/src/projects/*/*.md` and ask. Don't guess.
+## Resolve & extract structure
 
-## 1 — Extract claims (delegate, haiku)
+```shell
+"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" resolve "<arg>"
+"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" phases <slug>
+```
 
-Spawn one `Agent` (`general-purpose`, `haiku`) to read the doc and return verbatim:
-
-- every `<span class="pill gap">` / `<span class="pill partial">` item with its surrounding sentence and section anchor;
-- every phase checklist item (`- [ ]` / `- [x]`) and its stated target;
-- every roadmap step (commands, file paths, config blocks) and its stated target;
-- every version pin;
-- the closing gaps/decisions checklist, item by item.
+Each → JSON; non-zero exit → relay stderr and stop. `resolve` `kind: ambiguous` → present and ask, don't guess. `phases` supplies every phase, its pill, and its checkbox states deterministically. Then spawn one `Agent` (`general-purpose`, `haiku`) to read the doc for what the script does not extract: the in-prose `pill gap` / `pill partial` claims with their surrounding sentence and anchor, the closing gaps/decisions checklist item by item, and every version pin with its stated target.
 
 ## 2 — Verify against reality (delegate, sonnet)
 
@@ -41,4 +38,5 @@ On approval, revise the doc **in place** — never spawn a `-v2`:
 - Flip pills for **done** items: `pill gap` / `pill partial` → `pill ok`; check off completed checklist items and advance phase pills. **drifted** / **still open** items keep their pill.
 - Where reality diverged, update the prose to match and mark it `!!! note "Revised YYYY-MM-DD"` (ISO date).
 - Append a dated entry to `## Review log {#review-log}` (create if absent): what was verified, what changed, what remains open.
-- Bump the frontmatter `date:` — the landing-page card date is generated from it.
+- Bump the date: `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" touch <slug>`.
+- When everything is reconciled (all phases `ok`, no open gaps), propose `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" status <slug> done`.

@@ -3,10 +3,8 @@
   display: inline-block;
   font-size: 11px;
   font-weight: 600;
-  padding: 2px 9px;
-  border-radius: 999px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  padding: 1px 7px;
+  border-radius: 2px;
   vertical-align: middle;
 }
 .pill.ok {
@@ -37,6 +35,11 @@
   border: 1px solid #30363d;
   border-radius: 5px;
   padding: 1px 6px;
+}
+
+/* Card footer: separate the status pill from the muted type/date text. */
+.grid.cards .pill {
+  margin-right: 0.6em;
 }
 
 /* Nav status icons for the lifecycle states (Material page-status feature). */

@@ -5,12 +5,12 @@ After=network.target
 
 [Service]
 Type=notify
-User=pontusc
-Group=pontusc
+User=${USER}
+Group=${USER}
 Environment=XDG_DATA_HOME=/var/lib/plans-caddy
 StateDirectory=plans-caddy
-ExecStart=/usr/bin/caddy run --config /home/pontusc/.config/plans-server/Caddyfile --adapter caddyfile
-ExecReload=/usr/bin/caddy reload --config /home/pontusc/.config/plans-server/Caddyfile --adapter caddyfile --force
+ExecStart=/usr/bin/caddy run --config ${HOME}/.config/plans-server/Caddyfile --adapter caddyfile
+ExecReload=/usr/bin/caddy reload --config ${HOME}/.config/plans-server/Caddyfile --adapter caddyfile --force
 Restart=on-failure
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 

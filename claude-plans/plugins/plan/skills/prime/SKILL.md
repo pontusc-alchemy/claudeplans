@@ -11,17 +11,32 @@ Load context from a saved document under `~/plans/src/projects/` by delegating t
 
 ## Resolve the source
 
-- **Project name** (a dir under `~/plans/src/projects/`): list its docs (`ls ~/plans/src/projects/<project>/*.md`). Brief from the `status: active` ones. If several are active, brief all; if none are, list them and ask. Don't guess.
-- **Slug:** match against `~/plans/src/projects/*/*.md`. No clear single match → `ls ~/plans/src/projects/*/*.md` and ask.
+```shell
+"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" resolve "<arg>"
+```
+
+→ JSON `{kind, docs}`; non-zero exit → relay stderr and stop.
+
+- `kind: project` → brief the `status: active` docs; if several are active brief all, if none are present the list and ask.
+- `kind: doc` → brief that document.
+- `kind: ambiguous` → present the candidates and ask. Don't guess.
+- Bare invocation (no argument) → `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" list` and present the tree.
+
+For each `type: plan` doc, get the current phase deterministically:
+
+```shell
+"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" phases <slug>
+```
+
+→ `{current, phases:[{n,name,anchor,pill,tasks}]}`.
 
 ## Brief (delegate, haiku)
 
-Spawn one `Agent` (`general-purpose`, `haiku`) to read the resolved doc(s) and return a DENSE briefing:
+Spawn one `Agent` (`general-purpose`, `haiku`) to read the resolved doc(s) and return a DENSE briefing — the `phases` output already supplies the current phase and task states, so the agent focuses on:
 
 - title + intro; section list (level-2 `##`) in order;
 - locked decisions (`<span class="pill ok">`);
 - open gaps/caveats (`pill gap` / `pill partial` spans, `!!! warning` / `!!! danger` admonitions);
-- for `type: plan`: the **current phase** (first phase whose pill is not `ok`) and its **unchecked `- [ ]` tasks**;
 - verbatim config / commands / paths / version pins.
 
 Relay the result as restored context and continue.

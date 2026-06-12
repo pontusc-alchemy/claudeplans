@@ -77,15 +77,14 @@ def _render_card(c):
   description = html.escape(c["description"])
   date = html.escape(c["date"])
   spans = []
-  if c["type"]:
-    spans.append(f'<span class="tag">{html.escape(str(c["type"]))}</span>')
   if c["status"]:
     status = str(c["status"])
     cls = STATUS_PILL.get(status, "gap")
     spans.append(f'<span class="pill {cls}">{html.escape(status)}</span>')
-  if c["tag"]:
-    spans.append(f'<span class="tag">{html.escape(str(c["tag"]))}</span>')
-  spans.append(f'<span class="muted">{date}</span>')
+  if c["type"]:
+    spans.append(f'<span class="muted">{html.escape(str(c["type"]))} · {date}</span>')
+  else:
+    spans.append(f'<span class="muted">{date}</span>')
   meta = " ".join(spans)
   return [
     "    <li>",

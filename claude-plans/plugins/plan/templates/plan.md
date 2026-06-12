@@ -11,7 +11,8 @@ tag:
 
 ## Executive summary
 
-<!-- Answer the user's explicit questions; link each to its phase via [anchor](#phase-1). -->
+<!-- Answer the user's explicit questions, then a phase/status pipe table:
+     | Phase | Anchor | Pill | Note |. Link each phase via [anchor](#phase-1). -->
 
 ## Phase 1 — <name> {#phase-1}
 
@@ -28,7 +29,7 @@ tag:
 
 - Criterion one met
 
-## Gaps & decisions {#checklist}
+## Gaps & decisions {#gaps}
 
 <!-- Cross-cutting open decisions; pill each (gap/partial/ok). -->
 

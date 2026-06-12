@@ -35,10 +35,11 @@ install: venv render-unit ## User-scoped setup (config + venv + render watcher, 
 config: ## Render config + copy assets into $(CONFIG_DIR) (idempotent)
 	@mkdir -p $(PLANS_SRC)/projects $(PLANS_SRC)/assets $(CONFIG_DIR)
 	envsubst '$$HOME' < $(SRC)mkdocs.yml.tmpl > $(CONFIG_DIR)/mkdocs.yml
-	cp $(SRC)gen_index.py $(SRC)requirements.txt $(SRC)Caddyfile $(SRC)AUTHORING.md $(CONFIG_DIR)/
-	cp $(SRC)plans.service $(CONFIG_DIR)/plans.service
+	envsubst '$$HOME $$USER' < $(SRC)plans.service.tmpl > $(CONFIG_DIR)/plans.service
+	cp $(SRC)gen_index.py $(SRC)requirements.txt $(SRC)Caddyfile $(CONFIG_DIR)/
 	rm -f $(PLANS_SRC)/assets/extra.css
 	cp $(SRC)extra.css $(PLANS_SRC)/assets/extra.css
+	@[ -f $(PLANS_SRC)/index.md ] || cp $(SRC)index.md $(PLANS_SRC)/index.md
 	@echo "config rendered to $(CONFIG_DIR)"
 .PHONY: config
 

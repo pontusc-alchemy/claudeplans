@@ -6,14 +6,17 @@ model-invocable: false
 allowed-tools: Bash, Agent, Read, Write, Edit
 ---
 
-Produce an **actionable** implementation plan, authored as Markdown per `${CLAUDE_PLUGIN_ROOT}/server/AUTHORING.md` — never write HTML, never touch the theme. This is the action cornerstone: where `/plan:research` gathers _what's possible_, `/plan:write` decides _what to do_ and _how_.
+Produce an **actionable** implementation plan, authored as Markdown per `${CLAUDE_PLUGIN_ROOT}/AUTHORING.md` — never write HTML, never touch the theme. This is the action cornerstone: where `/plan:research` gathers _what's possible_, `/plan:write` decides _what to do_ and _how_.
 
 Argument: `<project> [research-slug]`.
 
-## 0 — Scaffold from the template (never author from scratch)
+## 0 — Scaffold
 
-- Slug the plan to kebab-case. Copy `${CLAUDE_PLUGIN_ROOT}/templates/plan.md` to `~/plans/src/projects/<project>/<slug>.md`, creating the project dir if new (`mkdir -p`). Fill the scaffold — it is the output contract.
-- Author with the `Write`/`Edit` tools, never `cat >` heredocs — the guard-sensitive hook scans Bash command content and will false-positive on document text.
+```shell
+"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" new "<project>" plan "<title>" [--slug S]
+```
+
+→ JSON `{path, slug, project, url}`; non-zero exit → relay stderr and stop. A `creating new project '<p>'` warning on stderr is a typo guard — confirm the project with the user. Then fill the scaffold with `Write`/`Edit`; the template is the output contract.
 
 ## Input — where the plan comes from
 
@@ -21,12 +24,12 @@ Argument: `<project> [research-slug]`.
 - **From the conversation:** structure the plan we've worked out.
 - **From the repo:** any codebase context-gathering goes to `scout` agents — never `Explore` or `general-purpose` defaults.
 
-Expect to iterate: the user reviews and discusses while the plan is constructed.
+Expect to iterate: the user reviews and discusses while the plan is constructed. Lead with `## Executive summary` answering the user's explicit questions, each linking to its phase.
 
-## Make it actionable
+## On approval
 
-- Lead with `## Executive summary` answering the user's explicit questions, each linking to its phase via a descriptive anchor link.
-- Order the work into phases per AUTHORING v2: `## Phase N — <name> {#phase-n}`, each with a status pill (`gap` → `partial` → `ok`), a `- [ ]` checklist of exact commands/config/paths/version pins, and explicit **Exit criteria**.
-- Mark cross-cutting decisions in `## Gaps & decisions {#checklist}` with pills.
-- Leave `## Learnings {#learnings}` and `## Review log {#review-log}` as stubs — `/plan:iterate` and `/plan:review` fill them.
-- Flag unverified or risky claims with `!!! warning` / `!!! danger` admonitions.
+Once the user approves the plan, flip status:
+
+```shell
+"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" status <slug> active
+```
