@@ -17,18 +17,19 @@ Load context from a saved document under `~/plans/src/projects/` by delegating t
 
 → JSON `{kind, docs}`; non-zero exit → relay stderr and stop.
 
-- `kind: project` → brief the `status: active` docs; if several are active brief all, if none are present the list and ask.
+- `kind: project` → brief the `status: active` docs; if several are active brief all, if none, present the list and ask.
 - `kind: doc` → brief that document.
 - `kind: ambiguous` → present the candidates and ask. Don't guess.
+- `kind: none` → say no match and run `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" list` to present what exists.
 - Bare invocation (no argument) → `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" list` and present the tree.
 
-For each `type: plan` doc, get the current phase deterministically:
+For each `type: plan` doc, get the current phase deterministically — pass the resolved `path`:
 
 ```shell
-"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" phases <slug>
+"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" phases <path>
 ```
 
-→ `{current, phases:[{n,name,anchor,pill,tasks}]}`.
+→ `{current, phases:[{n,name,anchor,pill,effective,tasks}]}`.
 
 ## Brief (delegate)
 

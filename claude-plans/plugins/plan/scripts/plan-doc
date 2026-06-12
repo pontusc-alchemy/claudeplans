@@ -4,16 +4,19 @@
 Stdlib only — runs before the render venv exists. The frontmatter contract is
 six flat single-line `key: value` pairs; parsed by split-on-first-colon, not
 pyyaml. JSON to stdout, diagnostics to stderr, exit 0 / 1 (violation) / 2 (usage).
+
+The docs root defaults to ~/plans/src; override with the PLANS_SRC env var.
 """
 
 import argparse
 import datetime
 import json
+import os
 import re
 import sys
 from pathlib import Path
 
-DOCS_ROOT = Path.home() / "plans" / "src"
+DOCS_ROOT = Path(os.environ.get("PLANS_SRC", Path.home() / "plans" / "src"))
 TEMPLATES = Path(__file__).resolve().parent.parent / "templates"
 PROJECTS_GLOB = "projects/*/*.md"
 
@@ -22,6 +25,7 @@ STATUSES = {"draft", "active", "done"}
 REQUIRED_FIELDS = ["title", "description", "type", "status", "date"]
 PILL_CLASSES = {"ok", "gap", "partial"}
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]*\Z")
 PHASE_RE = re.compile(r"^## Phase\s+(\d+)\s*[—-]\s*(.*?)\s*\{#([A-Za-z0-9-]+)\}\s*$")
 ANCHOR_RE = re.compile(r"\{#([A-Za-z0-9-]+)\}")
 PILL_RE = re.compile(r'<span class="pill (\w+)"')
@@ -31,6 +35,12 @@ CHECKBOX_RE = re.compile(r"^\s*- \[([ xX])\]\s*(.*)$")
 def die(msg, code=2):
   print(msg, file=sys.stderr)
   sys.exit(code)
+
+
+def is_fence(line):
+  """True for a Markdown code-fence line (``` or ~~~), allowing indentation."""
+  stripped = line.lstrip()
+  return stripped.startswith("```") or stripped.startswith("~~~")
 
 
 def slugify(text):
@@ -73,6 +83,8 @@ def quote_value(value):
 
   The lenient reader (strip_quotes) reverses this, so writes round-trip.
   """
+  if "\n" in value or "\r" in value:
+    die("frontmatter values are single-line", 2)
   needs_quote = (
     not value
     or value != value.strip()
@@ -128,8 +140,10 @@ def write_card(path):
   print(json.dumps(card(path)))
 
 
-def replace_field(text, key, value):
+def replace_field(text, key, value, path=None):
   parts = text.split("---", 2)
+  if len(parts) < 3:
+    die(f"'{path}' has no frontmatter block", 1)
   lines = parts[1].splitlines()
   written = f"{key}: {quote_value(value)}"
   out = []
@@ -155,15 +169,20 @@ def replace_field(text, key, value):
 
 
 def cmd_new(args):
+  if not NAME_RE.match(args.project):
+    die(f"project '{args.project}' must match {NAME_RE.pattern}")
   slug = args.slug or slugify(args.title)
   if not slug:
     die("could not derive a slug; pass --slug")
+  if not NAME_RE.match(slug):
+    die(f"slug '{slug}' must match {NAME_RE.pattern}")
   project_dir = DOCS_ROOT / "projects" / args.project
+  target = project_dir / f"{slug}.md"
+  _ensure_under_root(target)
   is_new = not project_dir.exists()
   project_dir.mkdir(parents=True, exist_ok=True)
   if is_new:
     print(f"creating new project '{args.project}'", file=sys.stderr)
-  target = project_dir / f"{slug}.md"
   if target.exists():
     die(f"'{target}' exists — revise in place, never -v2")
   template = TEMPLATES / f"{args.kind}.md"
@@ -223,8 +242,8 @@ def cmd_status(args):
     die(f"status must be one of {sorted(STATUSES)}")
   path = resolve_path(args.target)
   text = path.read_text(encoding="utf-8")
-  text = replace_field(text, "status", args.value)
-  text = replace_field(text, "date", today())
+  text = replace_field(text, "status", args.value, path)
+  text = replace_field(text, "date", today(), path)
   path.write_text(text, encoding="utf-8")
   write_card(path)
 
@@ -232,34 +251,56 @@ def cmd_status(args):
 def cmd_touch(args):
   path = resolve_path(args.target)
   text = path.read_text(encoding="utf-8")
-  text = replace_field(text, "date", today())
+  text = replace_field(text, "date", today(), path)
   path.write_text(text, encoding="utf-8")
   write_card(path)
 
 
 def parse_phases(text):
   lines = text.splitlines()
+  # Per-line fence state so fenced phase headings, pills, and checkboxes are
+  # ignored (mirrors check_doc's toggle).
+  in_fence = []
+  fenced = False
+  for line in lines:
+    if is_fence(line):
+      fenced = not fenced
+      in_fence.append(True)  # the fence line itself is inside the fence span
+    else:
+      in_fence.append(fenced)
+  # Every out-of-fence '## ' heading bounds a phase block; the phase block ends
+  # at the NEXT such heading of any kind, not just the next '## Phase'.
+  heading_lines = [
+    i for i, line in enumerate(lines)
+    if not in_fence[i] and line.startswith("## ")
+  ]
   starts = []
   for i, line in enumerate(lines):
+    if in_fence[i]:
+      continue
     m = PHASE_RE.match(line)
     if m:
       starts.append((i, int(m.group(1)), m.group(2).strip(), m.group(3)))
   phases = []
-  for idx, (i, n, name, anchor) in enumerate(starts):
-    end = starts[idx + 1][0] if idx + 1 < len(starts) else len(lines)
-    block = lines[i + 1:end]
+  for i, n, name, anchor in starts:
+    end = next((h for h in heading_lines if h > i), len(lines))
+    block_idx = range(i + 1, end)
     pill = None
-    for line in block:
-      pm = PILL_RE.search(line)
+    for j in block_idx:
+      if in_fence[j]:
+        continue
+      pm = PILL_RE.search(lines[j])
       if pm:
         pill = pm.group(1)
         break
     tasks = []
-    for offset, line in enumerate(block):
-      cm = CHECKBOX_RE.match(line)
+    for j in block_idx:
+      if in_fence[j]:
+        continue
+      cm = CHECKBOX_RE.match(lines[j])
       if cm:
         tasks.append({
-          "line": i + 1 + offset + 1,
+          "line": j + 1,
           "checked": cm.group(1).lower() == "x",
           "text": cm.group(2).strip(),
         })
@@ -289,6 +330,11 @@ def cmd_phases(args):
   if fm.get("type") != "plan":
     die(f"'{path}' is type: {fm.get('type')!r}, not plan")
   phases = parse_phases(path.read_text(encoding="utf-8"))
+  if not phases:
+    print(
+      "no phase headings parsed — current:null does not mean done",
+      file=sys.stderr,
+    )
   current = None
   for p in phases:
     if p["effective"] != "ok":
@@ -317,6 +363,13 @@ def check_doc(path):
     parts = text.split("---", 2)
     if len(parts) >= 3:
       body_start = len(parts[0].splitlines()) + len(parts[1].splitlines()) + 2
+      # Each frontmatter line must be blank or a `key: value` pair; a stray line
+      # (e.g. from an injected newline) is silently dropped by the lenient
+      # reader but breaks gen_index's pyyaml — flag it here.
+      fm_base = len(parts[0].splitlines()) + 1
+      for k, fm_line in enumerate(parts[1].splitlines()):
+        if fm_line.strip() and ":" not in fm_line:
+          errors.append((fm_base + k + 1, "frontmatter line is not 'key: value'"))
 
   lines = text.splitlines()
   in_fence = False
@@ -335,8 +388,12 @@ def check_doc(path):
       if pm.group(1) not in PILL_CLASSES:
         errors.append((n, f"pill class '{pm.group(1)}' not in {sorted(PILL_CLASSES)}"))
     if line.startswith("## Phase"):
-      if not ANCHOR_RE.search(line):
-        errors.append((n, "phase heading missing {#anchor}"))
+      if not PHASE_RE.match(line):
+        errors.append((
+          n,
+          "malformed phase heading — expected '## Phase N — name {#anchor}' "
+          "(em-dash or hyphen separator)",
+        ))
     if "{#checklist}" in line:
       warnings.append((n, "legacy anchor {#checklist} — current is {#gaps}"))
 

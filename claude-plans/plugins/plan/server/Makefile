@@ -32,7 +32,7 @@ help: ## Show available targets
 
 install: venv ## User-scoped setup (config + venv; render watcher on Linux, no sudo)
 	@if [ "$(UNAME)" != "Linux" ]; then \
-		echo "Linux-only target (systemd). On macOS: 'make serve' renders at http://127.0.0.1:8001; launchd/hostname tiers are designed but not shipped."; \
+		echo "Tier 0 complete (config + venv). On macOS: run 'make serve' for the foreground render at http://127.0.0.1:8001; the systemd render/system tiers are Linux-only."; \
 		exit 0; \
 	fi
 	$(MAKE) render-unit
@@ -85,6 +85,7 @@ caddy: ## Install Caddy if missing (pacman)
 	fi
 
 hosts: ## Ensure '127.0.0.2 plans.claude' in /etc/hosts (idempotent, migrates old 'plans')
+	$(require_linux)
 	@if grep -qE '^127\.0\.0\.2[[:space:]]+plans\.claude$$' /etc/hosts; then \
 		echo "/etc/hosts entry already present"; \
 	else \

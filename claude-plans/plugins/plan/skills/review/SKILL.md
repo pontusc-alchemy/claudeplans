@@ -14,10 +14,10 @@ Audit a plan document against the current state of the world, then bring the doc
 
 ```shell
 "${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" resolve "<arg>"
-"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" phases <slug>
+"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" phases <path>
 ```
 
-Each → JSON; non-zero exit → relay stderr and stop. `resolve` `kind: ambiguous` → present and ask, don't guess. `phases` supplies every phase, its pill, and its checkbox states deterministically. Then spawn one `Agent` (`general-purpose`, `haiku`) to read the doc for what the script does not extract: the in-prose `pill gap` / `pill partial` claims with their surrounding sentence and anchor, the closing gaps/decisions checklist item by item, and every version pin with its stated target.
+Each → JSON; non-zero exit → relay stderr and stop. `resolve` `kind: ambiguous` → present and ask, don't guess; `kind: none` → say no match and run `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" list` to present what exists. Pass the resolved `path` (not the slug — it collides across projects) to `phases`/`touch`/`status`. `phases` supplies every phase, its pill, and its checkbox states deterministically. Then spawn one `Agent` (`general-purpose`, `haiku`) to read the doc for what the script does not extract: the in-prose `pill gap` / `pill partial` claims with their surrounding sentence and anchor, the closing gaps/decisions checklist item by item, and every version pin with its stated target.
 
 ## 2 — Verify against reality (delegate, sonnet)
 
@@ -40,5 +40,5 @@ On approval, revise the doc **in place** — never spawn a `-v2`:
 - Flip pills for **done** items: `pill gap` / `pill partial` → `pill ok`; check off completed checklist items and advance phase pills. **drifted** / **still open** items keep their pill.
 - Where reality diverged, update the prose to match and mark it `!!! note "Revised YYYY-MM-DD"` (ISO date).
 - Append a dated entry to `## Review log {#review-log}` (create if absent): what was verified, what changed, what remains open.
-- Bump the date: `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" touch <slug>`.
-- When everything is reconciled (all phases `ok`, no open gaps), propose `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" status <slug> done`.
+- Bump the date: `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" touch <path>`.
+- When everything is reconciled (all phases `ok`, no open gaps), propose `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" status <path> done`.

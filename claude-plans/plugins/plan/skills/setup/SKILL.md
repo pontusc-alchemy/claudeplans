@@ -25,6 +25,8 @@ make -C "${CLAUDE_PLUGIN_ROOT}/server" status
 "${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" check --all
 ```
 
+On non-Linux `make status` is unavailable; with `make serve` running, verify the page instead: `curl -fs http://127.0.0.1:8001/index.html | grep -q 'grid cards'`.
+
 Units active, the landing-page probe (`grid cards`) passing, and `check` clean means the stack is healthy.
 
 ## 3 — System step (sudo — the user runs it)
