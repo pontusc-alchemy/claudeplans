@@ -1,0 +1,6 @@
+{
+  "name": "plan",
+  "description": "Research → plan → iterate → review lifecycle with local MkDocs rendering",
+  "author": { "name": "Pontus Curtsson" },
+  "skills": ["./skills/"]
+}

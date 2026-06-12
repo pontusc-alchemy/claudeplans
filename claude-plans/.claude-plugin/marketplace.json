@@ -1,0 +1,11 @@
+{
+  "name": "plans",
+  "owner": { "name": "Pontus Curtsson" },
+  "plugins": [
+    {
+      "name": "plan",
+      "source": "./plugins/plan",
+      "description": "Research → plan → iterate → review lifecycle with local MkDocs rendering"
+    }
+  ]
+}

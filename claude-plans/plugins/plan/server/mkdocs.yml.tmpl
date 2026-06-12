@@ -1,0 +1,40 @@
+site_name: Plans
+site_url: http://plans.claude/
+
+docs_dir: ${HOME}/plans/src
+site_dir: ${HOME}/plans/site
+
+use_directory_urls: false
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: blue
+      accent: blue
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.top
+    - toc.follow
+    - toc.integrate
+    - content.code.copy
+
+plugins:
+  - search
+
+hooks:
+  - gen_index.py
+
+markdown_extensions:
+  - attr_list
+  - md_in_html
+  - admonition
+  - tables
+  - pymdownx.details
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+
+extra_css:
+  - assets/extra.css
