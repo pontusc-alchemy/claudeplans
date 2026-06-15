@@ -22,6 +22,7 @@ The render stack installs in portability tiers: Tier 0 (any OS, no sudo) is conf
 - `/plan:prime <project|slug>` — restore session context from a saved doc (model-invocable).
 - `/plan:iterate <plan>` — execute a plan phase by phase; checks off tasks, records learnings.
 - `/plan:review <plan>` — reconcile a plan against reality; revise in place on approval.
+- `/plan:update <doc> <change>` — make a targeted revision to a saved doc; bumps date and validates.
 
 ## Layout
 
@@ -30,7 +31,7 @@ The render stack installs in portability tiers: Tier 0 (any OS, no sudo) is conf
 plugins/plan/
 ├── .claude-plugin/plugin.json    # plugin "plan" (commit-SHA versioned, no version field)
 ├── AUTHORING.md                  # the agent authoring contract (read by skills)
-├── skills/{setup,research,write,prime,iterate,review}/SKILL.md
+├── skills/{setup,research,write,prime,iterate,review,update}/SKILL.md
 ├── scripts/plan-doc              # stdlib create/lookup/metadata/lint helper
 ├── templates/{research.md,plan.md}   # output contracts
 └── server/                        # render infra → ~/.config/plans-server/ via `make install`
