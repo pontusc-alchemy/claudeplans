@@ -11,12 +11,17 @@ tag:
 
 ## Executive summary
 
-<!-- Answer the user's explicit questions, then a phase/status pipe table:
-     | Phase | Anchor | Pill | Note |. Link each phase via [anchor](#phase-1). -->
+<!-- Answer the user's explicit questions; link each to its phase by its
+     `{#slug}` anchor. Do NOT hand-write a phase/status table — the phase tracker
+     is rendered automatically at the top of the page from the status lines. -->
 
-## Phase 1 — <name> {#phase-1}
+## First phase {#first-phase .phase}
 
-<span class="pill gap">gap</span>
+<span class="pill todo">todo</span>
+
+<!-- Heading is `## <name> {#slug .phase}`; the status line above is machine-managed —
+     advance it with `plan-doc set-phase <path> <slug> <status>`
+     (todo|doing|done|blocked), never by hand. Add phases with `plan-doc add-phase`. -->
 
 <!-- Exact, ordered work with commands, paths, and version pins. -->
 
@@ -31,9 +36,9 @@ tag:
 
 ## Gaps & decisions {#gaps}
 
-<!-- Cross-cutting open decisions; pill each (gap/partial/ok). -->
+<!-- Cross-cutting open decisions; pill each (todo/doing/done/blocked). -->
 
-- [ ] <span class="pill gap">gap</span> Decision still open
+- [ ] <span class="pill todo">todo</span> Decision still open
 
 ## Learnings {#learnings}
 

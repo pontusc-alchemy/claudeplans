@@ -17,14 +17,14 @@ Audit a plan document against the current state of the world, then bring the doc
 "${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" phases <path>
 ```
 
-Each → JSON; non-zero exit → relay stderr and stop. `resolve` `kind: ambiguous` → present and ask, don't guess; `kind: none` → say no match and run `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" list` to present what exists. Pass the resolved `path` (not the slug — it collides across projects) to `phases`/`touch`/`status`. `phases` supplies every phase, its pill, and its checkbox states deterministically. Then spawn one `Agent` (`general-purpose`, `haiku`) to read the doc for what the script does not extract: the in-prose `pill gap` / `pill partial` claims with their surrounding sentence and anchor, the closing gaps/decisions checklist item by item, and every version pin with its stated target.
+Each → JSON; non-zero exit → relay stderr and stop. `resolve` `kind: ambiguous` → present and ask, don't guess; `kind: none` → say no match and run `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" list` to present what exists. Pass the resolved `path` (not the slug — it collides across projects) to `phases`/`touch`/`status`. `phases` supplies every phase, its status (`todo|doing|done|blocked`), and its checkbox states deterministically. Then spawn one `Agent` (`general-purpose`, `haiku`) to read the doc for what the script does not extract: the in-prose status claims (pills `todo`/`doing`/`blocked`) with their surrounding sentence and anchor, the closing gaps/decisions checklist item by item, and every version pin with its stated target.
 
 ## 2 — Verify against reality (delegate, sonnet)
 
 For each claim, spawn read-only `general-purpose` (`sonnet`) agents to check what is actually true:
 
 - Do the asserted files/configs/resources exist as the plan specifies?
-- Were the `gap` / `partial` items and unchecked tasks built? Fully or partially?
+- Were the `todo` / `doing` / `blocked` phases and unchecked tasks built? Fully or partially?
 - Are version pins still current? Check live (web/registry) — never trust training data.
 
 Verdict per claim: **done** / **drifted** (exists but differs — say how) / **still open**.
@@ -37,8 +37,8 @@ Present the drift as a pipe table (claim · plan said · reality · verdict) and
 
 On approval, revise the doc **in place** — never spawn a `-v2`:
 
-- Flip pills for **done** items: `pill gap` / `pill partial` → `pill ok`; check off completed checklist items and advance phase pills. **drifted** / **still open** items keep their pill.
+- For **done** items, advance the phase via `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" set-phase <path> <slug> done` and check tasks via `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" task <path> <slug> <selector> --check`; **drifted** / **still open** keep their status.
 - Where reality diverged, update the prose to match and mark it `!!! note "Revised YYYY-MM-DD"` (ISO date).
 - Append a dated entry to `## Review log {#review-log}` (create if absent): what was verified, what changed, what remains open.
 - Bump the date: `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" touch <path>`.
-- When everything is reconciled (all phases `ok`, no open gaps), propose `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" status <path> done`.
+- When everything is reconciled (all phases `done`, no open gaps), propose `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" status <path> done`.

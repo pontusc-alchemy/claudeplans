@@ -46,7 +46,8 @@ config: ## Render config + copy assets into $(CONFIG_DIR) (idempotent)
 	@mkdir -p $(PLANS_SRC)/projects $(PLANS_SRC)/assets $(CONFIG_DIR)
 	python3 -c 'import os,sys,string; sys.stdout.write(string.Template(sys.stdin.read()).safe_substitute(HOME=os.environ.get("HOME","")))' < $(SRC)mkdocs.yml.tmpl > $(CONFIG_DIR)/mkdocs.yml
 	python3 -c 'import os,sys,string; sys.stdout.write(string.Template(sys.stdin.read()).safe_substitute(HOME=os.environ.get("HOME",""),USER=os.environ.get("USER","")))' < $(SRC)plans.service.tmpl > $(CONFIG_DIR)/plans.service
-	cp $(SRC)gen_index.py $(SRC)requirements.txt $(SRC)Caddyfile $(CONFIG_DIR)/
+	cp $(SRC)gen_index.py $(SRC)gen_phase_tracker.py $(SRC)requirements.txt $(SRC)Caddyfile $(CONFIG_DIR)/
+	cp $(SRC)../scripts/plan-doc $(CONFIG_DIR)/plan-doc
 	rm -f $(PLANS_SRC)/assets/extra.css
 	cp $(SRC)extra.css $(PLANS_SRC)/assets/extra.css
 	@[ -f $(PLANS_SRC)/index.md ] || cp $(SRC)index.md $(PLANS_SRC)/index.md

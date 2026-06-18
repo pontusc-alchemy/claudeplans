@@ -29,15 +29,16 @@ For each `type: plan` doc, get the current phase deterministically — pass the 
 "${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" phases <path>
 ```
 
-→ `{current, phases:[{n,name,anchor,pill,effective,tasks}]}`.
+→ `{current, tally:{done,total,blocked}, phases:[{ordinal,slug,name,status,note,has_phase_class,tasks}]}`.
 
 ## Brief (delegate)
 
 Spawn one `Agent` (`general-purpose`, `sonnet`) to read the resolved doc(s) and return a DENSE briefing — the `phases` output already supplies the current phase and task states, so the agent focuses on:
 
 - title + intro; section list (level-2 `##`) in order;
-- locked decisions (`<span class="pill ok">`);
-- open gaps/caveats (`pill gap` / `pill partial` spans, `!!! warning` / `!!! danger` admonitions);
+- done phases / locked decisions (`status: done`, `<span class="pill done">`);
+- open/blocked phases and caveats (`status: todo|doing|blocked`, `!!! warning` / `!!! danger` admonitions);
+- the `tally` (done/total, blocked count) and the current phase;
 - verbatim config / commands / paths / version pins.
 
 Relay the result as restored context and continue.

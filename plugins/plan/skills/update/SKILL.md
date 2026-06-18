@@ -20,7 +20,7 @@ Apply an intent-driven revision to a saved document — per `${CLAUDE_PLUGIN_ROO
 
 - Confirm the change with the user before editing — restate what will change and where.
 - Edit in place with `Edit`/`Write` per AUTHORING (raw `<span>` pills, single-line frontmatter, real em-dashes, relative `.md` links). Never spawn a `-v2`.
-- Body changes: revise the targeted section, option, pin, or gap directly. Flip pills (`gap`/`partial`/`ok`) to match the new decision state; check off or reopen gap-checklist items as the change warrants.
+- Body changes: revise the targeted section, option, pin, or gap directly. For a plan's phase status use `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" set-phase <path> <slug> <status>` (`todo|doing|done|blocked`) and toggle phase tasks with `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" task <path> <slug> <selector> --check|--uncheck` — don't hand-edit phase pills or checkboxes. Decision pills outside phases (e.g. items under `## Gaps & decisions`) remain hand-edited per AUTHORING.
 - Frontmatter changes: `title`/`description`/`tag`/`type` are single-line edits (the `---` block). For `status`, prefer `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" status <path> <state>` over hand-editing.
 - Structural moves (rename/move/delete) are out of scope — they change the slug and break inter-doc links; do those by hand and re-run `check`.
 

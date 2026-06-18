@@ -38,7 +38,7 @@ Run as many deepening passes as a subject warrants — judgment call. A narrow t
 
 - Cite inline: `[official docs](url)`, `<span class="src">…</span>` for provenance.
 - Mark every unverified / third-party claim: `<span class="tag">unverified</span>` and/or a `!!! warning`.
-- When the findings are substantive, flip status: `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" status <slug> active`.
+- When the findings are substantive, flip status: `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" status <path> active` (use the `path` returned by `new` — not the bare slug, which collides across projects).
 
 ## 4 — Hand off (optional)
 
