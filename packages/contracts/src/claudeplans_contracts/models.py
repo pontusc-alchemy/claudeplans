@@ -9,9 +9,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .enums import DocStatus, DocType, PhaseStatus
+from .keys import validate_key_segment
 
 
 class Task(BaseModel):
@@ -69,6 +70,19 @@ class Document(BaseModel):
     primary_research_ref: str | None = None
     sections: list[Section] = Field(default_factory=list)
     phases: list[Phase] = Field(default_factory=list)
+
+    @field_validator("owner_id", "project", "slug")
+    @classmethod
+    def _key_safe(cls, v: str) -> str:
+        # These three fields are storage-key segments; the rule lives in keys.py so
+        # the model and raw document_key callers validate against one shared source.
+        return validate_key_segment(v)
+
+    @field_validator("research_refs")
+    @classmethod
+    def _dedup_research_refs(cls, v: list[str]) -> list[str]:
+        # Duplicates are meaningless and make `primary in refs` / listing ambiguous.
+        return list(dict.fromkeys(v))
 
     @model_validator(mode="after")
     def _check_invariants(self) -> Document:

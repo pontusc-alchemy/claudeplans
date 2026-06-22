@@ -29,7 +29,12 @@ CREATE: Final[_Create] = _Create()
 
 @dataclass(frozen=True, slots=True)
 class ListEntry:
-    """One entry from a prefix listing: the key, its current rev, and metadata."""
+    """One entry from a prefix listing: the key, its current rev, and metadata.
+
+    `metadata` carries listing-time fields every backend must provide without a full
+    body fetch: `created_at`, `updated_at`, `title`, `type`, `status`. (The filesystem
+    backend reads them from the envelope; GCS sources them from object custom metadata.)
+    """
 
     key: str
     rev: str
@@ -58,4 +63,9 @@ class Repository(ABC):
 
     @abstractmethod
     async def list(self, prefix: str) -> Iterable[ListEntry]:
-        """List entries under `prefix` (the adapter paginates internally)."""
+        """Return all entries whose key starts with `prefix`; ordering is unspecified.
+
+        Matching is a plain string prefix, so to scope to a key SEGMENT pass a
+        slash-terminated prefix (e.g. `"alice/"`) — `"u1"` would also match
+        `"u11/..."`.
+        """
