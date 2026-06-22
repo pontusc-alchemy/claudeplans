@@ -87,3 +87,21 @@ def test_unlink_non_primary_keeps_primary() -> None:
 
 def test_unlink_absent_is_noop() -> None:
     assert unlink_research_ref(["a"], "a", "z") == (["a"], "a")
+
+
+def test_unlink_mid_list_primary_promotes_first() -> None:
+    # Removing a mid-list primary promotes the FIRST remaining ref (list head),
+    # not the element that followed it.
+    assert unlink_research_ref(["a", "b", "c"], "b", "b") == (["a", "c"], "a")
+
+
+def test_duplicate_phase_slugs_rejected() -> None:
+    with pytest.raises(ValidationError):
+        Document(
+            type=DocType.plan,
+            project="demo",
+            slug="p1",
+            title="Plan One",
+            owner_id="u1",
+            phases=[Phase(slug="x", name="X"), Phase(slug="x", name="X2")],
+        )

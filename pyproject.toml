@@ -21,7 +21,7 @@ dev = [
 src = ["packages/contracts/src", "packages/server/src", "packages/cli/src", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I"]
+select = ["E", "F", "I", "B", "UP", "RUF"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

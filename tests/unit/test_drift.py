@@ -2,6 +2,7 @@
 
 from claudeplans.drift import lint
 from claudeplans_contracts import (
+    DocStatus,
     DocType,
     Document,
     Phase,
@@ -10,13 +11,16 @@ from claudeplans_contracts import (
 )
 
 
-def _doc(phases: list[Phase] | None = None) -> Document:
+def _doc(
+    phases: list[Phase] | None = None, status: DocStatus = DocStatus.draft
+) -> Document:
     return Document(
         type=DocType.plan,
         project="demo",
         slug="p1",
         title="Plan One",
         owner_id="u1",
+        status=status,
         phases=phases or [],
     )
 
@@ -63,7 +67,19 @@ def test_todo_phase_all_done_warns() -> None:
         ]
     )
     warnings = lint(doc)
+    assert len(warnings) == 1
     assert warnings[0].code == "phase-todo-all-tasks-done"
+
+
+def test_doc_done_with_open_phase_warns() -> None:
+    doc = _doc(
+        phases=[
+            Phase(slug="ph1", name="Phase 1", status=PhaseStatus.doing),
+        ],
+        status=DocStatus.done,
+    )
+    warnings = lint(doc)
+    assert warnings[0].code == "doc-done-phase-open"
 
 
 def test_lint_never_raises() -> None:

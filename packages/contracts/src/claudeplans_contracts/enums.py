@@ -1,25 +1,27 @@
 """Shared vocabulary for documents and phases.
 
 These enums are the controlled vocabulary that both the service and the CLI agree
-on. They subclass str so they serialize as their plain string values into the
-stored JSON and the API payloads (no enum-name leakage across the wire).
+on. They are StrEnum, so each member's plain string value IS its str() — e.g.
+str(DocType.plan) == "plan". No enum-name leakage anywhere: not in f-strings or
+logging (str() level), nor on the wire (stored JSON, API payloads). This matches
+the StrEnum already used in config.py.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class DocType(str, Enum):
+class DocType(StrEnum):
     plan = "plan"
     research = "research"
 
 
-class DocStatus(str, Enum):
+class DocStatus(StrEnum):
     draft = "draft"
     active = "active"
     done = "done"
 
 
-class PhaseStatus(str, Enum):
+class PhaseStatus(StrEnum):
     todo = "todo"
     doing = "doing"
     done = "done"

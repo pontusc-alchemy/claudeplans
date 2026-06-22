@@ -81,6 +81,10 @@ class Document(BaseModel):
             and self.primary_research_ref not in self.research_refs
         ):
             raise ValueError("primary_research_ref must be one of research_refs")
+        # Phase slug is the identity key for phase ops (set-status/move/rm) and the
+        # locator in DriftWarning.path; duplicates make both ambiguous.
+        if len({p.slug for p in self.phases}) != len(self.phases):
+            raise ValueError("phase slugs must be unique")
         return self
 
 
@@ -91,7 +95,7 @@ def unlink_research_ref(
 
     Pure: builds a new list, never mutates the inputs. Removing `ref` is a no-op if
     it isn't present. When the removed ref was the primary, the primary is promoted to
-    the next remaining ref (first of the list), or cleared to None if nothing remains.
+    the first remaining ref, or cleared to None if nothing remains.
     """
     new_refs = [r for r in research_refs if r != ref]
     if primary_research_ref == ref:
