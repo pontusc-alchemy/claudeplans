@@ -1,0 +1,23 @@
+[project]
+name = "claudeplans-cli"
+version = "0.1.0"
+description = "Agent client (thin CLI + library) for the claudeplans service"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+    "claudeplans-contracts",
+    "httpx==0.28.1",
+    "typer==0.26.7",
+]
+
+[project.scripts]
+claudeplans = "claudeplans_cli.cli:main"
+
+[tool.uv.sources]
+claudeplans-contracts = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/claudeplans_cli"]

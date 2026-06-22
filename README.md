@@ -1,47 +1,53 @@
-# claude-plans
+# claudeplans
 
-A Claude Code plugin (`plan`) and its marketplace (`plans`) for a research → plan → iterate → review document lifecycle, rendered locally as a browsable dark-themed site at **http://plans.claude** via MkDocs Material + Caddy.
-
-Documents live at `~/plans/src/projects/<project>/<slug>.md`; the landing page is generated, grouped by project. Two cornerstones: `type: research` (full consideration) and `type: plan` (phased execution with in-document learnings).
-
-## Install
-
-```shell
-/plugin marketplace add ~/repos/claude-plans   # or the GitHub repo
-/plugin install plan@plans
-/plan:setup                                     # installs the local render stack
-```
-
-The render stack installs in portability tiers: Tier 0 (any OS, no sudo) is config + venv + `make -C <plugin>/server serve` (foreground render at http://127.0.0.1:8001); Tier 1 (Linux/systemd) adds the per-user `plans-render` unit; Tier 2 (Linux/systemd, sudo) is `make -C <plugin>/server system-install` for the `/etc/hosts` entry + Caddy unit at http://plans.claude — run that yourself. On macOS only Tier 0 ships (launchd/hostname tiers are designed, not built). Templating uses `python3` (no `envsubst`/gettext dependency). Re-run `/plan:setup` after each `/plugin marketplace update plans`.
-
-## Skills
-
-- `/plan:setup` — install/upgrade/repair the local rendering stack.
-- `/plan:research <project> <topic>` — gather and present findings (`type: research`).
-- `/plan:write <project> [research-slug]` — turn research/discussion into a phased plan (`type: plan`).
-- `/plan:prime <project|slug>` — restore session context from a saved doc (model-invocable).
-- `/plan:iterate <plan>` — execute a plan phase by phase; checks off tasks, records learnings.
-- `/plan:review <plan>` — reconcile a plan against reality; revise in place on approval.
-- `/plan:update <doc> <change>` — make a targeted revision to a saved doc; bumps date and validates.
+A containerized CRUD service for plan documents and a `claudeplans` CLI client that
+talks to it, sharing one set of Pydantic models via `claudeplans-contracts`. The API
+and CLI are still skeletons — the runnable shapes (FastAPI app, console script,
+quality gate, Docker images) are in place ahead of the feature work.
 
 ## Layout
 
+A [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/) with a
+virtual root and three members:
+
 ```text
-.claude-plugin/marketplace.json   # marketplace "plans"
-plugins/plan/
-├── .claude-plugin/plugin.json    # plugin "plan" (commit-SHA versioned, no version field)
-├── AUTHORING.md                  # the agent authoring contract (read by skills)
-├── skills/{setup,research,write,prime,iterate,review,update}/SKILL.md
-├── scripts/plan-doc              # stdlib create/lookup/metadata/lint helper
-├── templates/{research.md,plan.md}   # output contracts
-└── server/                        # render infra → ~/.config/plans-server/ via `make install`
-    ├── Makefile mkdocs.yml.tmpl gen_index.py extra.css index.md
-    ├── requirements.txt Caddyfile
-    └── plans-render.service plans.service.tmpl
+pyproject.toml                 # virtual workspace root: dev group + ruff/ty/pytest config
+uv.lock                        # single lock for all members
+packages/
+├── contracts/                 # claudeplans-contracts — shared Pydantic models
+├── server/                    # claudeplans — FastAPI CRUD service (uvicorn entrypoint)
+└── cli/                       # claudeplans-cli — CLI client (console script: claudeplans)
+tests/{unit,integration,contract,fixtures}/
+Dockerfile docker-bake.hcl     # build / serve / ci stages, one image: claudeplans:<stage>
+scripts/ci.sh                  # the quality gate (ruff + ty + pytest)
+plugins/plan/                  # Claude Code plan plugin (skills only)
 ```
 
-Operational note: `gen_index.py` hook changes require `systemctl --user restart plans-render` to take effect; docs and config changes hot-reload.
+## Dev inner loop
 
-## Provenance
+Requires [uv](https://docs.astral.sh/uv/). The root is virtual, so a plain `uv sync`
+installs nothing — use `--all-packages` (wrapped by `make venv`).
 
-Migrated from the dotfiles `claude-plans` stow package (render infra) and the standalone `present-research`, `present-plan`, `review-plan`, and `prime` (plan half) skills, now unified under one plugin.
+```shell
+make venv     # uv sync --all-packages — all members editable, for the editor + ty LSP
+make check    # full quality gate: ruff check + ruff format --check + ty check + pytest
+```
+
+Individual targets: `make lint`, `make fmt`, `make typecheck`, `make test`.
+
+## Docker
+
+One Dockerfile, three stages, built via [Docker Bake](https://docs.docker.com/build/bake/)
+into one image (`claudeplans`) tagged by stage:
+
+| Target | Tag | Contents |
+| --- | --- | --- |
+| `serve` | `claudeplans:serve` | bare runtime — server member installed non-editable into the venv; uvicorn as PID 1 on :8000, non-root |
+| `ci` | `claudeplans:ci` | external deps + dev toolchain; runs `scripts/ci.sh` against bind-mounted source |
+| `build` | `claudeplans:build` | intermediate — the server's runtime venv |
+
+```shell
+make serve-build      # docker buildx bake serve
+make serve            # run claudeplans:serve on :8000
+make ci               # build claudeplans:ci and run the gate against the working tree
+```

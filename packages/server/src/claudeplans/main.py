@@ -1,0 +1,34 @@
+"""Composition root: build the FastAPI app, wire dependencies, fail-closed at startup.
+
+Routers, the events feed, the search index, and the render cache are wired here as
+later phases add them. For now this assembles a runnable app so the serve image
+has a PID-1 target. A SINGLE uvicorn worker is required (in-process events feed +
+in-memory index); multi-worker is deferred behind a shared broker.
+"""
+
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+
+from .config import Settings, fail_closed_check, load_settings
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # Startup: later phases build the search index and subscribe the cache/SSE here.
+    # Graceful SIGTERM handling for open SSE generators is wired in the rendering phase.
+    yield
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    """Build the application. Fail closed before serving any request."""
+    settings = settings or load_settings()
+    fail_closed_check(settings)
+    app = FastAPI(title="claudeplans", version="0.1.0", lifespan=lifespan)
+    # Routers, exception handlers, and the {data, warnings[]} wrapper land in
+    # the API phase.
+    return app
+
+
+app = create_app()

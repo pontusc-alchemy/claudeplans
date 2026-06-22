@@ -1,0 +1,7 @@
+# Deny everything by default; re-include only what the build context needs
+# (packages for the workspace sync, scripts for ci, pyproject + lock for resolution).
+*
+!packages/
+!scripts/
+!pyproject.toml
+!uv.lock
