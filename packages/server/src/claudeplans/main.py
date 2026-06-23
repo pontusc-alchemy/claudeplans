@@ -12,8 +12,24 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from .api import install
-from .config import Settings, fail_closed_check, load_settings
+from .auth.provider import IapProvider, NoopProvider, UserProvider
+from .config import AuthMode, Settings, fail_closed_check, load_settings
 from .storage.filesystem import FilesystemRepository
+
+
+def select_provider(settings: Settings) -> UserProvider:
+    """Pick the identity provider for the configured AUTH_MODE.
+
+    The default is iap (see config.Settings.auth_mode), whose provider is DEFERRED:
+    IapProvider raises NotImplementedError, so an unconfigured iap deployment fails
+    closed by refusing every write with a per-request error rather than serving one
+    unauthenticated. Local use requires AUTH_MODE=noop.
+    """
+    match settings.auth_mode:
+        case AuthMode.noop:
+            return NoopProvider()
+        case AuthMode.iap:
+            return IapProvider()
 
 
 @asynccontextmanager
@@ -37,6 +53,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # accessors hand them to routes; then mount the API.
     app.state.settings = settings
     app.state.repo = FilesystemRepository(settings.filesystem.root)
+    app.state.user_provider = select_provider(settings)
     install(app)
     return app
 

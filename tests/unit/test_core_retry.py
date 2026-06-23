@@ -6,9 +6,13 @@ from typing import Any
 import pytest
 
 from claudeplans import core
+from claudeplans.auth.provider import CurrentUser
 from claudeplans.core import read_modify_write
 from claudeplans.storage.repository import ListEntry, Repository, _Create
 from claudeplans_contracts import DocStatus, DocType, Document, StaleRevision
+
+# The retry tests address key "k", so write-own requires namespace == owner_of("k").
+_USER = CurrentUser(uid="u1", name="u1", namespace="k")
 
 
 class _FakeRepo(Repository):
@@ -54,7 +58,7 @@ def _activate(doc: Document) -> Document:
 
 async def test_success_on_first_try() -> None:
     repo = _FakeRepo(stale_until=0)
-    new_rev, updated = await read_modify_write(repo, "k", _activate)
+    new_rev, updated = await read_modify_write(repo, "k", _activate, user=_USER)
     assert new_rev == "2"
     assert updated.status is DocStatus.active
     assert repo.put_calls == 1
@@ -62,7 +66,7 @@ async def test_success_on_first_try() -> None:
 
 async def test_transient_stale_then_success() -> None:
     repo = _FakeRepo(stale_until=2)
-    new_rev, updated = await read_modify_write(repo, "k", _activate)
+    new_rev, updated = await read_modify_write(repo, "k", _activate, user=_USER)
     assert new_rev == "2"
     assert updated.status is DocStatus.active
     # Two stale rejections, then the third put succeeds.
@@ -72,5 +76,5 @@ async def test_transient_stale_then_success() -> None:
 async def test_budget_exhausted_raises() -> None:
     repo = _FakeRepo(stale_until=core.MAX_WRITE_RETRIES)
     with pytest.raises(StaleRevision):
-        await read_modify_write(repo, "k", _activate)
+        await read_modify_write(repo, "k", _activate, user=_USER)
     assert repo.put_calls == core.MAX_WRITE_RETRIES

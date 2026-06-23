@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from claudeplans import core
+from claudeplans.auth.provider import CurrentUser
 from claudeplans.storage.filesystem import FilesystemRepository
 from claudeplans_contracts import (
     CorruptDocument,
@@ -23,6 +24,8 @@ from claudeplans_contracts import (
     Task,
     key_for_document,
 )
+
+_USER = CurrentUser(uid="u1", name="u1", namespace="u1")
 
 
 def _repo(tmp_path: Path) -> FilesystemRepository:
@@ -41,7 +44,7 @@ def _create_in() -> DocumentCreate:
 async def test_create_then_get_round_trips(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     rev, doc = await core.create_document(
-        repo, owner_id="u1", project="demo", doc_in=_create_in()
+        repo, owner_id="u1", project="demo", doc_in=_create_in(), user=_USER
     )
     key = key_for_document(doc)
     got_rev, got = await core.get_document(repo, key)
@@ -54,10 +57,12 @@ async def test_create_then_get_round_trips(tmp_path: Path) -> None:
 async def test_stable_key_delta_bumps_rev_without_client_rev(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     rev1, doc = await core.create_document(
-        repo, owner_id="u1", project="demo", doc_in=_create_in()
+        repo, owner_id="u1", project="demo", doc_in=_create_in(), user=_USER
     )
     key = key_for_document(doc)
-    rev2, updated = await core.set_phase_status(repo, key, "a", PhaseStatus.doing)
+    rev2, updated = await core.set_phase_status(
+        repo, key, "a", PhaseStatus.doing, user=_USER
+    )
     assert rev2 != rev1
     assert updated.phases[0].status is PhaseStatus.doing
 
@@ -65,10 +70,10 @@ async def test_stable_key_delta_bumps_rev_without_client_rev(tmp_path: Path) -> 
 async def test_index_op_with_correct_rev_succeeds(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     rev1, doc = await core.create_document(
-        repo, owner_id="u1", project="demo", doc_in=_create_in()
+        repo, owner_id="u1", project="demo", doc_in=_create_in(), user=_USER
     )
     key = key_for_document(doc)
-    rev2, updated = await core.toggle_task(repo, key, "a", 0, True, rev1)
+    rev2, updated = await core.toggle_task(repo, key, "a", 0, True, rev1, user=_USER)
     assert rev2 != rev1
     assert updated.phases[0].tasks[0].checked is True
 
@@ -76,20 +81,20 @@ async def test_index_op_with_correct_rev_succeeds(tmp_path: Path) -> None:
 async def test_index_op_with_stale_rev_raises(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     _, doc = await core.create_document(
-        repo, owner_id="u1", project="demo", doc_in=_create_in()
+        repo, owner_id="u1", project="demo", doc_in=_create_in(), user=_USER
     )
     key = key_for_document(doc)
     with pytest.raises(StaleRevision):
-        await core.toggle_task(repo, key, "a", 0, True, "does-not-match")
+        await core.toggle_task(repo, key, "a", 0, True, "does-not-match", user=_USER)
 
 
 async def test_delete_with_correct_rev(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     rev1, doc = await core.create_document(
-        repo, owner_id="u1", project="demo", doc_in=_create_in()
+        repo, owner_id="u1", project="demo", doc_in=_create_in(), user=_USER
     )
     key = key_for_document(doc)
-    await core.delete_document(repo, key, rev1)
+    await core.delete_document(repo, key, rev1, user=_USER)
     with pytest.raises(NotFound):
         await core.get_document(repo, key)
 
@@ -97,27 +102,27 @@ async def test_delete_with_correct_rev(tmp_path: Path) -> None:
 async def test_delete_with_stale_rev_raises(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     _, doc = await core.create_document(
-        repo, owner_id="u1", project="demo", doc_in=_create_in()
+        repo, owner_id="u1", project="demo", doc_in=_create_in(), user=_USER
     )
     key = key_for_document(doc)
     with pytest.raises(StaleRevision):
-        await core.delete_document(repo, key, "does-not-match")
+        await core.delete_document(repo, key, "does-not-match", user=_USER)
 
 
 async def test_set_document_status_roundtrip(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     _, doc = await core.create_document(
-        repo, owner_id="u1", project="demo", doc_in=_create_in()
+        repo, owner_id="u1", project="demo", doc_in=_create_in(), user=_USER
     )
     key = key_for_document(doc)
-    _, updated = await core.set_document_status(repo, key, DocStatus.active)
+    _, updated = await core.set_document_status(repo, key, DocStatus.active, user=_USER)
     assert updated.status is DocStatus.active
 
 
 async def test_corrupt_non_integer_rev_raises_on_put(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     _, doc = await core.create_document(
-        repo, owner_id="u1", project="demo", doc_in=_create_in()
+        repo, owner_id="u1", project="demo", doc_in=_create_in(), user=_USER
     )
     key = key_for_document(doc)
     # Hand-edit the on-disk rev to a non-integer; a subsequent put must surface a
@@ -127,4 +132,4 @@ async def test_corrupt_non_integer_rev_raises_on_put(tmp_path: Path) -> None:
     envelope["rev"] = "garbage"
     path.write_text(json.dumps(envelope))
     with pytest.raises(CorruptDocument):
-        await core.toggle_task(repo, key, "a", 0, True, "garbage")
+        await core.toggle_task(repo, key, "a", 0, True, "garbage", user=_USER)

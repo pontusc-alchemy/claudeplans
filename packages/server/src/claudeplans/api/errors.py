@@ -23,6 +23,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from claudeplans_contracts import (
     CorruptDocument,
+    Forbidden,
     NotFound,
     StaleRevision,
 )
@@ -55,6 +56,10 @@ async def _handle_pydantic_validation_error(
     return JSONResponse({"detail": json.loads(exc.json())}, status_code=422)
 
 
+async def _handle_forbidden(request: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse({"detail": str(exc) or "forbidden"}, status_code=403)
+
+
 async def _handle_corrupt_document(request: Request, exc: Exception) -> JSONResponse:
     # A server-side integrity fault: return a clean message, never echo the internal
     # detail/stacktrace to the client.
@@ -65,6 +70,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     """Register the domain-error -> HTTP-status handlers on `app`."""
     app.add_exception_handler(NotFound, _handle_not_found)
     app.add_exception_handler(StaleRevision, _handle_stale_revision)
+    app.add_exception_handler(Forbidden, _handle_forbidden)
     app.add_exception_handler(DomainValidationError, _handle_validation_error)
     app.add_exception_handler(
         PydanticValidationError, _handle_pydantic_validation_error

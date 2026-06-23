@@ -15,7 +15,7 @@ from claudeplans_contracts import (
 )
 
 from .. import core
-from .deps import IfMatchDep, RepoDep
+from .deps import CurrentUserDep, IfMatchDep, RepoDep
 from .envelope import ResponseEnvelope, envelope
 
 router = APIRouter(
@@ -33,9 +33,10 @@ async def add_task(
     body: AddTaskRequest,
     response: Response,
     repo: RepoDep,
+    user: CurrentUserDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
-    rev, doc = await core.add_task(repo, key, phase_slug, body.text)
+    rev, doc = await core.add_task(repo, key, phase_slug, body.text, user=user)
     response.headers["ETag"] = rev
     return envelope(doc)
 
@@ -51,10 +52,11 @@ async def toggle_task(
     response: Response,
     expected_rev: IfMatchDep,
     repo: RepoDep,
+    user: CurrentUserDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
     rev, doc = await core.toggle_task(
-        repo, key, phase_slug, task_index, body.checked, expected_rev
+        repo, key, phase_slug, task_index, body.checked, expected_rev, user=user
     )
     response.headers["ETag"] = rev
     return envelope(doc)
@@ -71,10 +73,11 @@ async def edit_task(
     response: Response,
     expected_rev: IfMatchDep,
     repo: RepoDep,
+    user: CurrentUserDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
     rev, doc = await core.edit_task(
-        repo, key, phase_slug, task_index, body.text, expected_rev
+        repo, key, phase_slug, task_index, body.text, expected_rev, user=user
     )
     response.headers["ETag"] = rev
     return envelope(doc)
@@ -90,9 +93,12 @@ async def remove_task(
     response: Response,
     expected_rev: IfMatchDep,
     repo: RepoDep,
+    user: CurrentUserDep,
 ) -> ResponseEnvelope:
     # Returns 200 + envelope, not 204: the mutated document is in the response body.
     key = document_key(uid, project, slug)
-    rev, doc = await core.remove_task(repo, key, phase_slug, task_index, expected_rev)
+    rev, doc = await core.remove_task(
+        repo, key, phase_slug, task_index, expected_rev, user=user
+    )
     response.headers["ETag"] = rev
     return envelope(doc)

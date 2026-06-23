@@ -15,7 +15,7 @@ from claudeplans_contracts import (
 )
 
 from .. import core
-from .deps import IfMatchDep, RepoDep
+from .deps import CurrentUserDep, IfMatchDep, RepoDep
 from .envelope import ResponseEnvelope, envelope
 
 router = APIRouter(prefix="/v1/users/{uid}/projects/{project}/docs", tags=["documents"])
@@ -28,9 +28,10 @@ async def create(
     body: DocumentCreate,
     response: Response,
     repo: RepoDep,
+    user: CurrentUserDep,
 ) -> ResponseEnvelope:
     rev, doc = await core.create_document(
-        repo, owner_id=uid, project=project, doc_in=body
+        repo, owner_id=uid, project=project, doc_in=body, user=user
     )
     response.headers["ETag"] = rev
     return envelope(doc)
@@ -57,9 +58,10 @@ async def delete(
     slug: str,
     expected_rev: IfMatchDep,
     repo: RepoDep,
+    user: CurrentUserDep,
 ) -> Response:
     key = document_key(uid, project, slug)
-    await core.delete_document(repo, key, expected_rev)
+    await core.delete_document(repo, key, expected_rev, user=user)
     return Response(status_code=204)
 
 
@@ -71,9 +73,10 @@ async def set_status(
     body: DocStatusRequest,
     response: Response,
     repo: RepoDep,
+    user: CurrentUserDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
-    rev, doc = await core.set_document_status(repo, key, body.status)
+    rev, doc = await core.set_document_status(repo, key, body.status, user=user)
     response.headers["ETag"] = rev
     return envelope(doc)
 
@@ -86,10 +89,11 @@ async def set_research_refs(
     body: ResearchRefsRequest,
     response: Response,
     repo: RepoDep,
+    user: CurrentUserDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
     rev, doc = await core.put_research_refs(
-        repo, key, body.research_refs, body.primary_research_ref
+        repo, key, body.research_refs, body.primary_research_ref, user=user
     )
     response.headers["ETag"] = rev
     return envelope(doc)

@@ -10,8 +10,10 @@ read-modify-write retry so a false 409 never reaches the agent, while position-
 or index-sensitive deltas carry the client's If-Match rev and surface StaleRevision
 as a 409. Routers stay thin: parse, call core, return.
 
-Authz (can_write), change-event emission, and render-cache invalidation are NOT
-wired here yet — they arrive in the later auth and rendering phases.
+Authz (can_write) is enforced HERE on every write (write-own: a caller may write
+only within its own namespace); reads are unrestricted (read-all). Change-event
+emission and render-cache invalidation are NOT wired here yet — they arrive in the
+later rendering phase.
 """
 
 from collections.abc import Callable
@@ -22,13 +24,17 @@ from pydantic import JsonValue
 from claudeplans_contracts import (
     Document,
     DocumentCreate,
+    Forbidden,
     StaleRevision,
     key_for_document,
     migrate_document,
+    owner_of,
 )
 from claudeplans_contracts.enums import DocStatus, PhaseStatus
 
 from . import deltas
+from .auth.authz import can_write
+from .auth.provider import CurrentUser
 from .storage.repository import CREATE, Repository
 
 # A commutative/absolute delta should never surface a false 409 to the agent just
@@ -37,10 +43,23 @@ from .storage.repository import CREATE, Repository
 MAX_WRITE_RETRIES: Final = 5
 
 
+def _require_write(user: CurrentUser, namespace: str) -> None:
+    """Enforce write-own at the single write path. Reads are unrestricted.
+
+    Called BEFORE any repo.get on every write path, so an unauthorized caller gets
+    403 instead of (and before) a 404/409 — existence and rev never leak across
+    namespaces.
+    """
+    if not can_write(user, namespace):
+        raise Forbidden(f"user {user.uid!r} may not write in namespace {namespace!r}")
+
+
 async def read_modify_write(
     repo: Repository,
     key: str,
     mutate: Callable[[Document], Document],
+    *,
+    user: CurrentUser,
 ) -> tuple[str, Document]:
     """Apply `mutate` to the stored document under CAS, retrying on StaleRevision.
 
@@ -50,6 +69,7 @@ async def read_modify_write(
     sets, not relative flips. StaleRevision is raised only once the retry budget is
     spent (the API maps that to HTTP 409).
     """
+    _require_write(user, owner_of(key))
     for _ in range(MAX_WRITE_RETRIES):
         rev, raw = await repo.get(key)
         current = migrate_document(raw)
@@ -72,10 +92,13 @@ async def _write_at_rev(
     key: str,
     expected_rev: str,
     mutate: Callable[[Document], Document],
+    *,
+    user: CurrentUser,
 ) -> tuple[str, Document]:
     """Apply `mutate` under optimistic concurrency: the caller's rev must still
     match (StaleRevision -> 409 otherwise). Re-validates the result before
     persisting so an invariant violation 422s instead of poisoning the store."""
+    _require_write(user, owner_of(key))
     _, raw = await repo.get(key)
     updated = mutate(migrate_document(raw))
     dumped = updated.model_dump(mode="json")
@@ -88,7 +111,12 @@ async def _write_at_rev(
 
 
 async def create_document(
-    repo: Repository, *, owner_id: str, project: str, doc_in: DocumentCreate
+    repo: Repository,
+    *,
+    owner_id: str,
+    project: str,
+    doc_in: DocumentCreate,
+    user: CurrentUser,
 ) -> tuple[str, Document]:
     """Compose a Document from `doc_in` + path identity and create it (CREATE).
 
@@ -96,6 +124,7 @@ async def create_document(
     is server-set via the Document default. StaleRevision (the key already exists)
     propagates -> 409.
     """
+    _require_write(user, owner_id)
     doc = Document(
         type=doc_in.type,
         status=doc_in.status,
@@ -122,12 +151,15 @@ async def get_document(repo: Repository, key: str) -> tuple[str, Document]:
     return rev, migrate_document(raw)
 
 
-async def delete_document(repo: Repository, key: str, expected_rev: str) -> None:
+async def delete_document(
+    repo: Repository, key: str, expected_rev: str, *, user: CurrentUser
+) -> None:
     """Delete `key` under the client's rev. StaleRevision -> 409, NotFound -> 404.
 
     Destructive, so it requires the client's rev rather than a server-side retry: a
     silent re-delete after a concurrent change could remove the wrong state.
     """
+    _require_write(user, owner_of(key))
     await repo.delete(key, expected_rev)
 
 
@@ -140,10 +172,10 @@ async def delete_document(repo: Repository, key: str, expected_rev: str) -> None
 
 
 async def set_document_status(
-    repo: Repository, key: str, status: DocStatus
+    repo: Repository, key: str, status: DocStatus, *, user: CurrentUser
 ) -> tuple[str, Document]:
     return await read_modify_write(
-        repo, key, lambda doc: deltas.set_document_status(doc, status)
+        repo, key, lambda doc: deltas.set_document_status(doc, status), user=user
     )
 
 
@@ -153,31 +185,35 @@ async def add_phase(
     slug: str,
     name: str,
     status: PhaseStatus,
+    *,
+    user: CurrentUser,
 ) -> tuple[str, Document]:
     return await read_modify_write(
-        repo, key, lambda doc: deltas.add_phase(doc, slug, name, status)
+        repo, key, lambda doc: deltas.add_phase(doc, slug, name, status), user=user
     )
 
 
 async def set_phase_status(
-    repo: Repository, key: str, slug: str, status: PhaseStatus
+    repo: Repository, key: str, slug: str, status: PhaseStatus, *, user: CurrentUser
 ) -> tuple[str, Document]:
     return await read_modify_write(
-        repo, key, lambda doc: deltas.set_phase_status(doc, slug, status)
+        repo, key, lambda doc: deltas.set_phase_status(doc, slug, status), user=user
     )
 
 
-async def remove_phase(repo: Repository, key: str, slug: str) -> tuple[str, Document]:
+async def remove_phase(
+    repo: Repository, key: str, slug: str, *, user: CurrentUser
+) -> tuple[str, Document]:
     return await read_modify_write(
-        repo, key, lambda doc: deltas.remove_phase(doc, slug)
+        repo, key, lambda doc: deltas.remove_phase(doc, slug), user=user
     )
 
 
 async def add_task(
-    repo: Repository, key: str, phase_slug: str, text: str
+    repo: Repository, key: str, phase_slug: str, text: str, *, user: CurrentUser
 ) -> tuple[str, Document]:
     return await read_modify_write(
-        repo, key, lambda doc: deltas.add_task(doc, phase_slug, text)
+        repo, key, lambda doc: deltas.add_task(doc, phase_slug, text), user=user
     )
 
 
@@ -188,11 +224,14 @@ async def add_section(
     heading: str,
     body: str,
     level: int,
+    *,
+    user: CurrentUser,
 ) -> tuple[str, Document]:
     return await read_modify_write(
         repo,
         key,
         lambda doc: deltas.add_section(doc, anchor, heading, body, level),
+        user=user,
     )
 
 
@@ -203,33 +242,51 @@ async def set_section(
     heading: str | None,
     body: str | None,
     level: int | None,
+    *,
+    user: CurrentUser,
 ) -> tuple[str, Document]:
     return await read_modify_write(
-        repo, key, lambda doc: deltas.set_section(doc, anchor, heading, body, level)
+        repo,
+        key,
+        lambda doc: deltas.set_section(doc, anchor, heading, body, level),
+        user=user,
     )
 
 
 async def patch_section(
-    repo: Repository, key: str, anchor: str, patch: dict[str, JsonValue]
+    repo: Repository,
+    key: str,
+    anchor: str,
+    patch: dict[str, JsonValue],
+    *,
+    user: CurrentUser,
 ) -> tuple[str, Document]:
     return await read_modify_write(
-        repo, key, lambda doc: deltas.patch_section(doc, anchor, patch)
+        repo, key, lambda doc: deltas.patch_section(doc, anchor, patch), user=user
     )
 
 
 async def remove_section(
-    repo: Repository, key: str, anchor: str
+    repo: Repository, key: str, anchor: str, *, user: CurrentUser
 ) -> tuple[str, Document]:
     return await read_modify_write(
-        repo, key, lambda doc: deltas.remove_section(doc, anchor)
+        repo, key, lambda doc: deltas.remove_section(doc, anchor), user=user
     )
 
 
 async def put_research_refs(
-    repo: Repository, key: str, research_refs: list[str], primary: str | None
+    repo: Repository,
+    key: str,
+    research_refs: list[str],
+    primary: str | None,
+    *,
+    user: CurrentUser,
 ) -> tuple[str, Document]:
     return await read_modify_write(
-        repo, key, lambda doc: deltas.put_research_refs(doc, research_refs, primary)
+        repo,
+        key,
+        lambda doc: deltas.put_research_refs(doc, research_refs, primary),
+        user=user,
     )
 
 
@@ -243,10 +300,20 @@ async def put_research_refs(
 
 
 async def move_phase(
-    repo: Repository, key: str, slug: str, to_index: int, expected_rev: str
+    repo: Repository,
+    key: str,
+    slug: str,
+    to_index: int,
+    expected_rev: str,
+    *,
+    user: CurrentUser,
 ) -> tuple[str, Document]:
     return await _write_at_rev(
-        repo, key, expected_rev, lambda doc: deltas.move_phase(doc, slug, to_index)
+        repo,
+        key,
+        expected_rev,
+        lambda doc: deltas.move_phase(doc, slug, to_index),
+        user=user,
     )
 
 
@@ -257,12 +324,15 @@ async def toggle_task(
     task_index: int,
     checked: bool,
     expected_rev: str,
+    *,
+    user: CurrentUser,
 ) -> tuple[str, Document]:
     return await _write_at_rev(
         repo,
         key,
         expected_rev,
         lambda doc: deltas.toggle_task(doc, phase_slug, task_index, checked),
+        user=user,
     )
 
 
@@ -273,12 +343,15 @@ async def edit_task(
     task_index: int,
     text: str,
     expected_rev: str,
+    *,
+    user: CurrentUser,
 ) -> tuple[str, Document]:
     return await _write_at_rev(
         repo,
         key,
         expected_rev,
         lambda doc: deltas.edit_task(doc, phase_slug, task_index, text),
+        user=user,
     )
 
 
@@ -288,10 +361,13 @@ async def remove_task(
     phase_slug: str,
     task_index: int,
     expected_rev: str,
+    *,
+    user: CurrentUser,
 ) -> tuple[str, Document]:
     return await _write_at_rev(
         repo,
         key,
         expected_rev,
         lambda doc: deltas.remove_task(doc, phase_slug, task_index),
+        user=user,
     )

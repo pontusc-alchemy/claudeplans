@@ -14,7 +14,7 @@ from claudeplans_contracts import (
 )
 
 from .. import core
-from .deps import RepoDep
+from .deps import CurrentUserDep, RepoDep
 from .envelope import ResponseEnvelope, envelope
 
 router = APIRouter(
@@ -31,10 +31,11 @@ async def add_section(
     body: AddSectionRequest,
     response: Response,
     repo: RepoDep,
+    user: CurrentUserDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
     rev, doc = await core.add_section(
-        repo, key, body.anchor, body.heading, body.body, body.level
+        repo, key, body.anchor, body.heading, body.body, body.level, user=user
     )
     response.headers["ETag"] = rev
     return envelope(doc)
@@ -49,10 +50,11 @@ async def set_section(
     body: SetSectionRequest,
     response: Response,
     repo: RepoDep,
+    user: CurrentUserDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
     rev, doc = await core.set_section(
-        repo, key, anchor, body.heading, body.body, body.level
+        repo, key, anchor, body.heading, body.body, body.level, user=user
     )
     response.headers["ETag"] = rev
     return envelope(doc)
@@ -67,9 +69,10 @@ async def patch_section(
     body: PatchSectionRequest,
     response: Response,
     repo: RepoDep,
+    user: CurrentUserDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
-    rev, doc = await core.patch_section(repo, key, anchor, body.patch)
+    rev, doc = await core.patch_section(repo, key, anchor, body.patch, user=user)
     response.headers["ETag"] = rev
     return envelope(doc)
 
@@ -82,9 +85,10 @@ async def remove_section(
     anchor: str,
     response: Response,
     repo: RepoDep,
+    user: CurrentUserDep,
 ) -> ResponseEnvelope:
     # Returns 200 + envelope, not 204: the mutated document is in the response body.
     key = document_key(uid, project, slug)
-    rev, doc = await core.remove_section(repo, key, anchor)
+    rev, doc = await core.remove_section(repo, key, anchor, user=user)
     response.headers["ETag"] = rev
     return envelope(doc)

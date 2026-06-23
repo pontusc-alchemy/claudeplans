@@ -8,6 +8,7 @@ from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request
 
+from ..auth.provider import CurrentUser, UserProvider
 from ..config import Settings
 from ..storage.repository import Repository
 
@@ -15,6 +16,12 @@ from ..storage.repository import Repository
 def get_repo(request: Request) -> Repository:
     """The process-wide repository, built at startup."""
     return request.app.state.repo
+
+
+async def get_current_user(request: Request) -> CurrentUser:
+    """Resolve the caller via the configured provider (selected by AUTH_MODE)."""
+    provider: UserProvider = request.app.state.user_provider
+    return await provider(request.headers)
 
 
 def get_settings(request: Request) -> Settings:
@@ -41,3 +48,4 @@ def require_if_match(
 RepoDep = Annotated[Repository, Depends(get_repo)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 IfMatchDep = Annotated[str, Depends(require_if_match)]
+CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]

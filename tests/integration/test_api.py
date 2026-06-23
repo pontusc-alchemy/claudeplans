@@ -13,14 +13,19 @@ import httpx
 import pytest
 from httpx import ASGITransport
 
-from claudeplans.config import FilesystemSettings, Settings
+from claudeplans.config import AuthMode, FilesystemSettings, Settings
 from claudeplans.main import create_app
 
-BASE = "/v1/users/u1/projects/demo/docs"
+BASE = "/v1/users/dev/projects/demo/docs"
 
 
 def _client(tmp_path: Path) -> httpx.AsyncClient:
-    app = create_app(Settings(filesystem=FilesystemSettings(root=str(tmp_path))))
+    app = create_app(
+        Settings(
+            auth_mode=AuthMode.noop,
+            filesystem=FilesystemSettings(root=str(tmp_path)),
+        )
+    )
     return httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
 
@@ -46,7 +51,7 @@ async def test_create_returns_201_with_etag_and_envelope(tmp_path: Path) -> None
         assert resp.headers["ETag"]
         body = resp.json()
         assert body["data"]["slug"] == "p1"
-        assert body["data"]["owner_id"] == "u1"
+        assert body["data"]["owner_id"] == "dev"
         assert body["data"]["project"] == "demo"
         assert isinstance(body["warnings"], list)
 
@@ -106,6 +111,66 @@ async def test_get_missing_slug_returns_404(tmp_path: Path) -> None:
         resp = await client.get(f"{BASE}/nope")
         assert resp.status_code == 404
         assert "detail" in resp.json()
+
+
+async def test_write_to_foreign_namespace_is_forbidden(tmp_path: Path) -> None:
+    # The noop caller is DEV_USER (namespace "dev"); a write under another uid 403s.
+    async with _client(tmp_path) as client:
+        resp = await client.post(
+            "/v1/users/someone-else/projects/demo/docs",
+            json={"type": "plan", "slug": "p1", "title": "Plan One"},
+        )
+        assert resp.status_code == 403
+
+
+async def test_read_is_allowed_across_namespaces(tmp_path: Path) -> None:
+    # Reads are read-all, not namespace-gated: a missing doc 404s (not 403).
+    async with _client(tmp_path) as client:
+        resp = await client.get("/v1/users/someone-else/projects/demo/docs/nope")
+        assert resp.status_code == 404
+
+
+async def test_foreign_write_precedes_not_found(tmp_path: Path) -> None:
+    # A no-precondition write to a non-existent doc in a foreign namespace returns
+    # 403 (not 404): authz precedes NotFound, so existence is never leaked.
+    async with _client(tmp_path) as client:
+        resp = await client.put(
+            "/v1/users/someone-else/projects/demo/docs/ghost/status",
+            json={"status": "active"},
+        )
+        assert resp.status_code == 403
+
+
+# Write routes that need NO If-Match: the guard fires before any read, so a
+# cross-namespace caller gets 403 regardless of whether the doc exists. The
+# If-Match-gated routes (delete/move/toggle/edit/remove) return 428 first by
+# dependency ordering and are out of scope here.
+_FOREIGN = "/v1/users/someone-else/projects/demo/docs"
+_NO_PRECONDITION_WRITES = [
+    ("POST", _FOREIGN, {"type": "plan", "slug": "p1", "title": "Plan One"}),
+    ("PUT", f"{_FOREIGN}/p1/status", {"status": "active"}),
+    (
+        "PUT",
+        f"{_FOREIGN}/p1/research-refs",
+        {"research_refs": ["r1"], "primary_research_ref": "r1"},
+    ),
+    ("POST", f"{_FOREIGN}/p1/phases", {"slug": "b", "name": "Beta"}),
+    ("POST", f"{_FOREIGN}/p1/phases/a/tasks", {"text": "t1"}),
+    (
+        "POST",
+        f"{_FOREIGN}/p1/sections",
+        {"anchor": "ctx", "heading": "Context", "body": "b"},
+    ),
+]
+
+
+@pytest.mark.parametrize(("method", "url", "body"), _NO_PRECONDITION_WRITES)
+async def test_every_no_precondition_write_verb_403s_cross_namespace(
+    tmp_path: Path, method: str, url: str, body: dict
+) -> None:
+    async with _client(tmp_path) as client:
+        resp = await client.request(method, url, json=body)
+        assert resp.status_code == 403
 
 
 async def test_toggle_with_stale_if_match_returns_409(tmp_path: Path) -> None:
@@ -357,7 +422,7 @@ async def test_corrupt_document_returns_500_clean(tmp_path: Path) -> None:
     async with _client(tmp_path) as client:
         await _create_plan(client)
         # Overwrite the envelope on disk with one missing the `document` key.
-        envelope_path = tmp_path / "u1" / "demo" / "p1.json"
+        envelope_path = tmp_path / "dev" / "demo" / "p1.json"
         envelope_path.write_text(json.dumps({"rev": "1", "created_at": "x"}))
         resp = await client.get(f"{BASE}/p1")
         assert resp.status_code == 500

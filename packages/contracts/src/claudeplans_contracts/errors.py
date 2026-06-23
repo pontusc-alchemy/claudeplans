@@ -38,10 +38,15 @@ class ValidationError(PlanError):
     """
 
 
+class Forbidden(PlanError):
+    """A write outside the caller's namespace (write-own violation)."""
+
+
 class ExitCode(IntEnum):
     """claudeplans-cli process exit codes (agent-client phase wires these to errors)."""
 
     OK = 0
     NOT_FOUND = 2
+    FORBIDDEN = 3
     VALIDATION = 4
     STALE_REV = 9

@@ -28,12 +28,14 @@ from .enums import DocType as DocType
 from .enums import PhaseStatus as PhaseStatus
 from .errors import CorruptDocument as CorruptDocument
 from .errors import ExitCode as ExitCode
+from .errors import Forbidden as Forbidden
 from .errors import NotFound as NotFound
 from .errors import PlanError as PlanError
 from .errors import StaleRevision as StaleRevision
 from .errors import ValidationError as ValidationError
 from .keys import document_key as document_key
 from .keys import key_for_document as key_for_document
+from .keys import owner_of as owner_of
 from .keys import validate_key_segment as validate_key_segment
 from .migrate import CURRENT_SCHEMA_VERSION as CURRENT_SCHEMA_VERSION
 from .migrate import migrate as migrate

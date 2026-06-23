@@ -48,3 +48,11 @@ def document_key(owner_id: str, project: str, slug: str) -> str:
 def key_for_document(doc: Document) -> str:
     """Storage key for an already-built Document."""
     return document_key(doc.owner_id, doc.project, doc.slug)
+
+
+def owner_of(key: str) -> str:
+    """The owner/namespace segment of a `document_key` (its inverse-prefix).
+
+    `document_key` builds `owner/project/slug`, so the owner is the first segment.
+    """
+    return key.split("/", 1)[0]

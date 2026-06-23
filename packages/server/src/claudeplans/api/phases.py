@@ -14,7 +14,7 @@ from claudeplans_contracts import (
 )
 
 from .. import core
-from .deps import IfMatchDep, RepoDep
+from .deps import CurrentUserDep, IfMatchDep, RepoDep
 from .envelope import ResponseEnvelope, envelope
 
 router = APIRouter(
@@ -31,9 +31,12 @@ async def add_phase(
     body: AddPhaseRequest,
     response: Response,
     repo: RepoDep,
+    user: CurrentUserDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
-    rev, doc = await core.add_phase(repo, key, body.slug, body.name, body.status)
+    rev, doc = await core.add_phase(
+        repo, key, body.slug, body.name, body.status, user=user
+    )
     response.headers["ETag"] = rev
     return envelope(doc)
 
@@ -47,9 +50,12 @@ async def set_phase_status(
     body: PhaseStatusRequest,
     response: Response,
     repo: RepoDep,
+    user: CurrentUserDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
-    rev, doc = await core.set_phase_status(repo, key, phase_slug, body.status)
+    rev, doc = await core.set_phase_status(
+        repo, key, phase_slug, body.status, user=user
+    )
     response.headers["ETag"] = rev
     return envelope(doc)
 
@@ -64,11 +70,14 @@ async def move_phase(
     response: Response,
     expected_rev: IfMatchDep,
     repo: RepoDep,
+    user: CurrentUserDep,
 ) -> ResponseEnvelope:
     # Reorders the phase list, so it carries the client's rev (missing -> 428,
     # stale -> 409), consistent with the index-addressed task ops.
     key = document_key(uid, project, slug)
-    rev, doc = await core.move_phase(repo, key, phase_slug, body.to_index, expected_rev)
+    rev, doc = await core.move_phase(
+        repo, key, phase_slug, body.to_index, expected_rev, user=user
+    )
     response.headers["ETag"] = rev
     return envelope(doc)
 
@@ -81,8 +90,9 @@ async def remove_phase(
     phase_slug: str,
     response: Response,
     repo: RepoDep,
+    user: CurrentUserDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
-    rev, doc = await core.remove_phase(repo, key, phase_slug)
+    rev, doc = await core.remove_phase(repo, key, phase_slug, user=user)
     response.headers["ETag"] = rev
     return envelope(doc)
