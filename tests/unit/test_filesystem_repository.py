@@ -7,11 +7,13 @@ for files that vanish mid-walk or sit corrupt on disk.
 
 from pathlib import Path
 
+from pydantic import JsonValue
+
 from claudeplans.storage.filesystem import FilesystemRepository
 from claudeplans.storage.repository import CREATE
 
 
-def _doc() -> dict[str, str]:
+def _doc() -> dict[str, JsonValue]:
     return {
         "type": "plan",
         "project": "demo",

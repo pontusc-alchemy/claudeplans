@@ -1,19 +1,35 @@
 """Orchestration — the single path a write flows through. Called by API routers.
 
-Per write: validate (claudeplans_contracts model) -> authz (can_write) -> persist
-(Repository CAS, with a bounded server-side read-modify-write retry for
-commutative deltas so false conflicts never reach the agent) -> emit a change
-Event -> invalidate the render cache. Routers stay thin: parse, call core,
-return. The functions land in the storage and API phases; this module marks the
-seam.
+Per write today: apply the delta, then re-validate the result by re-constructing
+the Document (model_validate over the JSON dump) so field validators and the model
+invariants run BEFORE anything is persisted — a mutation that violates an invariant
+raises pydantic.ValidationError (mapped to HTTP 422) instead of being written and
+poisoning the store. The validated dump is then persisted under the Repository's
+compare-and-set: stable-key/absolute deltas go through a bounded server-side
+read-modify-write retry so a false 409 never reaches the agent, while position-
+or index-sensitive deltas carry the client's If-Match rev and surface StaleRevision
+as a 409. Routers stay thin: parse, call core, return.
+
+Authz (can_write), change-event emission, and render-cache invalidation are NOT
+wired here yet — they arrive in the later auth and rendering phases.
 """
 
 from collections.abc import Callable
 from typing import Final
 
-from claudeplans_contracts import Document, StaleRevision, migrate_document
+from pydantic import JsonValue
 
-from .storage.repository import Repository
+from claudeplans_contracts import (
+    Document,
+    DocumentCreate,
+    StaleRevision,
+    key_for_document,
+    migrate_document,
+)
+from claudeplans_contracts.enums import DocStatus, PhaseStatus
+
+from . import deltas
+from .storage.repository import CREATE, Repository
 
 # A commutative/absolute delta should never surface a false 409 to the agent just
 # because a concurrent write bumped the rev mid-flight; bound the re-read loop so a
@@ -38,9 +54,244 @@ async def read_modify_write(
         rev, raw = await repo.get(key)
         current = migrate_document(raw)
         updated = mutate(current)
+        # Re-validate before persisting: model_copy(update=...) inside the deltas does
+        # NOT re-run field validators or _check_invariants, so without this an
+        # invariant-violating mutation would reach disk and poison every later read.
+        dumped = updated.model_dump(mode="json")
+        Document.model_validate(dumped)
         try:
-            new_rev = await repo.put(key, updated.model_dump(mode="json"), rev)
+            new_rev = await repo.put(key, dumped, rev)
         except StaleRevision:
             continue
         return new_rev, updated
     raise StaleRevision(f"write to {key!r} lost {MAX_WRITE_RETRIES} CAS races")
+
+
+async def _write_at_rev(
+    repo: Repository,
+    key: str,
+    expected_rev: str,
+    mutate: Callable[[Document], Document],
+) -> tuple[str, Document]:
+    """Apply `mutate` under optimistic concurrency: the caller's rev must still
+    match (StaleRevision -> 409 otherwise). Re-validates the result before
+    persisting so an invariant violation 422s instead of poisoning the store."""
+    _, raw = await repo.get(key)
+    updated = mutate(migrate_document(raw))
+    dumped = updated.model_dump(mode="json")
+    Document.model_validate(dumped)
+    new_rev = await repo.put(key, dumped, expected_rev)
+    return new_rev, updated
+
+
+# --- Document lifecycle -----------------------------------------------------
+
+
+async def create_document(
+    repo: Repository, *, owner_id: str, project: str, doc_in: DocumentCreate
+) -> tuple[str, Document]:
+    """Compose a Document from `doc_in` + path identity and create it (CREATE).
+
+    owner_id/project come from the URL path (not the wire body) and schema_version
+    is server-set via the Document default. StaleRevision (the key already exists)
+    propagates -> 409.
+    """
+    doc = Document(
+        type=doc_in.type,
+        status=doc_in.status,
+        project=project,
+        slug=doc_in.slug,
+        title=doc_in.title,
+        owner_id=owner_id,
+        date=doc_in.date,
+        description=doc_in.description,
+        frontmatter=doc_in.frontmatter,
+        research_refs=doc_in.research_refs,
+        primary_research_ref=doc_in.primary_research_ref,
+        sections=doc_in.sections,
+        phases=doc_in.phases,
+    )
+    key = key_for_document(doc)
+    new_rev = await repo.put(key, doc.model_dump(mode="json"), CREATE)
+    return new_rev, doc
+
+
+async def get_document(repo: Repository, key: str) -> tuple[str, Document]:
+    """Read and migrate the document at `key`. NotFound propagates -> 404."""
+    rev, raw = await repo.get(key)
+    return rev, migrate_document(raw)
+
+
+async def delete_document(repo: Repository, key: str, expected_rev: str) -> None:
+    """Delete `key` under the client's rev. StaleRevision -> 409, NotFound -> 404.
+
+    Destructive, so it requires the client's rev rather than a server-side retry: a
+    silent re-delete after a concurrent change could remove the wrong state.
+    """
+    await repo.delete(key, expected_rev)
+
+
+# --- Stable-key deltas: read-modify-write (no client rev) -------------------
+#
+# These deltas address by stable key (document/phase slug, section anchor) and set
+# absolute values, so re-applying after a concurrent write is safe. read_modify_write
+# hides false conflicts by re-reading and re-applying, so the agent never sees a 409
+# it would only have to blindly retry.
+
+
+async def set_document_status(
+    repo: Repository, key: str, status: DocStatus
+) -> tuple[str, Document]:
+    return await read_modify_write(
+        repo, key, lambda doc: deltas.set_document_status(doc, status)
+    )
+
+
+async def add_phase(
+    repo: Repository,
+    key: str,
+    slug: str,
+    name: str,
+    status: PhaseStatus,
+) -> tuple[str, Document]:
+    return await read_modify_write(
+        repo, key, lambda doc: deltas.add_phase(doc, slug, name, status)
+    )
+
+
+async def set_phase_status(
+    repo: Repository, key: str, slug: str, status: PhaseStatus
+) -> tuple[str, Document]:
+    return await read_modify_write(
+        repo, key, lambda doc: deltas.set_phase_status(doc, slug, status)
+    )
+
+
+async def remove_phase(repo: Repository, key: str, slug: str) -> tuple[str, Document]:
+    return await read_modify_write(
+        repo, key, lambda doc: deltas.remove_phase(doc, slug)
+    )
+
+
+async def add_task(
+    repo: Repository, key: str, phase_slug: str, text: str
+) -> tuple[str, Document]:
+    return await read_modify_write(
+        repo, key, lambda doc: deltas.add_task(doc, phase_slug, text)
+    )
+
+
+async def add_section(
+    repo: Repository,
+    key: str,
+    anchor: str,
+    heading: str,
+    body: str,
+    level: int,
+) -> tuple[str, Document]:
+    return await read_modify_write(
+        repo,
+        key,
+        lambda doc: deltas.add_section(doc, anchor, heading, body, level),
+    )
+
+
+async def set_section(
+    repo: Repository,
+    key: str,
+    anchor: str,
+    heading: str | None,
+    body: str | None,
+    level: int | None,
+) -> tuple[str, Document]:
+    return await read_modify_write(
+        repo, key, lambda doc: deltas.set_section(doc, anchor, heading, body, level)
+    )
+
+
+async def patch_section(
+    repo: Repository, key: str, anchor: str, patch: dict[str, JsonValue]
+) -> tuple[str, Document]:
+    return await read_modify_write(
+        repo, key, lambda doc: deltas.patch_section(doc, anchor, patch)
+    )
+
+
+async def remove_section(
+    repo: Repository, key: str, anchor: str
+) -> tuple[str, Document]:
+    return await read_modify_write(
+        repo, key, lambda doc: deltas.remove_section(doc, anchor)
+    )
+
+
+async def put_research_refs(
+    repo: Repository, key: str, research_refs: list[str], primary: str | None
+) -> tuple[str, Document]:
+    return await read_modify_write(
+        repo, key, lambda doc: deltas.put_research_refs(doc, research_refs, primary)
+    )
+
+
+# --- Position- / index-sensitive deltas: require the client's rev -----------
+#
+# move_phase reorders, and the task ops address a task by list index, so re-applying
+# after a concurrent structural change (an insert/remove/reorder shifting positions)
+# would silently corrupt the wrong target. They take the client's expected_rev and
+# let StaleRevision surface as a 409 rather than retrying — the agent must re-read
+# and re-target.
+
+
+async def move_phase(
+    repo: Repository, key: str, slug: str, to_index: int, expected_rev: str
+) -> tuple[str, Document]:
+    return await _write_at_rev(
+        repo, key, expected_rev, lambda doc: deltas.move_phase(doc, slug, to_index)
+    )
+
+
+async def toggle_task(
+    repo: Repository,
+    key: str,
+    phase_slug: str,
+    task_index: int,
+    checked: bool,
+    expected_rev: str,
+) -> tuple[str, Document]:
+    return await _write_at_rev(
+        repo,
+        key,
+        expected_rev,
+        lambda doc: deltas.toggle_task(doc, phase_slug, task_index, checked),
+    )
+
+
+async def edit_task(
+    repo: Repository,
+    key: str,
+    phase_slug: str,
+    task_index: int,
+    text: str,
+    expected_rev: str,
+) -> tuple[str, Document]:
+    return await _write_at_rev(
+        repo,
+        key,
+        expected_rev,
+        lambda doc: deltas.edit_task(doc, phase_slug, task_index, text),
+    )
+
+
+async def remove_task(
+    repo: Repository,
+    key: str,
+    phase_slug: str,
+    task_index: int,
+    expected_rev: str,
+) -> tuple[str, Document]:
+    return await _write_at_rev(
+        repo,
+        key,
+        expected_rev,
+        lambda doc: deltas.remove_task(doc, phase_slug, task_index),
+    )

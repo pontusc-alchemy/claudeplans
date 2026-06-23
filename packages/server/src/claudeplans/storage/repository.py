@@ -10,7 +10,9 @@ phase; GCS slots in behind this same interface during the cloud migration.
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Final
+from typing import Final
+
+from pydantic import JsonValue
 
 
 class _Create:
@@ -45,12 +47,12 @@ class Repository(ABC):
     """Async store of JSON documents with compare-and-set writes."""
 
     @abstractmethod
-    async def get(self, key: str) -> tuple[str, dict[str, Any]]:
-        """Return (rev, raw document). Raise NotFound if absent."""
+    async def get(self, key: str) -> tuple[str, dict[str, JsonValue]]:
+        """Return (rev, raw JSON document). Raise NotFound if absent."""
 
     @abstractmethod
     async def put(
-        self, key: str, document: dict[str, Any], expected_rev: str | _Create
+        self, key: str, document: dict[str, JsonValue], expected_rev: str | _Create
     ) -> str:
         """Write `document` if the stored rev matches `expected_rev` (or CREATE).
 

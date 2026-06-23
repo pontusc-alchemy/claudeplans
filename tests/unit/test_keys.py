@@ -22,11 +22,11 @@ def _doc() -> Document:
 
 
 def test_document_key_layout() -> None:
-    assert document_key("u1", "demo", DocType.plan, "p1") == "u1/demo/plan/p1"
+    assert document_key("u1", "demo", "p1") == "u1/demo/p1"
 
 
 def test_key_for_document_matches_derivation() -> None:
-    assert key_for_document(_doc()) == "u1/demo/plan/p1"
+    assert key_for_document(_doc()) == "u1/demo/p1"
 
 
 @pytest.mark.parametrize("field", ["owner_id", "project", "slug"])

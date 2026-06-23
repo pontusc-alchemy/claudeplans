@@ -22,6 +22,15 @@ class StaleRevision(PlanError):
     """A conditional write lost the compare-and-set race (rev mismatch)."""
 
 
+class CorruptDocument(PlanError):
+    """A persisted document/envelope is malformed (bad rev, missing/garbled keys).
+
+    A server-side data-integrity fault (e.g. a hand-edited file), distinct from a
+    client error — the API maps it to 500 with a clean message, never a raw
+    ValueError/KeyError stacktrace.
+    """
+
+
 class ValidationError(PlanError):
     """Structural validation of a document failed (the API maps this to HTTP 422).
 

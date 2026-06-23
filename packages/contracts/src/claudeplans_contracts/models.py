@@ -7,9 +7,14 @@ escape hatch is Document.frontmatter, a free-form dict for metadata we don't mod
 
 from __future__ import annotations
 
-from typing import Any
-
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    field_validator,
+    model_validator,
+)
 
 from .enums import DocStatus, DocType, PhaseStatus
 from .keys import validate_key_segment
@@ -64,8 +69,10 @@ class Document(BaseModel):
     date: str | None = None
     description: str | None = None
     # Free-form metadata escape hatch: Document forbids extra keys, so anything we
-    # don't model explicitly lives here.
-    frontmatter: dict[str, Any] = Field(default_factory=dict)
+    # don't model explicitly lives here. Must be JSON-serializable (JsonValue) — it
+    # round-trips through storage as JSON, so non-JSON values (datetime/set/bytes/
+    # tuple) are intentionally rejected at validation.
+    frontmatter: dict[str, JsonValue] = Field(default_factory=dict)
     research_refs: list[str] = Field(default_factory=list)
     primary_research_ref: str | None = None
     sections: list[Section] = Field(default_factory=list)
@@ -99,6 +106,10 @@ class Document(BaseModel):
         # locator in DriftWarning.path; duplicates make both ambiguous.
         if len({p.slug for p in self.phases}) != len(self.phases):
             raise ValueError("phase slugs must be unique")
+        # Section anchor is the identity key for section ops (set/patch/rm); duplicates
+        # make addressing ambiguous, exactly as for phase slugs.
+        if len({s.anchor for s in self.sections}) != len(self.sections):
+            raise ValueError("section anchors must be unique")
         return self
 
 

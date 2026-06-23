@@ -11,7 +11,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from .api import install
 from .config import Settings, fail_closed_check, load_settings
+from .storage.filesystem import FilesystemRepository
 
 
 @asynccontextmanager
@@ -25,9 +27,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     """Build the application. Fail closed before serving any request."""
     settings = settings or load_settings()
     fail_closed_check(settings)
-    app = FastAPI(title="claudeplans", version="0.1.0", lifespan=lifespan)
-    # Routers, exception handlers, and the {data, warnings[]} wrapper land in
-    # the API phase.
+    app = FastAPI(
+        title="claudeplans",
+        version="0.1.0",
+        lifespan=lifespan,
+        description="Structured CRUD plan service. Interactive API docs at /docs.",
+    )
+    # Build the repo and stash settings/repo on app.state so the dependency
+    # accessors hand them to routes; then mount the API.
+    app.state.settings = settings
+    app.state.repo = FilesystemRepository(settings.filesystem.root)
+    install(app)
     return app
 
 

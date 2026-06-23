@@ -23,22 +23,22 @@ import tempfile
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 from anyio import to_thread
+from pydantic import JsonValue
 
-from claudeplans_contracts import NotFound, StaleRevision
+from claudeplans_contracts import CorruptDocument, NotFound, StaleRevision
 
 from .repository import CREATE, ListEntry, Repository, _Create
 
 
-def _read_envelope(path: Path) -> dict[str, Any]:
+def _read_envelope(path: Path) -> dict[str, JsonValue]:
     """Load the envelope at `path`. Raises FileNotFoundError if absent."""
     with path.open("rb") as fh:
         return json.loads(fh.read())
 
 
-def _write_envelope_atomic(path: Path, envelope: dict[str, Any]) -> None:
+def _write_envelope_atomic(path: Path, envelope: dict[str, JsonValue]) -> None:
     """Write `envelope` to `path` atomically (temp file beside it, then rename)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent)
@@ -55,7 +55,7 @@ def _write_envelope_atomic(path: Path, envelope: dict[str, Any]) -> None:
         raise
 
 
-def _create_envelope_exclusive(path: Path, envelope: dict[str, Any]) -> None:
+def _create_envelope_exclusive(path: Path, envelope: dict[str, JsonValue]) -> None:
     """Create `path` only if absent (O_EXCL). Raises FileExistsError otherwise."""
     path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
@@ -65,9 +65,9 @@ def _create_envelope_exclusive(path: Path, envelope: dict[str, Any]) -> None:
         os.fsync(fh.fileno())
 
 
-def _walk_keys(root: Path) -> list[tuple[str, dict[str, Any]]]:
+def _walk_keys(root: Path) -> list[tuple[str, dict[str, JsonValue]]]:
     """Return (key, envelope) for every *.json under `root`, keyed POSIX-relative."""
-    found: list[tuple[str, dict[str, Any]]] = []
+    found: list[tuple[str, dict[str, JsonValue]]] = []
     for path in root.rglob("*.json"):
         try:
             envelope = _read_envelope(path)
@@ -105,16 +105,24 @@ class FilesystemRepository(Repository):
             raise ValueError(f"key {key!r} escapes the storage root")
         return path
 
-    async def get(self, key: str) -> tuple[str, dict[str, Any]]:
+    async def get(self, key: str) -> tuple[str, dict[str, JsonValue]]:
         path = self._path_for(key)
         try:
             envelope = await to_thread.run_sync(_read_envelope, path)
         except FileNotFoundError:
             raise NotFound(key) from None
-        return envelope["rev"], envelope["document"]
+        # A hand-edited or truncated file is a server-side integrity fault, not a
+        # client error: surface a clean CorruptDocument (-> 500) instead of a raw
+        # KeyError/AttributeError stacktrace. The isinstance narrows also prove the
+        # return types (rev: str, document: dict) the JsonValue envelope can't promise.
+        rev = envelope.get("rev")
+        document = envelope.get("document")
+        if not isinstance(rev, str) or not isinstance(document, dict):
+            raise CorruptDocument(f"{key}: malformed envelope")
+        return rev, document
 
     async def put(
-        self, key: str, document: dict[str, Any], expected_rev: str | _Create
+        self, key: str, document: dict[str, JsonValue], expected_rev: str | _Create
     ) -> str:
         path = self._path_for(key)
         now = datetime.now(UTC).isoformat()
@@ -138,12 +146,26 @@ class FilesystemRepository(Repository):
             except FileNotFoundError:
                 # The rev you hold no longer exists: a lost race, not a NotFound.
                 raise StaleRevision(key) from None
-            if current["rev"] != expected_rev:
+            # A hand-edited rev/created_at is a server-side integrity fault: raise a
+            # clean CorruptDocument rather than leaking a raw KeyError/ValueError. The
+            # isinstance narrows also pin both to str, which JsonValue can't promise.
+            current_rev = current.get("rev")
+            created_at = current.get("created_at")
+            if not isinstance(current_rev, str) or not isinstance(created_at, str):
+                raise CorruptDocument(
+                    f"{key}: non-string rev/created_at {current.get('rev')!r}"
+                )
+            if current_rev != expected_rev:
                 raise StaleRevision(key)
-            new_rev = str(int(current["rev"]) + 1)
+            try:
+                new_rev = str(int(current_rev) + 1)
+            except ValueError:
+                raise CorruptDocument(
+                    f"{key}: non-integer rev {current_rev!r}"
+                ) from None
             envelope = {
                 "rev": new_rev,
-                "created_at": current["created_at"],
+                "created_at": created_at,
                 "updated_at": now,
                 "document": document,
             }
@@ -157,7 +179,13 @@ class FilesystemRepository(Repository):
                 current = await to_thread.run_sync(_read_envelope, path)
             except FileNotFoundError:
                 raise NotFound(key) from None
-            if current["rev"] != expected_rev:
+            # A hand-edited envelope with a missing/non-string rev is a server-side
+            # integrity fault: raise a clean CorruptDocument rather than a raw
+            # KeyError -> 500, mirroring put's guard.
+            current_rev = current.get("rev")
+            if not isinstance(current_rev, str):
+                raise CorruptDocument(f"{key}: non-string rev {current_rev!r}")
+            if current_rev != expected_rev:
                 raise StaleRevision(key)
             await to_thread.run_sync(path.unlink)
 
@@ -167,19 +195,29 @@ class FilesystemRepository(Repository):
         for key, env in found:
             if not key.startswith(prefix):
                 continue
-            doc = env["document"]
+            rev = env.get("rev")
+            if not isinstance(rev, str):
+                # A corrupt envelope must not 500 the whole index; skip it, matching
+                # _walk_keys's skip-on-corrupt behavior.
+                continue
+            doc = env.get("document")
             # Surface title/type/status as metadata so the search phase can build a
             # title index without reading bodies (GCS sources these from object meta).
+            # doc is JsonValue, so only read fields off it when it's actually a dict;
+            # created_at/updated_at are coerced to str for the dict[str, str] metadata.
+            title = str(doc.get("title", "")) if isinstance(doc, dict) else ""
+            doc_type = str(doc.get("type", "")) if isinstance(doc, dict) else ""
+            status = str(doc.get("status", "")) if isinstance(doc, dict) else ""
             entries.append(
                 ListEntry(
                     key=key,
-                    rev=env["rev"],
+                    rev=rev,
                     metadata={
-                        "created_at": env["created_at"],
-                        "updated_at": env["updated_at"],
-                        "title": str(doc.get("title", "")),
-                        "type": str(doc.get("type", "")),
-                        "status": str(doc.get("status", "")),
+                        "created_at": str(env.get("created_at", "")),
+                        "updated_at": str(env.get("updated_at", "")),
+                        "title": title,
+                        "type": doc_type,
+                        "status": status,
                     },
                 )
             )

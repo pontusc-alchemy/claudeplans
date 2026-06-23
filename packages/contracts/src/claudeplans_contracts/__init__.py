@@ -10,10 +10,23 @@ package's public surface (ruff F401 / the no-implicit-reexport rule). The import
 line IS the API declaration — there is no separate `__all__` list to drift from it.
 """
 
+from .dto import AddPhaseRequest as AddPhaseRequest
+from .dto import AddSectionRequest as AddSectionRequest
+from .dto import AddTaskRequest as AddTaskRequest
+from .dto import DocStatusRequest as DocStatusRequest
+from .dto import DocumentCreate as DocumentCreate
 from .dto import DriftWarning as DriftWarning
+from .dto import EditTaskRequest as EditTaskRequest
+from .dto import MovePhaseRequest as MovePhaseRequest
+from .dto import PatchSectionRequest as PatchSectionRequest
+from .dto import PhaseStatusRequest as PhaseStatusRequest
+from .dto import ResearchRefsRequest as ResearchRefsRequest
+from .dto import SetSectionRequest as SetSectionRequest
+from .dto import ToggleTaskRequest as ToggleTaskRequest
 from .enums import DocStatus as DocStatus
 from .enums import DocType as DocType
 from .enums import PhaseStatus as PhaseStatus
+from .errors import CorruptDocument as CorruptDocument
 from .errors import ExitCode as ExitCode
 from .errors import NotFound as NotFound
 from .errors import PlanError as PlanError

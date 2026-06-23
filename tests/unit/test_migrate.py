@@ -1,6 +1,7 @@
 """Upgrade-on-read migration: v0 -> current, pass-through, and no input mutation."""
 
 import pytest
+from pydantic import JsonValue
 
 from claudeplans_contracts import (
     CURRENT_SCHEMA_VERSION,
@@ -11,7 +12,7 @@ from claudeplans_contracts import (
 
 
 def test_migrates_v0_to_current() -> None:
-    raw = {
+    raw: dict[str, JsonValue] = {
         "type": "plan",
         "project": "demo",
         "slug": "p1",
@@ -25,7 +26,7 @@ def test_migrates_v0_to_current() -> None:
 
 
 def test_current_version_doc_unchanged() -> None:
-    raw = {
+    raw: dict[str, JsonValue] = {
         "schema_version": CURRENT_SCHEMA_VERSION,
         "type": "plan",
         "project": "demo",
@@ -40,7 +41,7 @@ def test_current_version_doc_unchanged() -> None:
 
 
 def test_forward_version_raises() -> None:
-    raw = {
+    raw: dict[str, JsonValue] = {
         "schema_version": 99,
         "type": "plan",
         "project": "demo",
@@ -58,7 +59,7 @@ def test_malformed_version_raises() -> None:
 
 
 def test_migrate_does_not_mutate_input() -> None:
-    raw = {"type": "plan", "owner": "u1"}
+    raw: dict[str, JsonValue] = {"type": "plan", "owner": "u1"}
     original = dict(raw)
     migrate(raw)
     assert raw == original
