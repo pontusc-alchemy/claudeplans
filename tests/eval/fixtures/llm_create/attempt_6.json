@@ -1,0 +1,28 @@
+{
+  "type": "research",
+  "slug": "secrets-management-survey",
+  "title": "Survey of secrets-management options",
+  "status": "draft",
+  "description": "Comparative survey of secrets-management approaches, synthesizing findings from a HashiCorp Vault deep dive and a cloud KMS comparison to guide platform selection.",
+  "research_refs": ["vault-deep-dive", "cloud-kms-comparison"],
+  "primary_research_ref": "vault-deep-dive",
+  "sections": [
+    {
+      "anchor": "overview",
+      "heading": "Overview",
+      "body": "This survey consolidates two prior investigations into a single decision-oriented view. Secrets management spans static credential storage, dynamic secret issuance, encryption-as-a-service, and key lifecycle management. The candidates fall into two broad families: self-hosted secrets platforms (HashiCorp Vault) and managed cloud key services (AWS KMS, GCP Cloud KMS, Azure Key Vault). The vault-deep-dive is treated as the primary reference because it covers the widest functional surface; the cloud-kms-comparison narrows the analysis to managed encryption primitives.",
+      "level": 2
+    },
+    {
+      "anchor": "findings",
+      "heading": "Key Findings",
+      "body": "Vault offers the richest capability set: dynamic secrets, leasing/renewal, fine-grained policy, and pluggable secret engines, at the cost of operational ownership (HA storage, unseal, upgrades). Managed cloud KMS options are operationally trivial and integrate natively with their respective IAM systems, but are scoped primarily to envelope encryption and signing rather than general-purpose secret distribution. For multi-cloud or hybrid estates, Vault's portability is decisive; for single-cloud workloads dominated by encryption needs, a managed KMS minimizes overhead.",
+      "level": 2
+    },
+    {
+      "anchor": "recommendation",
+      "heading": "Recommendation",
+      "body": "Adopt a layered approach: use the native cloud KMS as the root-of-trust for envelope encryption within each cloud, and run Vault as the cross-cutting secrets broker for dynamic credentials and policy-driven access. This keeps key custody close to the provider IAM boundary while preserving a portable, auditable secrets workflow. Revisit the decision if the estate consolidates to a single cloud, in which case the managed KMS plus that provider's secret store may remove the need to self-host Vault."
+    }
+  ]
+}

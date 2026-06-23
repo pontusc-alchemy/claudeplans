@@ -1,0 +1,38 @@
+{
+  "type": "plan",
+  "slug": "migrate-ci-jenkins-to-github-actions",
+  "title": "Migrate CI from Jenkins to GitHub Actions",
+  "description": "Migrate the existing Jenkins-based CI pipelines to GitHub Actions workflows, then cut over and decommission Jenkins.",
+  "phases": [
+    {
+      "slug": "audit-existing-pipelines",
+      "name": "Audit existing pipelines",
+      "status": "done",
+      "tasks": [
+        { "text": "Inventory all Jenkins jobs, pipelines, and their triggers", "checked": true },
+        { "text": "Document plugins, credentials, and shared libraries in use", "checked": true },
+        { "text": "Map build agents, environments, and external integrations", "checked": true }
+      ]
+    },
+    {
+      "slug": "port-jobs-to-workflows",
+      "name": "Port jobs to workflows",
+      "status": "todo",
+      "tasks": [
+        { "text": "Translate each Jenkins pipeline into a GitHub Actions workflow YAML", "checked": false },
+        { "text": "Migrate secrets and credentials to GitHub encrypted secrets", "checked": false },
+        { "text": "Run workflows in parallel with Jenkins and compare results", "checked": false }
+      ]
+    },
+    {
+      "slug": "cutover-and-decommission",
+      "name": "Cutover and decommission",
+      "status": "todo",
+      "tasks": [
+        { "text": "Switch branch protection and required checks to GitHub Actions", "checked": false },
+        { "text": "Disable Jenkins jobs and archive build history", "checked": false },
+        { "text": "Decommission Jenkins servers and revoke obsolete credentials", "checked": false }
+      ]
+    }
+  ]
+}

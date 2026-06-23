@@ -1,0 +1,50 @@
+{
+  "type": "plan",
+  "slug": "feature-flag-rollout",
+  "title": "Roll out feature flags across the platform",
+  "status": "active",
+  "date": "2026-06-23",
+  "description": "Platform-wide rollout of feature flags, informed by prior vendor and strategy research.",
+  "frontmatter": {
+    "owner": "platform-team",
+    "ticket": "PLAT-1428"
+  },
+  "research_refs": ["feature-flag-vendors", "rollout-strategy"],
+  "primary_research_ref": "feature-flag-vendors",
+  "sections": [
+    {
+      "anchor": "overview",
+      "heading": "Overview",
+      "body": "Introduce a feature-flag system across all platform services to enable controlled, incremental rollouts.",
+      "level": 2
+    },
+    {
+      "anchor": "goals",
+      "heading": "Goals",
+      "body": "Decouple deploy from release, support gradual rollouts, and provide a kill switch for risky changes.",
+      "level": 2
+    }
+  ],
+  "phases": [
+    {
+      "slug": "foundation",
+      "name": "Foundation & vendor integration",
+      "status": "doing",
+      "tasks": [
+        {"text": "Select feature-flag vendor based on research", "checked": true},
+        {"text": "Provision vendor account and environments", "checked": false},
+        {"text": "Add SDK to shared platform library", "checked": false}
+      ]
+    },
+    {
+      "slug": "rollout",
+      "name": "Service rollout",
+      "status": "todo",
+      "tasks": [
+        {"text": "Integrate flags into the web frontend", "checked": false},
+        {"text": "Integrate flags into the API services", "checked": false},
+        {"text": "Document flag lifecycle and cleanup process", "checked": false}
+      ]
+    }
+  ]
+}

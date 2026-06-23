@@ -1,0 +1,34 @@
+{
+  "type": "research",
+  "slug": "postgres-vs-dynamodb-events-store",
+  "title": "Postgres vs DynamoDB for the events store",
+  "status": "draft",
+  "date": "2026-06-23",
+  "description": "Comparative evaluation of PostgreSQL and DynamoDB as the backing store for the append-only events log, weighing access patterns, operational cost, and scaling characteristics.",
+  "sections": [
+    {
+      "anchor": "context",
+      "heading": "Context",
+      "body": "We need a durable store for the **events log** that backs the audit trail and downstream projections. The dominant access patterns are:\n\n- High-volume **append-only writes** keyed by `aggregate_id`.\n- **Range reads** of an aggregate's events ordered by sequence number.\n- Occasional **cross-aggregate queries** for analytics and replay.\n\nThis doc compares PostgreSQL and DynamoDB against those patterns, plus operational cost and team familiarity.",
+      "level": 2
+    },
+    {
+      "anchor": "postgres",
+      "heading": "PostgreSQL",
+      "body": "A single `events` table with a composite primary key `(aggregate_id, sequence)` serves both the append and range-read paths cleanly. Strengths:\n\n- **Strong consistency** and real transactions make optimistic-concurrency checks on `sequence` trivial.\n- **Ad-hoc queries** and joins for analytics and replay come for free via SQL.\n- The team already operates Postgres; no new runtime expertise needed.\n\nTrade-offs:\n\n- Write throughput is bounded by a single primary; very high ingest needs partitioning or sharding.\n- Operational scaling (vacuum, connection limits, failover) is our responsibility unless we lean on a managed offering.",
+      "level": 2
+    },
+    {
+      "anchor": "dynamodb",
+      "heading": "DynamoDB",
+      "body": "Model the table with partition key `aggregate_id` and sort key `sequence`. Strengths:\n\n- **Effectively unbounded write throughput** with no primary bottleneck.\n- Fully managed: no patching, vacuum, or failover to operate.\n- Conditional writes give us per-aggregate optimistic concurrency natively.\n\nTrade-offs:\n\n- **Cross-aggregate queries** require GSIs or a separate analytics pipeline; no ad-hoc SQL.\n- Cost model (RCU/WCU or on-demand) is harder to predict for bursty workloads.\n- The team has limited DynamoDB operational experience.",
+      "level": 2
+    },
+    {
+      "anchor": "recommendation",
+      "heading": "Recommendation",
+      "body": "**Start with PostgreSQL.** Our current ingest volume sits well within a single primary's capacity, and the value of free-form SQL for replay and analytics outweighs DynamoDB's scaling headroom at this stage.\n\nThe event schema (`aggregate_id`, `sequence`, payload) is storage-agnostic, so a later migration to DynamoDB remains open should write volume outgrow a single Postgres primary. Revisit if sustained write rate approaches the documented ceiling of our managed instance.",
+      "level": 2
+    }
+  ]
+}

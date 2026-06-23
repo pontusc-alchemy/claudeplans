@@ -1,0 +1,1 @@
+{"type":"plan","slug":"spike-evaluate-opentelemetry","title":"Spike: evaluate OpenTelemetry","phases":[{"slug":"investigate","name":"investigate","tasks":[{"text":"Read the OTel spec"}]}]}

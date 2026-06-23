@@ -1,0 +1,67 @@
+{
+  "type": "plan",
+  "slug": "kubernetes-platform-hardening",
+  "title": "Kubernetes platform hardening",
+  "status": "active",
+  "date": "2026-06-23",
+  "description": "Harden the shared Kubernetes platform across network, identity, secrets, and observability controls to meet our internal baseline and reduce blast radius of a compromised workload.",
+  "sections": [
+    {
+      "anchor": "goals",
+      "heading": "Goals",
+      "body": "Establish a defense-in-depth posture for the platform: deny-by-default east-west traffic, least-privilege RBAC for both humans and service accounts, encrypted and externally-managed secrets, and tamper-evident audit logging shipped to central storage. Each control should be enforced by policy rather than convention so regressions are caught in CI.",
+      "level": 2
+    },
+    {
+      "anchor": "out-of-scope",
+      "heading": "Out of scope",
+      "body": "Cluster upgrade automation, node OS hardening (CIS benchmarks at the host level), and multi-cluster federation are tracked separately and are not addressed here. Application-level authn/authz inside workloads is the responsibility of the owning teams.",
+      "level": 2
+    }
+  ],
+  "phases": [
+    {
+      "slug": "network-policies",
+      "name": "Network policies",
+      "status": "done",
+      "tasks": [
+        { "text": "Inventory current namespace-to-namespace traffic flows", "checked": true },
+        { "text": "Apply default-deny ingress/egress NetworkPolicy per namespace", "checked": true },
+        { "text": "Add explicit allow rules for required service dependencies", "checked": true },
+        { "text": "Verify CNI (Cilium) enforces policies in staging", "checked": true }
+      ]
+    },
+    {
+      "slug": "rbac-tightening",
+      "name": "RBAC tightening",
+      "status": "doing",
+      "tasks": [
+        { "text": "Audit existing ClusterRoleBindings for wildcard verbs", "checked": true },
+        { "text": "Replace cluster-admin grants with scoped namespace roles", "checked": true },
+        { "text": "Disable automountServiceAccountToken where unused", "checked": false },
+        { "text": "Add OPA/Gatekeeper constraint blocking privileged role creation", "checked": false }
+      ]
+    },
+    {
+      "slug": "secrets-management",
+      "name": "Secrets management",
+      "status": "todo",
+      "tasks": [
+        { "text": "Enable etcd encryption-at-rest with a KMS provider", "checked": false },
+        { "text": "Migrate static Secrets to External Secrets Operator", "checked": false },
+        { "text": "Rotate and revoke long-lived credentials found in inventory", "checked": false }
+      ]
+    },
+    {
+      "slug": "audit-logging",
+      "name": "Audit logging",
+      "status": "todo",
+      "tasks": [
+        { "text": "Define audit policy covering RBAC and secret access events", "checked": false },
+        { "text": "Configure apiserver audit log backend to ship to central store", "checked": false },
+        { "text": "Set retention and immutability on the audit log bucket", "checked": false },
+        { "text": "Wire alerting on anomalous privileged actions", "checked": false }
+      ]
+    }
+  ]
+}
