@@ -21,6 +21,8 @@ from .dto import MovePhaseRequest as MovePhaseRequest
 from .dto import PatchSectionRequest as PatchSectionRequest
 from .dto import PhaseStatusRequest as PhaseStatusRequest
 from .dto import ResearchRefsRequest as ResearchRefsRequest
+from .dto import SearchHit as SearchHit
+from .dto import SearchResults as SearchResults
 from .dto import SetSectionRequest as SetSectionRequest
 from .dto import ToggleTaskRequest as ToggleTaskRequest
 from .enums import DocStatus as DocStatus

@@ -1,5 +1,7 @@
 """Wire DTOs shared by the service and the CLI."""
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from .enums import DocStatus, DocType, PhaseStatus
@@ -143,3 +145,33 @@ class ResearchRefsRequest(BaseModel):
 
     research_refs: list[str]
     primary_research_ref: str | None = None
+
+
+class SearchHit(BaseModel):
+    """One search match: which document matched, and what in it matched.
+
+    `kind` says whether the query hit the document title, a section heading, or a
+    phase name; `text` is the matched string; `anchor` is the in-document target for
+    navigation — a section anchor or a phase slug — and is None for a title hit.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    project: str
+    slug: str
+    title: str
+    type: DocType
+    status: DocStatus
+    kind: Literal["title", "section", "phase"]
+    text: str
+    anchor: str | None = None
+
+
+class SearchResults(BaseModel):
+    """The search response: the echoed query and its ordered hits."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    query: str
+    hits: list[SearchHit]

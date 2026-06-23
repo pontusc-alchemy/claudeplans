@@ -5,6 +5,7 @@ index is a later phase. A SINGLE uvicorn worker is required (in-process events f
 in-memory cache); multi-worker is deferred behind a shared broker.
 """
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -17,6 +18,7 @@ from .auth.provider import IapProvider, NoopProvider, UserProvider
 from .cache import FragmentCache
 from .config import AuthMode, Settings, fail_closed_check, load_settings
 from .events import EventFeed
+from .search import SearchIndex
 from .storage.filesystem import FilesystemRepository
 
 
@@ -37,15 +39,21 @@ def select_provider(settings: Settings) -> UserProvider:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    # The feed/cache are built in create_app (so app.state always has them, even in
-    # unit tests that never enter lifespan); here we only close the feed on shutdown.
-    # In production the __main__ Server subclass closes the feed at shutdown START so
-    # SSE generators drain in time; this `finally` is the idempotent backstop for
-    # non-uvicorn teardown (tests).
+    # The feed/cache/index are built in create_app (so app.state always has them, even
+    # in unit tests that never enter lifespan). Here we start the search index's
+    # background consumer — it builds from storage then keeps fresh off the feed — and
+    # await the initial build so the first request searches a complete index. On
+    # shutdown we close the feed (in production the __main__ Server subclass closes it
+    # at shutdown START so SSE generators drain in time; this is the idempotent backstop
+    # for non-uvicorn teardown), which ends the consumer loop, then await its exit.
+    index: SearchIndex = app.state.search_index
+    index_task = asyncio.create_task(index.run(app.state.repo, app.state.feed))
     try:
+        await index.ready()
         yield
     finally:
         app.state.feed.close()
+        await index_task
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -67,6 +75,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # drive routes without entering lifespan; lifespan's shutdown half closes the feed.
     app.state.feed = EventFeed()
     app.state.render_cache = FragmentCache()
+    app.state.search_index = SearchIndex()
     install(app)
     # Vendored CSS/JS (htmx, idiomorph, htmx-ext-sse) served same-origin so the
     # strict CSP (`script-src 'self'`) admits them.

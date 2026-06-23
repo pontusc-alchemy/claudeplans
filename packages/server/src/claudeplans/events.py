@@ -99,15 +99,21 @@ class EventFeed:
             queue.get_nowait()
             queue.put_nowait(item)
 
-    def subscribe(self) -> Subscription:
+    def subscribe(self, *, maxsize: int | None = None) -> Subscription:
         """Return a Subscription with its queue registered EAGERLY.
 
         Registration happens synchronously in `Subscription.__init__`, so an Event
         published any time after this returns is queued, not lost. Use it as a
         context manager so the queue is discarded on disconnect or shutdown:
         `with feed.subscribe() as sub: async for event in sub: ...`.
+
+        `maxsize` defaults to the feed's bounded drop-oldest size — right for an SSE
+        reader that converges per-doc and must not grow memory if it stalls. A
+        consumer that indexes ALL docs (the search index) cannot tolerate drop-oldest
+        silently losing a distinct key's only Event, so it passes `maxsize=0` for an
+        unbounded, lossless queue (safe because that single consumer drains promptly).
         """
-        return Subscription(self, self._maxsize)
+        return Subscription(self, self._maxsize if maxsize is None else maxsize)
 
     def close(self) -> None:
         """Stop the feed and signal every subscriber to finish.
