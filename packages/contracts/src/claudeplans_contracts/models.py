@@ -35,7 +35,9 @@ class Section(BaseModel):
     anchor: str
     heading: str
     body: str = ""
-    level: int = 2
+    # Bounded to 1..6: it becomes an <h{level}> heading, and nh3 strips <h0>/<h7+>,
+    # which would silently drop the heading. Reject out of range at the boundary.
+    level: int = Field(2, ge=1, le=6)
 
 
 class Phase(BaseModel):

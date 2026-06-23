@@ -5,7 +5,7 @@ composition root calls to mount everything.
 
 from fastapi import FastAPI
 
-from . import documents, health, phases, sections, tasks
+from . import documents, health, phases, sections, tasks, view
 from .errors import register_exception_handlers
 
 
@@ -16,4 +16,5 @@ def install(app: FastAPI) -> None:
     app.include_router(phases.router)
     app.include_router(tasks.router)
     app.include_router(sections.router)
+    app.include_router(view.router)
     app.include_router(health.router)

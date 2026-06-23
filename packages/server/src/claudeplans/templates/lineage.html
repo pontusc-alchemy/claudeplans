@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="lineage" id="lineage">
+  <h1>{{ title }}</h1>
+  <ul class="research-roots">
+    {% for r in lineage.research %}
+    <li class="research-node">
+      <a class="research-title" href="{{ r.view_url }}">{{ r.title }}</a>
+      {% if r.plans %}
+      <ul class="plans">
+        {% for p in r.plans %}
+        <li class="plan"><a href="{{ p.view_url }}">{{ p.title }}</a></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      {% if r.backlinks %}
+      <ul class="backlinks">
+        <li class="backlinks-label">referenced by</li>
+        {% for p in r.backlinks %}
+        <li class="plan backlink"><a href="{{ p.view_url }}">{{ p.title }}</a></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% if lineage.unlinked_plans %}
+  <h2>Unlinked plans</h2>
+  <ul class="unlinked-plans">
+    {% for p in lineage.unlinked_plans %}
+    <li class="plan"><a href="{{ p.view_url }}">{{ p.title }}</a></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</main>
+{% endblock %}

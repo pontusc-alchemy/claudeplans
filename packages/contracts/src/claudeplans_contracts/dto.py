@@ -115,7 +115,7 @@ class AddSectionRequest(BaseModel):
     anchor: str
     heading: str
     body: str = ""
-    level: int = 2
+    level: int = Field(2, ge=1, le=6)
 
 
 class SetSectionRequest(BaseModel):
@@ -125,7 +125,7 @@ class SetSectionRequest(BaseModel):
 
     heading: str | None = None
     body: str | None = None
-    level: int | None = None
+    level: int | None = Field(None, ge=1, le=6)
 
 
 class PatchSectionRequest(BaseModel):

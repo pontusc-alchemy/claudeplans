@@ -21,7 +21,7 @@ RUN uv sync --locked --no-dev --no-editable --package claudeplans
 
 # serve — bare runtime: copy the prod venv only. With --no-editable the server lives
 # in the venv site-packages, so there is no source to copy and no PYTHONPATH to set.
-# exec-form ENTRYPOINT means uvicorn is PID 1 (no shell), so it receives SIGTERM
+# exec-form ENTRYPOINT means python is PID 1 (no shell), so it receives SIGTERM
 # directly for graceful shutdown. Single worker: the in-process events feed +
 # in-memory index require it (multi-worker is deferred behind a shared broker).
 FROM python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061 AS serve
@@ -33,7 +33,11 @@ COPY --from=build --chown=app:app /opt/venv /opt/venv
 WORKDIR /app
 USER app
 EXPOSE 8000
-ENTRYPOINT ["uvicorn", "claudeplans.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# The entrypoint is the uvicorn Server subclass in __main__.py: it closes the change
+# feed at the START of shutdown, pushing a sentinel that ends every open SSE generator
+# so in-flight streams drain WITHIN the graceful timeout (10s, set in uvicorn.Config)
+# instead of being force-cancelled at the deadline.
+ENTRYPOINT ["python", "-m", "claudeplans"]
 
 # ci — every member's external deps + dev toolchain, but NOT the workspace members
 # themselves. `--all-packages` pulls in all members' dependency edges; `--no-install-workspace`

@@ -1,19 +1,22 @@
 """Composition root: build the FastAPI app, wire dependencies, fail-closed at startup.
 
-Routers, the events feed, the search index, and the render cache are wired here as
-later phases add them. For now this assembles a runnable app so the serve image
-has a PID-1 target. A SINGLE uvicorn worker is required (in-process events feed +
-in-memory index); multi-worker is deferred behind a shared broker.
+Routers, the in-process events feed, and the render cache are wired here; the search
+index is a later phase. A SINGLE uvicorn worker is required (in-process events feed +
+in-memory cache); multi-worker is deferred behind a shared broker.
 """
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from .api import install
 from .auth.provider import IapProvider, NoopProvider, UserProvider
+from .cache import FragmentCache
 from .config import AuthMode, Settings, fail_closed_check, load_settings
+from .events import EventFeed
 from .storage.filesystem import FilesystemRepository
 
 
@@ -34,9 +37,15 @@ def select_provider(settings: Settings) -> UserProvider:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    # Startup: later phases build the search index and subscribe the cache/SSE here.
-    # Graceful SIGTERM handling for open SSE generators is wired in the rendering phase.
-    yield
+    # The feed/cache are built in create_app (so app.state always has them, even in
+    # unit tests that never enter lifespan); here we only close the feed on shutdown.
+    # In production the __main__ Server subclass closes the feed at shutdown START so
+    # SSE generators drain in time; this `finally` is the idempotent backstop for
+    # non-uvicorn teardown (tests).
+    try:
+        yield
+    finally:
+        app.state.feed.close()
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -54,7 +63,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.repo = FilesystemRepository(settings.filesystem.root)
     app.state.user_provider = select_provider(settings)
+    # Built here (not only in lifespan) so app.state always carries them — unit tests
+    # drive routes without entering lifespan; lifespan's shutdown half closes the feed.
+    app.state.feed = EventFeed()
+    app.state.render_cache = FragmentCache()
     install(app)
+    # Vendored CSS/JS (htmx, idiomorph, htmx-ext-sse) served same-origin so the
+    # strict CSP (`script-src 'self'`) admits them.
+    app.mount(
+        "/assets",
+        StaticFiles(directory=Path(__file__).parent / "assets"),
+        name="assets",
+    )
     return app
 
 

@@ -7,6 +7,7 @@ from claudeplans_contracts import (
     DocType,
     Document,
     Phase,
+    Section,
     unlink_research_ref,
 )
 
@@ -93,6 +94,14 @@ def test_unlink_mid_list_primary_promotes_first() -> None:
     # Removing a mid-list primary promotes the FIRST remaining ref (list head),
     # not the element that followed it.
     assert unlink_research_ref(["a", "b", "c"], "b", "b") == (["a", "c"], "a")
+
+
+def test_section_level_out_of_range_rejected() -> None:
+    # level becomes <h{level}>; nh3 strips <h0>/<h7+>, silently dropping the heading,
+    # so the bound rejects out-of-range at the contract boundary.
+    for bad in (0, 9):
+        with pytest.raises(ValidationError):
+            Section(anchor="a", heading="H", level=bad)
 
 
 def test_duplicate_phase_slugs_rejected() -> None:

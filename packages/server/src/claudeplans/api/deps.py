@@ -10,12 +10,18 @@ from fastapi import Depends, Header, HTTPException, Request
 
 from ..auth.provider import CurrentUser, UserProvider
 from ..config import Settings
+from ..events import EventFeed
 from ..storage.repository import Repository
 
 
 def get_repo(request: Request) -> Repository:
     """The process-wide repository, built at startup."""
     return request.app.state.repo
+
+
+def get_feed(request: Request) -> EventFeed:
+    """The process-wide change feed, built at startup."""
+    return request.app.state.feed
 
 
 async def get_current_user(request: Request) -> CurrentUser:
@@ -46,6 +52,7 @@ def require_if_match(
 # Annotated aliases so routes inject via a parameter annotation (the modern FastAPI
 # form) rather than a Depends() call in a default — the latter trips ruff B008.
 RepoDep = Annotated[Repository, Depends(get_repo)]
+FeedDep = Annotated[EventFeed, Depends(get_feed)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 IfMatchDep = Annotated[str, Depends(require_if_match)]
 CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]

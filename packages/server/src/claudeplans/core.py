@@ -12,8 +12,8 @@ as a 409. Routers stay thin: parse, call core, return.
 
 Authz (can_write) is enforced HERE on every write (write-own: a caller may write
 only within its own namespace); reads are unrestricted (read-all). Change-event
-emission and render-cache invalidation are NOT wired here yet — they arrive in the
-later rendering phase.
+emission is performed by the API layer — the composition point that holds both the
+key and the new rev — keeping core a pure storage-orchestration layer.
 """
 
 from collections.abc import Callable

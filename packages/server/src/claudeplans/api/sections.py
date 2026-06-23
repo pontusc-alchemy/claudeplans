@@ -14,7 +14,8 @@ from claudeplans_contracts import (
 )
 
 from .. import core
-from .deps import CurrentUserDep, RepoDep
+from ..events import Event
+from .deps import CurrentUserDep, FeedDep, RepoDep
 from .envelope import ResponseEnvelope, envelope
 
 router = APIRouter(
@@ -32,12 +33,14 @@ async def add_section(
     response: Response,
     repo: RepoDep,
     user: CurrentUserDep,
+    feed: FeedDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
     rev, doc = await core.add_section(
         repo, key, body.anchor, body.heading, body.body, body.level, user=user
     )
     response.headers["ETag"] = rev
+    feed.publish(Event(key=key, rev=rev))
     return envelope(doc)
 
 
@@ -51,12 +54,14 @@ async def set_section(
     response: Response,
     repo: RepoDep,
     user: CurrentUserDep,
+    feed: FeedDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
     rev, doc = await core.set_section(
         repo, key, anchor, body.heading, body.body, body.level, user=user
     )
     response.headers["ETag"] = rev
+    feed.publish(Event(key=key, rev=rev))
     return envelope(doc)
 
 
@@ -70,10 +75,12 @@ async def patch_section(
     response: Response,
     repo: RepoDep,
     user: CurrentUserDep,
+    feed: FeedDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
     rev, doc = await core.patch_section(repo, key, anchor, body.patch, user=user)
     response.headers["ETag"] = rev
+    feed.publish(Event(key=key, rev=rev))
     return envelope(doc)
 
 
@@ -86,9 +93,11 @@ async def remove_section(
     response: Response,
     repo: RepoDep,
     user: CurrentUserDep,
+    feed: FeedDep,
 ) -> ResponseEnvelope:
     # Returns 200 + envelope, not 204: the mutated document is in the response body.
     key = document_key(uid, project, slug)
     rev, doc = await core.remove_section(repo, key, anchor, user=user)
     response.headers["ETag"] = rev
+    feed.publish(Event(key=key, rev=rev))
     return envelope(doc)

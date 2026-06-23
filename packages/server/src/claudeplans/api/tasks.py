@@ -15,7 +15,8 @@ from claudeplans_contracts import (
 )
 
 from .. import core
-from .deps import CurrentUserDep, IfMatchDep, RepoDep
+from ..events import Event
+from .deps import CurrentUserDep, FeedDep, IfMatchDep, RepoDep
 from .envelope import ResponseEnvelope, envelope
 
 router = APIRouter(
@@ -34,10 +35,12 @@ async def add_task(
     response: Response,
     repo: RepoDep,
     user: CurrentUserDep,
+    feed: FeedDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
     rev, doc = await core.add_task(repo, key, phase_slug, body.text, user=user)
     response.headers["ETag"] = rev
+    feed.publish(Event(key=key, rev=rev))
     return envelope(doc)
 
 
@@ -53,12 +56,14 @@ async def toggle_task(
     expected_rev: IfMatchDep,
     repo: RepoDep,
     user: CurrentUserDep,
+    feed: FeedDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
     rev, doc = await core.toggle_task(
         repo, key, phase_slug, task_index, body.checked, expected_rev, user=user
     )
     response.headers["ETag"] = rev
+    feed.publish(Event(key=key, rev=rev))
     return envelope(doc)
 
 
@@ -74,12 +79,14 @@ async def edit_task(
     expected_rev: IfMatchDep,
     repo: RepoDep,
     user: CurrentUserDep,
+    feed: FeedDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
     rev, doc = await core.edit_task(
         repo, key, phase_slug, task_index, body.text, expected_rev, user=user
     )
     response.headers["ETag"] = rev
+    feed.publish(Event(key=key, rev=rev))
     return envelope(doc)
 
 
@@ -94,6 +101,7 @@ async def remove_task(
     expected_rev: IfMatchDep,
     repo: RepoDep,
     user: CurrentUserDep,
+    feed: FeedDep,
 ) -> ResponseEnvelope:
     # Returns 200 + envelope, not 204: the mutated document is in the response body.
     key = document_key(uid, project, slug)
@@ -101,4 +109,5 @@ async def remove_task(
         repo, key, phase_slug, task_index, expected_rev, user=user
     )
     response.headers["ETag"] = rev
+    feed.publish(Event(key=key, rev=rev))
     return envelope(doc)

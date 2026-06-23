@@ -15,7 +15,8 @@ from claudeplans_contracts import (
 )
 
 from .. import core
-from .deps import CurrentUserDep, IfMatchDep, RepoDep
+from ..events import Event
+from .deps import CurrentUserDep, FeedDep, IfMatchDep, RepoDep
 from .envelope import ResponseEnvelope, envelope
 
 router = APIRouter(prefix="/v1/users/{uid}/projects/{project}/docs", tags=["documents"])
@@ -29,11 +30,13 @@ async def create(
     response: Response,
     repo: RepoDep,
     user: CurrentUserDep,
+    feed: FeedDep,
 ) -> ResponseEnvelope:
     rev, doc = await core.create_document(
         repo, owner_id=uid, project=project, doc_in=body, user=user
     )
     response.headers["ETag"] = rev
+    feed.publish(Event(key=document_key(uid, project, body.slug), rev=rev))
     return envelope(doc)
 
 
@@ -59,9 +62,13 @@ async def delete(
     expected_rev: IfMatchDep,
     repo: RepoDep,
     user: CurrentUserDep,
+    feed: FeedDep,
 ) -> Response:
     key = document_key(uid, project, slug)
     await core.delete_document(repo, key, expected_rev, user=user)
+    # No new rev for a delete; a viewer's SSE reloads at expected_rev -> NotFound ->
+    # the deleted frame.
+    feed.publish(Event(key=key, rev=expected_rev))
     return Response(status_code=204)
 
 
@@ -74,10 +81,12 @@ async def set_status(
     response: Response,
     repo: RepoDep,
     user: CurrentUserDep,
+    feed: FeedDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
     rev, doc = await core.set_document_status(repo, key, body.status, user=user)
     response.headers["ETag"] = rev
+    feed.publish(Event(key=key, rev=rev))
     return envelope(doc)
 
 
@@ -90,10 +99,12 @@ async def set_research_refs(
     response: Response,
     repo: RepoDep,
     user: CurrentUserDep,
+    feed: FeedDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
     rev, doc = await core.put_research_refs(
         repo, key, body.research_refs, body.primary_research_ref, user=user
     )
     response.headers["ETag"] = rev
+    feed.publish(Event(key=key, rev=rev))
     return envelope(doc)

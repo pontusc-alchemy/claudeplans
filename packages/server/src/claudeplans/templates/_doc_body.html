@@ -1,0 +1,35 @@
+{# The morph payload. Stable ids here ARE the delta -> fragment-id map; idiomorph
+   diffs against them. Only *_html values are nh3-sanitized and marked | safe;
+   every other interpolation stays autoescaped. #}
+<h1 id="doc-title">{{ doc.title }}</h1>
+<span id="doc-status" class="pill {{ doc.status.value }}">{{ doc.status.value }}</span>
+{% if description_html %}
+<div id="doc-description">{{ description_html|safe }}</div>
+{% else %}
+<div id="doc-description"></div>
+{% endif %}
+<div id="sections">
+  {% for s in sections %}
+  <section id="section-{{ s.anchor }}" class="md-section">
+    <h{{ s.level }}>{{ s.heading }}</h{{ s.level }}>
+    {{ s.body_html|safe }}
+  </section>
+  {% endfor %}
+</div>
+{% if phases %}
+<ol id="phases" class="phases">
+  {% for p in phases %}
+  <li id="phase-{{ p.slug }}" class="phase">
+    <span class="phase-name">{{ p.name }}</span>
+    <span id="phase-{{ p.slug }}-status" class="pill {{ p.status }}">{{ p.status }}</span>
+    <ul class="tasks">
+      {% for t in p.tasks %}
+      <li id="phase-{{ p.slug }}-task-{{ loop.index0 }}" class="task {{ 'done' if t.checked else '' }}">
+        <span class="task-check">{{ '☑' if t.checked else '☐' }}</span> {{ t.text }}
+      </li>
+      {% endfor %}
+    </ul>
+  </li>
+  {% endfor %}
+</ol>
+{% endif %}

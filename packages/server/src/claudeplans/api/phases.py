@@ -14,7 +14,8 @@ from claudeplans_contracts import (
 )
 
 from .. import core
-from .deps import CurrentUserDep, IfMatchDep, RepoDep
+from ..events import Event
+from .deps import CurrentUserDep, FeedDep, IfMatchDep, RepoDep
 from .envelope import ResponseEnvelope, envelope
 
 router = APIRouter(
@@ -32,12 +33,14 @@ async def add_phase(
     response: Response,
     repo: RepoDep,
     user: CurrentUserDep,
+    feed: FeedDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
     rev, doc = await core.add_phase(
         repo, key, body.slug, body.name, body.status, user=user
     )
     response.headers["ETag"] = rev
+    feed.publish(Event(key=key, rev=rev))
     return envelope(doc)
 
 
@@ -51,12 +54,14 @@ async def set_phase_status(
     response: Response,
     repo: RepoDep,
     user: CurrentUserDep,
+    feed: FeedDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
     rev, doc = await core.set_phase_status(
         repo, key, phase_slug, body.status, user=user
     )
     response.headers["ETag"] = rev
+    feed.publish(Event(key=key, rev=rev))
     return envelope(doc)
 
 
@@ -71,6 +76,7 @@ async def move_phase(
     expected_rev: IfMatchDep,
     repo: RepoDep,
     user: CurrentUserDep,
+    feed: FeedDep,
 ) -> ResponseEnvelope:
     # Reorders the phase list, so it carries the client's rev (missing -> 428,
     # stale -> 409), consistent with the index-addressed task ops.
@@ -79,6 +85,7 @@ async def move_phase(
         repo, key, phase_slug, body.to_index, expected_rev, user=user
     )
     response.headers["ETag"] = rev
+    feed.publish(Event(key=key, rev=rev))
     return envelope(doc)
 
 
@@ -91,8 +98,10 @@ async def remove_phase(
     response: Response,
     repo: RepoDep,
     user: CurrentUserDep,
+    feed: FeedDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
     rev, doc = await core.remove_phase(repo, key, phase_slug, user=user)
     response.headers["ETag"] = rev
+    feed.publish(Event(key=key, rev=rev))
     return envelope(doc)
