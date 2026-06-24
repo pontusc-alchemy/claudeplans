@@ -175,3 +175,40 @@ class SearchResults(BaseModel):
 
     query: str
     hits: list[SearchHit]
+
+
+class DocListEntry(BaseModel):
+    """One document in a project listing."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    slug: str
+    title: str
+    type: DocType
+    status: DocStatus
+
+
+class DocList(BaseModel):
+    """All documents in one project."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    project: str
+    items: list[DocListEntry]
+
+
+class ProjectEntry(BaseModel):
+    """One project in a user's project listing."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    project: str
+    docs: int
+
+
+class ProjectList(BaseModel):
+    """All projects owned by a user."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[ProjectEntry]

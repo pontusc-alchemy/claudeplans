@@ -24,7 +24,7 @@ from claudeplans_contracts import (
 
 from ..context import AppContext
 from ..errors import handle_errors
-from ..output import emit, emit_phases
+from ..output import emit, emit_obj, emit_phases
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -164,3 +164,21 @@ def unlink(
     new_refs, new_primary = unlink_research_ref(existing, existing_primary, ref)
     reply = c.client.put_research_refs(c.uid, project, slug, new_refs, new_primary)
     emit(reply)
+
+
+@app.command("list")
+@handle_errors
+def list_(ctx: typer.Context, project: str) -> None:
+    """List all documents in a project."""
+    c: AppContext = ctx.obj
+    emit_obj(c.client.list_docs(c.uid, project))
+
+
+@app.command()
+@handle_errors
+def view(ctx: typer.Context, project: str, slug: str) -> None:
+    """Print the rendered view URL for a document (no network request)."""
+    c: AppContext = ctx.obj
+    print(
+        f"{c.base_url.rstrip('/')}/v1/users/{c.uid}/projects/{project}/docs/{slug}/view"
+    )

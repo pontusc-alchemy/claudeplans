@@ -217,7 +217,8 @@ class FilesystemRepository(Repository):
             # title index without reading bodies (GCS sources these from object meta).
             # doc is JsonValue, so only read fields off it when it's actually a dict;
             # created_at/updated_at are coerced to str for the dict[str, str] metadata.
-            title = str(doc.get("title", "")) if isinstance(doc, dict) else ""
+            raw_title = doc.get("title") if isinstance(doc, dict) else None
+            title = raw_title if isinstance(raw_title, str) else ""
             doc_type = str(doc.get("type", "")) if isinstance(doc, dict) else ""
             status = str(doc.get("status", "")) if isinstance(doc, dict) else ""
             entries.append(

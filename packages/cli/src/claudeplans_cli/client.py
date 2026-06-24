@@ -89,8 +89,8 @@ class PlanClient:
         else:
             self._http = httpx.Client(base_url=base_url)
 
-    def _reply(self, resp: httpx.Response) -> Reply:
-        """Map a response to a Reply, raising the matching domain error on failure."""
+    def _raise_for_status(self, resp: httpx.Response) -> None:
+        """Raise the matching domain error for any non-2xx response."""
         if resp.status_code >= 400:
             detail = _detail_message(resp)
             error_cls = _STATUS_TO_ERROR.get(resp.status_code)
@@ -100,11 +100,29 @@ class PlanClient:
             # boundary catches it (-> generic exit code) rather than leaking an
             # httpx.HTTPStatusError traceback.
             raise PlanError(f"unexpected HTTP {resp.status_code}: {detail}")
+
+    def _reply(self, resp: httpx.Response) -> Reply:
+        """Map a response to a Reply, raising the matching domain error on failure."""
+        self._raise_for_status(resp)
         rev = resp.headers.get("ETag")
         if resp.status_code == 204 or not resp.content:
             return Reply(rev=rev, data=None, warnings=[])
         body = resp.json()
         return Reply(rev=rev, data=body["data"], warnings=body.get("warnings", []))
+
+    def _get_json(self, path: str) -> object:
+        """GET a plain-JSON endpoint (not the {rev,data,warnings} envelope)."""
+        resp = self._http.get(path)
+        self._raise_for_status(resp)
+        return resp.json()
+
+    def list_projects(self, uid: str) -> object:
+        """GET /v1/users/{uid}/projects → ProjectList plain JSON."""
+        return self._get_json(f"/v1/users/{uid}/projects")
+
+    def list_docs(self, uid: str, project: str) -> object:
+        """GET /v1/users/{uid}/projects/{project}/docs → DocList plain JSON."""
+        return self._get_json(f"/v1/users/{uid}/projects/{project}/docs")
 
     def _doc_base(self, uid: str, project: str, slug: str) -> str:
         """The collection-item URL a single document's mutations hang off."""

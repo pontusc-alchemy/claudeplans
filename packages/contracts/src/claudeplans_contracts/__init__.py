@@ -13,6 +13,8 @@ line IS the API declaration — there is no separate `__all__` list to drift fro
 from .dto import AddPhaseRequest as AddPhaseRequest
 from .dto import AddSectionRequest as AddSectionRequest
 from .dto import AddTaskRequest as AddTaskRequest
+from .dto import DocList as DocList
+from .dto import DocListEntry as DocListEntry
 from .dto import DocStatusRequest as DocStatusRequest
 from .dto import DocumentCreate as DocumentCreate
 from .dto import DriftWarning as DriftWarning
@@ -20,6 +22,8 @@ from .dto import EditTaskRequest as EditTaskRequest
 from .dto import MovePhaseRequest as MovePhaseRequest
 from .dto import PatchSectionRequest as PatchSectionRequest
 from .dto import PhaseStatusRequest as PhaseStatusRequest
+from .dto import ProjectEntry as ProjectEntry
+from .dto import ProjectList as ProjectList
 from .dto import ResearchRefsRequest as ResearchRefsRequest
 from .dto import SearchHit as SearchHit
 from .dto import SearchResults as SearchResults

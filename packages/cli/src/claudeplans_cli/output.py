@@ -52,3 +52,8 @@ def emit_phases(reply: Reply) -> None:
     """Print just the document's phases list (plus rev) as compact JSON."""
     phases = reply.data.get("phases", []) if reply.data is not None else []
     _compact({"rev": reply.rev, "phases": phases})
+
+
+def emit_obj(obj: object) -> None:
+    """Print a plain object as compact single-line JSON to stdout."""
+    _compact(obj)
