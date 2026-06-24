@@ -1,23 +1,34 @@
 ---
 name: review
-description: Reconcile a saved plan under ~/plans/src/projects against reality — verify which gaps, decisions, and phase tasks were actually implemented, report the drift, and on approval revise the document in place. Can also deep-verify a chosen part of a plan on request. Takes a plan slug. Closes the loop after implementation.
+description: Reconcile a saved plan in the claudeplans service against reality — verify which gaps, decisions, and phase tasks were actually implemented, report the drift, and on approval revise the document in place via the CLI. Can also deep-verify a chosen part of a plan on request. Takes a plan project and slug. Closes the loop after implementation.
 user-invocable: true
 model-invocable: false
-allowed-tools: Bash, Agent, Read, Edit
+allowed-tools: Bash, Agent
 ---
 
-Audit a plan document against the current state of the world, then bring the document back in sync — per `${CLAUDE_PLUGIN_ROOT}/AUTHORING.md`. The reverse loop: reconcile after work happened without the document. (`/plan:iterate` is the forward loop that mutates the doc as work happens.) Reconciliation is the default mode; the user may instead ask to strongly verify a specific part of the plan — same report-then-STOP shape, deeper verification.
+Audit a plan document against the current state of the world, then bring the document back in sync via the claudeplans CLI. The reverse loop: reconcile after work happened without the document. (`/plan:iterate` is the forward loop that mutates the doc as work happens.) Reconciliation is the default mode; the user may instead ask to strongly verify a specific part of the plan — same report-then-STOP shape, deeper verification.
 
 <!-- This skill uses portable `general-purpose` agent names, not the house scout/investigator roster — a deliberate divergence so it works without those agents installed. -->
 
-## Resolve & extract structure
+## 1 — Extract structure
+
+Arguments must carry both `<project>` and `<slug>` — there is no fuzzy resolve. For project-wide discovery: list projects with `claudeplans project list`, list a project's documents with `claudeplans doc list <project>` (both return JSON). The lineage page is the human browser view — open it with `claudeplans project view <project>` which prints its URL. (The search endpoint requires `?q=<term>` and performs keyword search, not enumeration.)
 
 ```shell
-"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" resolve "<arg>"
-"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" phases <path>
+claudeplans doc phases "<project>" "<slug>"
 ```
 
-Each → JSON; non-zero exit → relay stderr and stop. `resolve` `kind: ambiguous` → present and ask, don't guess; `kind: none` → say no match and run `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" list` to present what exists. Pass the resolved `path` (not the slug — it collides across projects) to `phases`/`touch`/`status`. `phases` supplies every phase, its status (`todo|doing|done|blocked`), and its checkbox states deterministically. Then spawn one `Agent` (`general-purpose`, `haiku`) to read the doc for what the script does not extract: the in-prose status claims (pills `todo`/`doing`/`blocked`) with their surrounding sentence and anchor, the closing gaps/decisions checklist item by item, and every version pin with its stated target.
+→ JSON `{rev, phases:[{slug, name, status, tasks:[{text, checked}]}]}`; hold `rev`. Then read prose sections using projections:
+
+```shell
+claudeplans doc get "<project>" "<slug>" --section "<anchor>"
+claudeplans doc get "<project>" "<slug>" --phase "<phase-slug>"
+claudeplans doc get "<project>" "<slug>" --fields "title,description,status,research_refs"
+```
+
+Non-zero exit on any call → relay stderr and stop.
+
+Spawn one `Agent` (`general-purpose`, `haiku`) to process the full structure output and return: the in-prose status claims with their surrounding context, the open gaps/decisions item by item, and every version pin with its stated target.
 
 ## 2 — Verify against reality (delegate, sonnet)
 
@@ -35,10 +46,28 @@ Verdict per claim: **done** / **drifted** (exists but differs — say how) / **s
 
 Present the drift as a pipe table (claim · plan said · reality · verdict) and STOP for the user's review. Do not edit before approval.
 
-On approval, revise the doc **in place** — never spawn a `-v2`:
+On approval, revise the doc **in place** — never create a new slug or version:
 
-- For **done** items, advance the phase via `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" set-phase <path> <slug> done` and check tasks via `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" task <path> <slug> <selector> --check`; **drifted** / **still open** keep their status.
-- Where reality diverged, update the prose to match and mark it `!!! note "Revised YYYY-MM-DD"` (ISO date).
-- Append a dated entry to `## Review log {#review-log}` (create if absent): what was verified, what changed, what remains open.
-- Bump the date: `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" touch <path>`.
-- When everything is reconciled (all phases `done`, no open gaps), propose `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" status <path> done`.
+- For **done** items, advance the phase (re-read `doc phases` to refresh `rev` first):
+  ```shell
+  claudeplans phase set-status "<project>" "<slug>" "<phase-slug>" done
+  claudeplans task toggle "<project>" "<slug>" "<phase-slug>" <index> --rev <rev>
+  ```
+- **Drifted** / **still open** items keep their status.
+- Where reality diverged, update the prose via `section set` or `section patch` to match (plain markdown — no HTML spans or admonitions):
+  ```shell
+  claudeplans section set "<project>" "<slug>" "<anchor>" --body "<updated markdown>"
+  claudeplans section patch "<project>" "<slug>" "<anchor>" --merge-patch '{"body":"<updated>"}'
+  ```
+- Append a dated entry to a `review-log` section (create if absent):
+  ```shell
+  # Create if absent:
+  claudeplans section add "<project>" "<slug>" "review-log" "Review log" --level 2
+  # Append via set (replace body with prior content + new entry):
+  claudeplans section set "<project>" "<slug>" "review-log" --body "<full updated body>"
+  ```
+  Entry format (plain markdown): `## YYYY-MM-DD — what was verified, what changed, what remains open`.
+- When everything is reconciled (all phases `done`, no open gaps), propose:
+  ```shell
+  claudeplans doc status "<project>" "<slug>" done
+  ```

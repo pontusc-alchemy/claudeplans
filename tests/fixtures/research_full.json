@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "type": "research",
+  "status": "draft",
+  "project": "api-gateway-migration",
+  "slug": "envoy-proxy-architecture",
+  "title": "Envoy Proxy Architecture Deep Dive",
+  "owner_id": "pontusc",
+  "date": "2026-06-10",
+  "description": "Investigation of Envoy's threading model, xDS protocol, and operational trade-offs relative to managed API Gateway offerings.",
+  "frontmatter": {},
+  "research_refs": [],
+  "primary_research_ref": null,
+  "sections": [
+    {
+      "anchor": "overview",
+      "heading": "Overview",
+      "body": "Envoy is a cloud-native L7 proxy written in C++. Each worker thread handles a subset of connections; the main thread owns the xDS subscription loop and fans updates out without locking hot paths.",
+      "level": 1
+    },
+    {
+      "anchor": "xds-protocol",
+      "heading": "xDS Control Plane Protocol",
+      "body": "Envoy discovers routes, clusters, listeners, and endpoints via streaming gRPC (xDS v3). The control plane pushes a DiscoveryResponse; Envoy applies it atomically and ACKs. Stale configs are never visible during an update.",
+      "level": 2
+    },
+    {
+      "anchor": "threading-model",
+      "heading": "Threading Model",
+      "body": "One listener thread accepts connections and dispatches to `N` worker threads (configurable via `--concurrency`). Each worker thread runs a libevent loop. Upstream connection pools are per-thread, eliminating cross-thread lock contention.",
+      "level": 2
+    },
+    {
+      "anchor": "observability",
+      "heading": "Observability",
+      "body": "Envoy exposes a Prometheus-compatible `/stats/prometheus` endpoint and supports distributed tracing via Zipkin, Jaeger, or OpenTelemetry. Access logs are structured JSON by default.",
+      "level": 2
+    },
+    {
+      "anchor": "verdict",
+      "heading": "Verdict",
+      "body": "Envoy is a strong fit: sub-millisecond overhead in benchmarks, mature xDS ecosystem, and first-class Kubernetes integration via Istio or Gateway API. Main cost is operational complexity of the control plane.",
+      "level": 2
+    }
+  ],
+  "phases": []
+}

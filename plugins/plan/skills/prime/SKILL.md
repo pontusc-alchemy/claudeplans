@@ -1,44 +1,33 @@
 ---
 name: prime
-description: Bootstrap session context from a saved plans document or project. Given a project name, enumerate its docs and brief from the active ones; given a slug, brief that document.
+description: Bootstrap session context from a claudeplans document or project. Given a project and slug, brief that document; for project-wide discovery use `claudeplans project list` / `claudeplans doc list <project>`.
 user-invocable: true
 model-invocable: true
 allowed-tools: Bash, Agent
 model: sonnet
 ---
 
-Load context from a saved document under `~/plans/src/projects/` by delegating the reads to an agent — never read large files in the main thread. The argument is a project name or a slug.
+Load context from a document in the claudeplans service by delegating the reads to an agent — never read large JSON payloads in the main thread. Arguments must carry both `<project>` and `<slug>` — there is no fuzzy resolve.
 
-## Resolve the source
+For project-wide discovery (no slug known): enumerate with the CLI — `claudeplans project list` lists all projects, `claudeplans doc list <project>` lists a project's documents (both return JSON). Ask the user to supply the slug before continuing. The lineage page is the human browser view; get its URL with `claudeplans project view <project>`. (The search endpoint `…/search?q=<term>` performs keyword search — it requires a query term and is not a listing.)
 
-```shell
-"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" resolve "<arg>"
-```
-
-→ JSON `{kind, docs}`; non-zero exit → relay stderr and stop.
-
-- `kind: project` → brief the `status: active` docs; if several are active brief all, if none, present the list and ask.
-- `kind: doc` → brief that document.
-- `kind: ambiguous` → present the candidates and ask. Don't guess.
-- `kind: none` → say no match and run `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" list` to present what exists.
-- Bare invocation (no argument) → `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" list` and present the tree.
-
-For each `type: plan` doc, get the current phase deterministically — pass the resolved `path`:
+## Load the source
 
 ```shell
-"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" phases <path>
+claudeplans doc get "<project>" "<slug>"
+claudeplans doc phases "<project>" "<slug>"
 ```
 
-→ `{current, tally:{done,total,blocked}, phases:[{ordinal,slug,name,status,note,has_phase_class,tasks}]}`.
+Non-zero exit → relay stderr and stop. For a `type: plan` doc, `doc phases` returns `{rev, phases:[{slug, name, status, tasks:[{text, checked}]}]}` — the current phase is the first entry whose status is not `done`.
 
 ## Brief (delegate)
 
-Spawn one `Agent` (`general-purpose`, `sonnet`) to read the resolved doc(s) and return a DENSE briefing — the `phases` output already supplies the current phase and task states, so the agent focuses on:
+Spawn one `Agent` (`general-purpose`, `sonnet`) with the JSON output from both calls and instruct it to return a DENSE briefing focused on:
 
-- title + intro; section list (level-2 `##`) in order;
-- done phases / locked decisions (`status: done`, `<span class="pill done">`);
-- open/blocked phases and caveats (`status: todo|doing|blocked`, `!!! warning` / `!!! danger` admonitions);
-- the `tally` (done/total, blocked count) and the current phase;
-- verbatim config / commands / paths / version pins.
+- title + description; section list (anchors + headings) in order;
+- done phases / locked decisions (status `done`);
+- open/blocked phases and caveats (status `todo|doing|blocked`), open tasks;
+- progress summary (done/total phases, blocked count) and the current phase;
+- verbatim config / commands / paths / version pins found in section bodies.
 
 Relay the result as restored context and continue.

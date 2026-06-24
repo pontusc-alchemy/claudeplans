@@ -1,6 +1,6 @@
 {
   "name": "plan",
-  "description": "Research → plan → iterate → review lifecycle with local MkDocs rendering",
+  "description": "Research → plan → iterate → review lifecycle over the claudeplans service (CLI + live HTML view)",
   "author": { "name": "Pontus Curtsson" },
   "skills": ["./skills/"]
 }

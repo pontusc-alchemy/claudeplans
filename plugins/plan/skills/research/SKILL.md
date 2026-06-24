@@ -1,22 +1,24 @@
 ---
 name: research
-description: Research a topic and present the findings as a Markdown document under ~/plans/src/projects/<project>/ that auto-renders to a dark-themed HTML view at http://plans.claude. Use to investigate a question, compare options, or gather and cite sources into a browsable deliverable.
+description: Research a topic and create a structured findings document in the claudeplans service (CLI + browsable view). Use to investigate a question, compare options, or gather and cite sources into a browsable deliverable.
 user-invocable: true
 model-invocable: false
-allowed-tools: Bash, Agent, Read, Write, Edit
+allowed-tools: Bash, Agent
 ---
 
-Gather material on a topic, then present it as a **Markdown** findings document authored per `${CLAUDE_PLUGIN_ROOT}/AUTHORING.md` — never write HTML, never touch the theme. This is the reference cornerstone: a FULL consideration of a topic (why, options, docs, gotchas). An action plan is not always the end goal — the findings doc itself may be the deliverable.
+Gather material on a topic, then persist the findings as a **structured research document** in the claudeplans service via the CLI. This is the reference cornerstone: a FULL consideration of a topic (why, options, docs, gotchas). An action plan is not always the end goal — the findings doc itself may be the deliverable.
 
 Argument: `<project> <topic>`.
 
 ## 0 — Scaffold
 
+Generate a URL-safe slug from the topic (kebab-case, ≤40 chars). Create the document:
+
 ```shell
-"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" new "<project>" research "<topic>" [--slug S]
+claudeplans doc create "<project>" --type research --slug "<slug>" --title "<topic title>"
 ```
 
-→ JSON `{path, slug, project, url}`; non-zero exit → relay stderr and stop. A `creating new project '<p>'` warning on stderr is a typo guard — confirm the project with the user before continuing. Fill the scaffold with `Write`/`Edit`; the template is the section contract.
+→ the reply envelope `{rev, data:{...}, warnings}` (the created doc's fields are under `data`); non-zero exit → relay stderr and stop. The project is created implicitly on first doc — double-check the project name is right before continuing (there is no new-project warning). Sections are added via `claudeplans section add` — the section contract is in `${CLAUDE_PLUGIN_ROOT}/AUTHORING.md`.
 
 ## 1 — Survey (delegate, sonnet)
 
@@ -36,10 +38,23 @@ Run as many deepening passes as a subject warrants — judgment call. A narrow t
 
 ## 3 — Construct the findings
 
-- Cite inline: `[official docs](url)`, `<span class="src">…</span>` for provenance.
-- Mark every unverified / third-party claim: `<span class="tag">unverified</span>` and/or a `!!! warning`.
-- When the findings are substantive, flip status: `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" status <path> active` (use the `path` returned by `new` — not the bare slug, which collides across projects).
+Build the document section by section using the CLI:
+
+```shell
+claudeplans section add "<project>" "<slug>" "<anchor>" "<Heading>" --body "<markdown text>" --level 2
+claudeplans section set "<project>" "<slug>" "<anchor>" --body "<updated markdown>"
+```
+
+Section bodies are **plain markdown** — cite sources inline as `[official docs](url)`. Mark every unverified / third-party claim in the body text (e.g. `[unverified — third-party source]`). Do not write HTML spans, pills, or admonitions — the service renders and sanitizes the markdown.
+
+When the findings are substantive, flip status:
+
+```shell
+claudeplans doc status "<project>" "<slug>" active
+```
+
+Get the browsable view URL with `claudeplans doc view "<project>" "<slug>"`.
 
 ## 4 — Hand off (optional)
 
-When the research should drive action, offer to point `/plan:write` at this doc. Pure topic research with no implementation plan is a valid end state.
+When the research should drive action, offer to point `/plan:write` at this doc (pass the research slug as the second argument). Pure topic research with no implementation plan is a valid end state.

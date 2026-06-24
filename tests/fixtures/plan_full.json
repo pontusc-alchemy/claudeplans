@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "type": "plan",
+  "status": "active",
+  "project": "api-gateway-migration",
+  "slug": "migrate-api-gateway-to-envoy",
+  "title": "Migrate API Gateway to Envoy Proxy",
+  "owner_id": "pontusc",
+  "date": "2026-06-24",
+  "description": "Replace the legacy AWS API Gateway with a self-managed Envoy Proxy sidecar mesh to cut latency and gain L7 routing control.",
+  "frontmatter": {
+    "priority": "high",
+    "team": "platform",
+    "ticket": "PLAT-418",
+    "stakeholders": ["infra", "backend"]
+  },
+  "research_refs": [
+    "envoy-proxy-architecture",
+    "aws-api-gateway-cost-analysis"
+  ],
+  "primary_research_ref": "envoy-proxy-architecture",
+  "sections": [
+    {
+      "anchor": "background",
+      "heading": "Background",
+      "body": "The current API Gateway introduces ~40 ms of median latency and limits header manipulation. Envoy gives us xDS-based dynamic routing, retries, and circuit breaking without per-request AWS costs.",
+      "level": 2
+    },
+    {
+      "anchor": "scope",
+      "heading": "Scope",
+      "body": "Covers the three public-facing services: auth, search, and ingest. Internal gRPC traffic is out of scope for this iteration.",
+      "level": 2
+    },
+    {
+      "anchor": "risk-register",
+      "heading": "Risk Register",
+      "body": "| Risk | Mitigation |\n|------|------------|\n| TLS cert rotation gap | Use cert-manager with auto-renew |\n| Canary traffic split | Feature-flag per-service |",
+      "level": 3
+    }
+  ],
+  "phases": [
+    {
+      "slug": "discovery",
+      "name": "Discovery & Benchmarking",
+      "status": "done",
+      "tasks": [
+        { "text": "Profile p50/p99 latency of current API Gateway", "checked": true },
+        { "text": "Document all active routes and auth integrations", "checked": true },
+        { "text": "Evaluate Envoy control-plane options (Istio vs raw xDS)", "checked": true }
+      ]
+    },
+    {
+      "slug": "envoy-rollout",
+      "name": "Envoy Rollout",
+      "status": "doing",
+      "tasks": [
+        { "text": "Author Envoy bootstrap config and Docker image", "checked": true },
+        { "text": "Deploy to staging behind feature flag", "checked": true },
+        { "text": "Wire xDS control plane for dynamic route updates", "checked": false },
+        { "text": "Run load test and compare latency profiles", "checked": false }
+      ]
+    },
+    {
+      "slug": "cutover",
+      "name": "Production Cutover",
+      "status": "todo",
+      "tasks": [
+        { "text": "Canary 10 % of auth traffic through Envoy", "checked": false },
+        { "text": "Ramp to 100 % and monitor error budget", "checked": false },
+        { "text": "Disable API Gateway endpoints and update DNS", "checked": false }
+      ]
+    },
+    {
+      "slug": "decommission",
+      "name": "Decommission & Cleanup",
+      "status": "blocked",
+      "tasks": [
+        { "text": "Remove API Gateway Terraform resources", "checked": false },
+        { "text": "Archive access logs and cost reports", "checked": false }
+      ]
+    }
+  ]
+}

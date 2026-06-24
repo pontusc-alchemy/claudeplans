@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "type": "plan",
+  "status": "done",
+  "project": "api-gateway-migration",
+  "slug": "pre-migration-audit",
+  "title": "Pre-Migration Audit",
+  "owner_id": "pontusc",
+  "date": "2026-05-01",
+  "description": "Completed audit of existing API Gateway routes and auth integrations ahead of the Envoy migration.",
+  "frontmatter": {},
+  "research_refs": [],
+  "primary_research_ref": null,
+  "sections": [
+    {
+      "anchor": "summary",
+      "heading": "Summary",
+      "body": "All 47 public routes catalogued. Three routes use deprecated AWS-specific auth extensions that require adapters in Envoy.",
+      "level": 2
+    }
+  ],
+  "phases": [
+    {
+      "slug": "inventory",
+      "name": "Route Inventory",
+      "status": "done",
+      "tasks": [
+        { "text": "Extract all routes from API Gateway console", "checked": true },
+        { "text": "Document auth integration per route", "checked": true }
+      ]
+    },
+    {
+      "slug": "gap-analysis",
+      "name": "Gap Analysis",
+      "status": "done",
+      "tasks": [
+        { "text": "Identify routes with no Envoy equivalent filter", "checked": true },
+        { "text": "Flag deprecated auth extensions", "checked": true },
+        { "text": "Produce adapter requirements list", "checked": true }
+      ]
+    }
+  ]
+}

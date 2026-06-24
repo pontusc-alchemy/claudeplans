@@ -1,42 +1,57 @@
 ---
 name: setup
-description: Install, upgrade, or repair the local plans rendering stack (MkDocs render unit + Caddy site at http://plans.claude). Run once after installing the plugin, and again after every plugin update.
+description: Bring up the claudeplans service locally via the repo's compose stack (make up — Docker Compose, API + view on :8000). Run once after cloning or after a stack update; verify health with the /healthz endpoint.
 user-invocable: true
 model-invocable: false
 allowed-tools: Bash, Read
 ---
 
-Install the bundled hosting idempotently into the stable runtime dir `~/.config/plans-server/` — the plugin is source + installer; systemd units never point into the plugin cache (its path changes on every update).
+Bring up the claudeplans HTTP service locally. The service exposes the full API and a live HTML view at `:8000`. Once running, the `claudeplans` CLI targets it at `http://127.0.0.1:8000` (the default, or set `CLAUDEPLANS_URL`).
 
-## 1 — User-scoped install (no sudo)
+## 1 — Start the service
 
-```shell
-make -C "${CLAUDE_PLUGIN_ROOT}/server" install
-```
-
-Renders configs, copies assets, installs the landing-page stub if absent, creates/refreshes the venv, and enables the per-user `plans-render` unit.
-
-On macOS / non-systemd hosts only the portable tier applies: `make install` sets up config + venv, then the user runs `make -C "${CLAUDE_PLUGIN_ROOT}/server" serve` (foreground render at http://127.0.0.1:8001). The render-unit and system-install tiers below are Linux-only.
-
-## 2 — Verify
+From the repo root:
 
 ```shell
-make -C "${CLAUDE_PLUGIN_ROOT}/server" status
-"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" check --all
+make up
 ```
 
-On non-Linux `make status` is unavailable; with `make serve` running, verify the page instead: `curl -fs http://127.0.0.1:8001/index.html | grep -q 'grid cards'`.
-
-Units active, the landing-page probe (`grid cards`) passing, and `check` clean means the stack is healthy.
-
-## 3 — System step (sudo — the user runs it)
-
-If `install`/`status` shows the hint about `http://plans.claude` (the `/etc/hosts` entry + Caddy system unit are missing), tell the user to run it themselves — NEVER run sudo for them:
+This runs `docker compose up --build` in the **foreground**, streaming logs to the terminal — the shell is blocked while the stack is up. Start it in a separate terminal (or background it), then run the health check from another shell. To stop:
 
 ```shell
-make -C "${CLAUDE_PLUGIN_ROOT}/server" system-install
+make down
 ```
+
+## 2 — Verify health
+
+From a separate shell (while `make up` is running):
+
+```shell
+curl -fs http://127.0.0.1:8000/healthz
+```
+
+A 200 response means the stack is ready. If the curl fails, check the `make up` terminal for errors or run `docker compose logs`.
+
+## 3 — Store the service address
+
+Once the stack is healthy, write the address into the CLI config so subsequent commands need no `--url`:
+
+```shell
+claudeplans config set --url http://127.0.0.1:8000 --uid dev
+```
+
+The url must match the configured bind (`CLAUDEPLANS_HOST_IP`/`CLAUDEPLANS_HOST_PORT`) — if a non-default bind or friendly-hostname is used, pass that url instead. Verify with:
+
+```shell
+claudeplans config show
+```
+
+## 4 — Environment
+
+- **Bind address**: controlled by `CLAUDEPLANS_HOST_IP` (default `127.0.0.1`) and `CLAUDEPLANS_HOST_PORT` (default `8000`). An optional `/etc/hosts` friendly-hostname alias (loopback) is supported; the user must add it themselves (requires sudo).
+- **Auth**: the dev stack uses a fixed `dev` user with no authentication — set `CLAUDEPLANS_UID=dev` or pass `--uid dev` to the CLI (the default).
+- **CLI target**: `CLAUDEPLANS_URL=http://127.0.0.1:8000` is the default; override via `claudeplans config set --url <url>` or the env var if the bind address differs.
 
 ## Upgrades
 
-After `/plugin marketplace update plans`, re-run this skill — it re-copies configs and restarts only what changed.
+After pulling new repo commits, re-run `make up` — compose rebuilds only changed layers.

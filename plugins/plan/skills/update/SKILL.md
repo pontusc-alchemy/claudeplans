@@ -1,31 +1,60 @@
 ---
 name: update
-description: Make a targeted revision to a saved plan or research document under ~/plans/src/projects — edit a section, option, version pin, gap, or frontmatter field on request, then bump the date and validate. Takes a doc slug or project plus the change to make. The direct-edit loop of the lifecycle.
+description: Make a targeted revision to a saved plan or research document in the claudeplans service — edit a section, phase status, task state, or doc status on request via the CLI. Takes the project and doc slug plus the change to make. The direct-edit loop of the lifecycle.
 user-invocable: true
 model-invocable: false
-allowed-tools: Bash, Read, Edit
+allowed-tools: Bash, Agent
 ---
 
-Apply an intent-driven revision to a saved document — per `${CLAUDE_PLUGIN_ROOT}/AUTHORING.md`. This is the direct loop: change content because the user asked, when no implementation or audit is happening. (`/plan:iterate` is the forward loop that edits as work happens; `/plan:review` is the reverse loop that reconciles against reality.) Works on both `research` and `plan` docs.
+Apply an intent-driven revision to a saved document via the claudeplans CLI. This is the direct loop: change content because the user asked, when no implementation or audit is happening. (`/plan:iterate` is the forward loop that edits as work happens; `/plan:review` is the reverse loop that reconciles against reality.) Works on both `research` and `plan` docs.
 
-## Resolve
+Arguments must carry both `<project>` and `<slug>` — there is no fuzzy resolve. For project-wide discovery: list projects with `claudeplans project list`, list a project's documents with `claudeplans doc list <project>` (both return JSON). The lineage page is the human browser view — open it with `claudeplans project view <project>` which prints its URL. (The search endpoint requires `?q=<term>` and performs keyword search, not enumeration.)
+
+## Read before editing
+
+Load what the change targets (use projections to stay narrow):
 
 ```shell
-"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" resolve "<arg>"
+claudeplans doc get "<project>" "<slug>" --section "<anchor>"
+claudeplans doc get "<project>" "<slug>" --phase "<phase-slug>"
+claudeplans doc get "<project>" "<slug>" --fields "title,description,status"
+claudeplans doc phases "<project>" "<slug>"   # returns rev — required for position-sensitive ops
 ```
 
-→ JSON `{kind, docs}`; non-zero exit → relay stderr and stop. `kind: ambiguous` → present and ask, don't guess; `kind: none` → say no match and run `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" list` to present what exists. Pass the resolved `path` (not the slug — it collides across projects) to `touch`/`status`/`check`. Read only the section the change targets inline.
+Non-zero exit → relay stderr and stop.
 
-## Revise
+## Confirm, then revise
 
 - Confirm the change with the user before editing — restate what will change and where.
-- Edit in place with `Edit`/`Write` per AUTHORING (raw `<span>` pills, single-line frontmatter, real em-dashes, relative `.md` links). Never spawn a `-v2`.
-- Body changes: revise the targeted section, option, pin, or gap directly. For a plan's phase status use `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" set-phase <path> <slug> <status>` (`todo|doing|done|blocked`) and toggle phase tasks with `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" task <path> <slug> <selector> --check|--uncheck` — don't hand-edit phase pills or checkboxes. Decision pills outside phases (e.g. items under `## Gaps & decisions`) remain hand-edited per AUTHORING.
-- Frontmatter changes: `title`/`description`/`tag`/`type` are single-line edits (the `---` block). For `status`, prefer `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" status <path> <state>` over hand-editing.
-- Structural moves (rename/move/delete) are out of scope — they change the slug and break inter-doc links; do those by hand and re-run `check`.
+- Never create a new slug or version.
 
-## Bump & validate
+**Section prose** — replace a section body or patch individual fields:
+```shell
+claudeplans section set "<project>" "<slug>" "<anchor>" --body "<updated markdown>"
+claudeplans section set "<project>" "<slug>" "<anchor>" --heading "<new heading>" --level 3
+claudeplans section patch "<project>" "<slug>" "<anchor>" --merge-patch '{"body":"<updated>"}'
+```
+Section bodies are **plain markdown** — do not write HTML spans, pills, or admonitions.
 
-- Bump the date: `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" touch <path>`.
-- Validate: `"${CLAUDE_PLUGIN_ROOT}/scripts/plan-doc" check <path>` — non-zero exit → relay stderr and fix before finishing.
-- If the edit closed all open gaps or, conversely, reopened decided work, propose the matching `status` flip (`done` / `active`).
+**Phase status** — use `phase set-status` (never hand-edit):
+```shell
+claudeplans phase set-status "<project>" "<slug>" "<phase-slug>" todo|doing|done|blocked
+```
+
+**Task state** — read `doc phases` first to get `rev` and the task index (0-based):
+```shell
+claudeplans task toggle "<project>" "<slug>" "<phase-slug>" <index> --rev <rev>
+claudeplans task toggle "<project>" "<slug>" "<phase-slug>" <index> --rev <rev> --unchecked
+claudeplans task edit "<project>" "<slug>" "<phase-slug>" <index> "<new text>" --rev <rev>
+```
+
+**Doc status** — flip the lifecycle state:
+```shell
+claudeplans doc status "<project>" "<slug>" draft|active|done
+```
+
+**Structural moves** (rename slug, reorder sections across docs, delete) are out of scope — the slug is the document's identity; renaming requires re-creating the doc. Flag these and ask the user to handle them explicitly.
+
+## Validate
+
+A write that violates a server-side invariant is **rejected** with exit 4 (ValidationError) — relay the error and stop; there is no separate drift linter. If the edit closes all open gaps or re-opens decided work, propose the matching `doc status` flip.

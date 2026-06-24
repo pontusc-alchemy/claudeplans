@@ -1,0 +1,7 @@
+{
+  "type": "plan",
+  "project": "api-gateway-migration",
+  "slug": "quick-win-rate-limiting",
+  "title": "Add Rate Limiting to Public Endpoints",
+  "owner_id": "pontusc"
+}
