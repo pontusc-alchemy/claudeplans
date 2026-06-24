@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from .api import install
+from .api.limits import BodySizeLimitMiddleware
 from .auth.provider import IapProvider, NoopProvider, UserProvider
 from .cache import FragmentCache
 from .config import AuthMode, Settings, fail_closed_check, load_settings
@@ -77,6 +78,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.render_cache = FragmentCache()
     app.state.search_index = SearchIndex()
     install(app)
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
     # Vendored CSS/JS (htmx, idiomorph, htmx-ext-sse) served same-origin so the
     # strict CSP (`script-src 'self'`) admits them.
     app.mount(

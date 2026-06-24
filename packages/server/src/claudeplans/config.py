@@ -8,7 +8,7 @@ rule and is invoked from main.py at startup, before any request is served.
 
 from enum import StrEnum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     storage_backend: StorageBackend = StorageBackend.filesystem
     auth_mode: AuthMode = AuthMode.iap  # fail-closed default
     filesystem: FilesystemSettings = FilesystemSettings()
+    # 1 MiB cap on request bodies (CLAUDEPLANS_MAX_BODY_BYTES); must be positive.
+    max_body_bytes: int = Field(default=1_048_576, gt=0)
 
 
 def load_settings() -> Settings:
@@ -65,6 +67,7 @@ def fail_closed_check(settings: Settings) -> None:
         and settings.storage_backend is StorageBackend.gcs
     ):
         raise RuntimeError(
-            "fail-closed: AUTH_MODE=noop with STORAGE_BACKEND=gcs is forbidden "
+            "fail-closed: CLAUDEPLANS_AUTH_MODE=noop with "
+            "CLAUDEPLANS_STORAGE_BACKEND=gcs is forbidden "
             "(no-op auth must not front a cloud backend)"
         )

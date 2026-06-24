@@ -429,3 +429,71 @@ async def test_corrupt_document_returns_500_clean(tmp_path: Path) -> None:
         assert resp.json() == {"detail": "stored document is corrupt"}
         # No filesystem path leaked in the body.
         assert str(tmp_path) not in resp.text
+
+
+async def test_oversized_body_returns_413(tmp_path: Path) -> None:
+    app = create_app(
+        Settings(
+            auth_mode=AuthMode.noop,
+            filesystem=FilesystemSettings(root=str(tmp_path)),
+            max_body_bytes=1024,
+        )
+    )
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            BASE, content=b"x" * 2048, headers={"Content-Type": "application/json"}
+        )
+        assert resp.status_code == 413
+
+
+async def test_deeply_nested_body_returns_422_not_500(tmp_path: Path) -> None:
+    async with _client(tmp_path) as client:
+        depth = 5000
+        body = (
+            '{"type":"plan","slug":"p1","title":"t","frontmatter":'
+            + '{"a":' * depth
+            + "1"
+            + "}" * depth
+            + "}"
+        )
+        resp = await client.post(
+            BASE, content=body, headers={"Content-Type": "application/json"}
+        )
+        assert resp.status_code == 422
+        assert resp.json()["detail"][0]["msg"] == "request body is too deeply nested"
+
+
+async def test_oversized_chunked_body_returns_413(tmp_path: Path) -> None:
+    # No Content-Length (streamed/chunked): the byte-count backstop must still 413,
+    # not the 400 that a plain exception in the body parser would produce.
+    app = create_app(
+        Settings(
+            auth_mode=AuthMode.noop,
+            filesystem=FilesystemSettings(root=str(tmp_path)),
+            max_body_bytes=1024,
+        )
+    )
+
+    async def chunks() -> AsyncIterator[bytes]:
+        for _ in range(4):
+            yield b"x" * 512  # 2048 total, streamed without a Content-Length
+
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            BASE, content=chunks(), headers={"Content-Type": "application/json"}
+        )
+        assert resp.status_code == 413
+
+
+async def test_non_object_document_returns_500_clean(tmp_path: Path) -> None:
+    async with _client(tmp_path) as client:
+        await _create_plan(client)
+        # Valid JSON but not an object on disk: a clean 500, not a raw AttributeError.
+        envelope_path = tmp_path / "dev" / "demo" / "p1.json"
+        envelope_path.write_text("[1, 2, 3]")
+        resp = await client.get(f"{BASE}/p1")
+        assert resp.status_code == 500
+        assert resp.json() == {"detail": "stored document is corrupt"}
+        assert str(tmp_path) not in resp.text

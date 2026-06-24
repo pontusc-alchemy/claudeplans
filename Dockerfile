@@ -29,6 +29,12 @@ ENV PATH=/opt/venv/bin:$PATH \
     PYTHONUNBUFFERED=1
 # Non-root runtime user; --chown gives it the venv it needs to read.
 RUN useradd --no-create-home --uid 10001 app
+# Writable state dir for the filesystem backend, owned by app. A FRESH named volume
+# mounted here inherits this ownership on first mount, so uid 10001 can write (a
+# volume at a root-owned path like the default ./data under WORKDIR could not).
+# Seeding is first-mount-only: a pre-existing root-owned volume, a host bind mount,
+# or a uid-remapping (rootless/Podman) engine each need their own ownership setup.
+RUN install -d -o app -g app /data
 COPY --from=build --chown=app:app /opt/venv /opt/venv
 WORKDIR /app
 USER app

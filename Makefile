@@ -1,5 +1,5 @@
 # claudeplans — dev inner loop + Docker Bake jobs. (Make requires real tabs.)
-.PHONY: venv check lint fmt typecheck test bake-ci ci serve-build serve
+.PHONY: venv check lint fmt typecheck test bake-ci ci serve-build serve up down
 
 UV ?= uv
 
@@ -35,3 +35,9 @@ serve-build:  ## Build the bare serve image.
 
 serve:  ## Run the bare serve image locally on :8000.
 	docker run --rm -p 8000:8000 claudeplans:serve
+
+up:  ## Build + run the local stack (compose, filesystem + noop auth) on :8000.
+	docker compose up --build
+
+down:  ## Stop the local stack (the data volume is kept; add -v to wipe).
+	docker compose down

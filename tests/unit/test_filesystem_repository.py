@@ -56,3 +56,15 @@ async def test_walk_skips_corrupt_file(tmp_path: Path) -> None:
 
     entries = list(await repo.list(""))
     assert {e.key for e in entries} == {"u1/demo/plan/p1"}
+
+
+async def test_walk_skips_non_object_json(tmp_path: Path) -> None:
+    root = tmp_path / "data"
+    repo = FilesystemRepository(root)
+    await repo.put("u1/demo/plan/p1", _doc(), CREATE)
+
+    # Valid JSON but not an object must not 500 the whole listing either.
+    (root / "u1" / "demo" / "plan" / "bad.json").write_text("[1, 2, 3]")
+
+    entries = list(await repo.list(""))
+    assert {e.key for e in entries} == {"u1/demo/plan/p1"}

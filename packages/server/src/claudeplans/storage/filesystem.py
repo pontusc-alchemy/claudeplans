@@ -33,9 +33,21 @@ from .repository import CREATE, ListEntry, Repository, _Create
 
 
 def _read_envelope(path: Path) -> dict[str, JsonValue]:
-    """Load the envelope at `path`. Raises FileNotFoundError if absent."""
+    """Load and validate the envelope at `path`.
+
+    Raises FileNotFoundError if absent, CorruptDocument if the file is unparseable
+    JSON or is not a JSON object — so every caller (a direct fetch and the listing
+    walk) treats a corrupt file uniformly, never a raw ValueError/AttributeError 500.
+    """
     with path.open("rb") as fh:
-        return json.loads(fh.read())
+        raw = fh.read()
+    try:
+        envelope = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise CorruptDocument(f"{path.name}: unparseable JSON") from exc
+    if not isinstance(envelope, dict):
+        raise CorruptDocument(f"{path.name}: envelope is not a JSON object")
+    return envelope
 
 
 def _write_envelope_atomic(path: Path, envelope: dict[str, JsonValue]) -> None:
@@ -71,7 +83,7 @@ def _walk_keys(root: Path) -> list[tuple[str, dict[str, JsonValue]]]:
     for path in root.rglob("*.json"):
         try:
             envelope = _read_envelope(path)
-        except FileNotFoundError, json.JSONDecodeError:
+        except FileNotFoundError, CorruptDocument:
             # Deleted mid-walk or corrupt on disk: omit from the listing rather than
             # failing the whole list() — a single bad file must not 500 the index.
             continue

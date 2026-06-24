@@ -18,6 +18,8 @@ handler callable as taking the base `Exception`; so each `exc` is annotated
 import json
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError as PydanticValidationError
 
@@ -66,6 +68,25 @@ async def _handle_corrupt_document(request: Request, exc: Exception) -> JSONResp
     return JSONResponse({"detail": "stored document is corrupt"}, status_code=500)
 
 
+async def _handle_request_validation(request: Request, exc: Exception) -> JSONResponse:
+    # Mirror FastAPI's default request-body 422 (detail[{type,loc,msg,input}]); but
+    # serializing a pathologically deep error tree can itself exhaust the recursion
+    # limit, so fall back to a flat (still list-shaped) entry — a hostile
+    # deeply-nested body is then a clean 422, never an uncaught 500.
+    assert isinstance(exc, RequestValidationError)
+    try:
+        detail: object = jsonable_encoder(exc.errors())
+    except RecursionError:
+        detail = [
+            {
+                "type": "too_deeply_nested",
+                "loc": ["body"],
+                "msg": "request body is too deeply nested",
+            }
+        ]
+    return JSONResponse({"detail": detail}, status_code=422)
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Register the domain-error -> HTTP-status handlers on `app`."""
     app.add_exception_handler(NotFound, _handle_not_found)
@@ -76,3 +97,4 @@ def register_exception_handlers(app: FastAPI) -> None:
         PydanticValidationError, _handle_pydantic_validation_error
     )
     app.add_exception_handler(CorruptDocument, _handle_corrupt_document)
+    app.add_exception_handler(RequestValidationError, _handle_request_validation)
