@@ -15,7 +15,7 @@ from claudeplans_contracts import ValidationError
 
 from ..context import AppContext
 from ..errors import handle_errors
-from ..output import emit
+from ..output import emit_write
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -42,7 +42,7 @@ def add(
     """Append a section."""
     c: AppContext = ctx.obj
     reply = c.client.add_section(c.uid, project, slug, anchor, heading, body, level)
-    emit(reply)
+    emit_write(reply, full=c.full)
 
 
 @app.command("set")
@@ -59,7 +59,7 @@ def set_section(
     """Absolute-set a section's fields (omitted flags are left unchanged)."""
     c: AppContext = ctx.obj
     reply = c.client.set_section(c.uid, project, slug, anchor, heading, body, level)
-    emit(reply)
+    emit_write(reply, full=c.full)
 
 
 @app.command()
@@ -80,7 +80,7 @@ def patch(
     except json.JSONDecodeError as exc:
         raise ValidationError(f"--merge-patch is not valid JSON: {exc}") from exc
     reply = c.client.patch_section(c.uid, project, slug, anchor, patch_obj)
-    emit(reply)
+    emit_write(reply, full=c.full)
 
 
 @app.command()
@@ -89,4 +89,4 @@ def rm(ctx: typer.Context, project: str, slug: str, anchor: str) -> None:
     """Remove a section."""
     c: AppContext = ctx.obj
     reply = c.client.remove_section(c.uid, project, slug, anchor)
-    emit(reply)
+    emit_write(reply, full=c.full)

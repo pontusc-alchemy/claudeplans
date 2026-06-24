@@ -13,7 +13,7 @@ from claudeplans_contracts import PhaseStatus
 
 from ..context import AppContext
 from ..errors import handle_errors
-from ..output import emit
+from ..output import emit_write
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -37,7 +37,7 @@ def add(
     """Append a phase."""
     c: AppContext = ctx.obj
     reply = c.client.add_phase(c.uid, project, slug, phase_slug, name, status.value)
-    emit(reply)
+    emit_write(reply, full=c.full)
 
 
 @app.command("set-status")
@@ -52,7 +52,7 @@ def set_status(
     """Set a phase's status."""
     c: AppContext = ctx.obj
     reply = c.client.set_phase_status(c.uid, project, slug, phase_slug, status.value)
-    emit(reply)
+    emit_write(reply, full=c.full)
 
 
 @app.command()
@@ -68,7 +68,7 @@ def move(
     """Move a phase to a new index (conditional on --rev)."""
     c: AppContext = ctx.obj
     reply = c.client.move_phase(c.uid, project, slug, phase_slug, to_index, rev=rev)
-    emit(reply)
+    emit_write(reply, full=c.full, slice_="phases-ordering")
 
 
 @app.command()
@@ -77,4 +77,4 @@ def rm(ctx: typer.Context, project: str, slug: str, phase_slug: str) -> None:
     """Remove a phase."""
     c: AppContext = ctx.obj
     reply = c.client.remove_phase(c.uid, project, slug, phase_slug)
-    emit(reply)
+    emit_write(reply, full=c.full)

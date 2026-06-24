@@ -19,7 +19,15 @@ class NotFound(PlanError):
 
 
 class StaleRevision(PlanError):
-    """A conditional write lost the compare-and-set race (rev mismatch)."""
+    """A conditional write lost the compare-and-set race (rev mismatch).
+
+    `current_rev` is the server-side revision at the time of rejection; the
+    caller can retry immediately without a re-read.
+    """
+
+    def __init__(self, key: str = "", current_rev: str = "") -> None:
+        super().__init__(key)
+        self.current_rev = current_rev
 
 
 class CorruptDocument(PlanError):

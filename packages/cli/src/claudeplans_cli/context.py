@@ -16,3 +16,4 @@ class AppContext:
     client: PlanClient
     uid: str
     base_url: str
+    full: bool = False

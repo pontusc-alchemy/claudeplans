@@ -150,14 +150,16 @@ class FilesystemRepository(Repository):
                     await to_thread.run_sync(_create_envelope_exclusive, path, envelope)
                 except FileExistsError:
                     # Create-if-absent lost: another writer created the key first.
-                    raise StaleRevision(key) from None
+                    # No current rev is available for a key that now exists but
+                    # whose rev we haven't read; pass empty so the contract is met.
+                    raise StaleRevision(key, current_rev="") from None
                 return "1"
 
             try:
                 current = await to_thread.run_sync(_read_envelope, path)
             except FileNotFoundError:
                 # The rev you hold no longer exists: a lost race, not a NotFound.
-                raise StaleRevision(key) from None
+                raise StaleRevision(key, current_rev="") from None
             # A hand-edited rev/created_at is a server-side integrity fault: raise a
             # clean CorruptDocument rather than leaking a raw KeyError/ValueError. The
             # isinstance narrows also pin both to str, which JsonValue can't promise.
@@ -168,7 +170,7 @@ class FilesystemRepository(Repository):
                     f"{key}: non-string rev/created_at {current.get('rev')!r}"
                 )
             if current_rev != expected_rev:
-                raise StaleRevision(key)
+                raise StaleRevision(key, current_rev=current_rev)
             try:
                 new_rev = str(int(current_rev) + 1)
             except ValueError:
@@ -198,7 +200,7 @@ class FilesystemRepository(Repository):
             if not isinstance(current_rev, str):
                 raise CorruptDocument(f"{key}: non-string rev {current_rev!r}")
             if current_rev != expected_rev:
-                raise StaleRevision(key)
+                raise StaleRevision(key, current_rev=current_rev)
             await to_thread.run_sync(path.unlink)
 
     async def list(self, prefix: str) -> Iterable[ListEntry]:

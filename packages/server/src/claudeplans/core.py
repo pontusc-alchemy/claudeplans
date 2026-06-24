@@ -84,7 +84,9 @@ async def read_modify_write(
         except StaleRevision:
             continue
         return new_rev, updated
-    raise StaleRevision(f"write to {key!r} lost {MAX_WRITE_RETRIES} CAS races")
+    raise StaleRevision(
+        f"write to {key!r} lost {MAX_WRITE_RETRIES} CAS races", current_rev=""
+    )
 
 
 async def _write_at_rev(

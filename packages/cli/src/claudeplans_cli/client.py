@@ -95,6 +95,21 @@ class PlanClient:
             detail = _detail_message(resp)
             error_cls = _STATUS_TO_ERROR.get(resp.status_code)
             if error_cls is not None:
+                if resp.status_code == 409:
+                    # Extract the current server rev so the caller can retry without
+                    # a re-read. Prefer the ETag header; fall back to body field.
+                    current_rev = resp.headers.get("ETag", "")
+                    if not current_rev:
+                        try:
+                            body = resp.json()
+                            current_rev = (
+                                body.get("current_rev", "")
+                                if isinstance(body, dict)
+                                else ""
+                            )
+                        except ValueError:
+                            current_rev = ""
+                    raise StaleRevision(detail, current_rev=current_rev)
                 raise error_cls(detail)
             # Any unmapped error status stays inside PlanError so the CLI's error
             # boundary catches it (-> generic exit code) rather than leaking an

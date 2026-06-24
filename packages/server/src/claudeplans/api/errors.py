@@ -39,7 +39,14 @@ async def _handle_not_found(request: Request, exc: Exception) -> JSONResponse:
 
 
 async def _handle_stale_revision(request: Request, exc: Exception) -> JSONResponse:
-    return JSONResponse({"detail": str(exc) or "revision conflict"}, status_code=409)
+    assert isinstance(exc, StaleRevision)
+    current_rev = exc.current_rev
+    body: dict[str, object] = {"detail": str(exc) or "revision conflict"}
+    headers: dict[str, str] = {}
+    if current_rev:
+        body["current_rev"] = current_rev
+        headers["ETag"] = current_rev
+    return JSONResponse(body, status_code=409, headers=headers)
 
 
 async def _handle_validation_error(request: Request, exc: Exception) -> JSONResponse:

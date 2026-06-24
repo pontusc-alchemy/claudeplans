@@ -24,7 +24,7 @@ from claudeplans_contracts import (
 
 from ..context import AppContext
 from ..errors import handle_errors
-from ..output import emit, emit_obj, emit_phases
+from ..output import emit, emit_obj, emit_phases, emit_write
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -63,7 +63,7 @@ def create(
             {"type": type_, "slug": slug, "title": title}
         )
     reply = c.client.create_document(c.uid, project, payload.model_dump(mode="json"))
-    emit(reply)
+    emit_write(reply, full=c.full, slice_="create")
 
 
 @app.command()
@@ -110,7 +110,7 @@ def status(
     """Set a document's status."""
     c: AppContext = ctx.obj
     reply = c.client.set_document_status(c.uid, project, slug, value.value)
-    emit(reply)
+    emit_write(reply, full=c.full)
 
 
 @app.command()
@@ -142,7 +142,7 @@ def link(
     new_refs = existing if ref in existing else [*existing, ref]
     new_primary = ref if primary else existing_primary
     reply = c.client.put_research_refs(c.uid, project, slug, new_refs, new_primary)
-    emit(reply)
+    emit_write(reply, full=c.full)
 
 
 @app.command()
@@ -163,7 +163,7 @@ def unlink(
     existing_primary: str | None = data.get("primary_research_ref")
     new_refs, new_primary = unlink_research_ref(existing, existing_primary, ref)
     reply = c.client.put_research_refs(c.uid, project, slug, new_refs, new_primary)
-    emit(reply)
+    emit_write(reply, full=c.full)
 
 
 @app.command("list")

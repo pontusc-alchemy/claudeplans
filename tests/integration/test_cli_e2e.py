@@ -35,13 +35,15 @@ def patched_cli(client: PlanClient, monkeypatch: pytest.MonkeyPatch) -> Iterator
     yield
 
 
-def test_create_from_stdin_exits_ok_and_prints_doc(patched_cli: None) -> None:
+def test_create_from_stdin_exits_ok_and_prints_slug(patched_cli: None) -> None:
     result = runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
     assert result.exit_code == 0
     parsed = json.loads(result.stdout)
-    assert parsed["data"]["slug"] == "p1"
+    assert parsed["slug"] == "p1"
+    assert "rev" in parsed
+    assert "data" not in parsed
 
 
 def test_get_missing_doc_exits_not_found(patched_cli: None) -> None:
@@ -88,3 +90,67 @@ def test_malformed_merge_patch_exits_validation(patched_cli: None) -> None:
         ["section", "patch", "demo", "p1", "ctx", "--merge-patch", "{bad"],
     )
     assert result.exit_code == 4
+
+
+def test_create_full_flag_prints_full_doc(patched_cli: None) -> None:
+    result = runner.invoke(
+        cli.app,
+        ["--full", "doc", "create", "demo", "--from-json", "-"],
+        input=_VALID_CREATE,
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    assert parsed["data"]["slug"] == "p1"
+    assert "rev" in parsed
+
+
+def test_stale_rev_toggle_stderr_carries_current_rev(patched_cli: None) -> None:
+    # Create doc, then attempt a toggle with a wrong rev -> exit 9 + JSON on stderr.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app,
+        ["task", "toggle", "demo", "p1", "a", "0", "--rev", "does-not-match"],
+    )
+    assert result.exit_code == 9
+    err = json.loads(result.stderr)
+    assert err["error"] == "stale_rev"
+    assert err["current_rev"]
+
+
+def test_task_toggle_default_prints_phase_tasks(patched_cli: None) -> None:
+    # Create doc then toggle task 0; default output carries the affected phase.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    # Get the current rev from a get call.
+    get_result = runner.invoke(cli.app, ["doc", "get", "demo", "p1"])
+    rev = json.loads(get_result.stdout)["rev"]
+    result = runner.invoke(
+        cli.app,
+        ["task", "toggle", "demo", "p1", "a", "0", "--rev", rev],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    assert "phase" in parsed
+    assert parsed["phase"]["slug"] == "a"
+    assert isinstance(parsed["phase"]["tasks"], list)
+    assert "data" not in parsed
+
+
+def test_phase_move_default_prints_ordering(patched_cli: None) -> None:
+    # Create doc with one phase, add a second, then move it.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    add_result = runner.invoke(cli.app, ["phase", "add", "demo", "p1", "b", "Beta"])
+    rev = json.loads(add_result.stdout)["rev"]
+    result = runner.invoke(
+        cli.app, ["phase", "move", "demo", "p1", "b", "0", "--rev", rev]
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    assert "phases" in parsed
+    assert [p["slug"] for p in parsed["phases"]] == ["b", "a"]
+    assert "data" not in parsed

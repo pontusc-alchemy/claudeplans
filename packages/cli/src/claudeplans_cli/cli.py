@@ -34,6 +34,7 @@ app.add_typer(config_cmd.app, name="config")
 # the resolution chain in _root stays explicit and testable.
 _URL = typer.Option("--url")
 _UID = typer.Option("--uid")
+_FULL = typer.Option("--full", "-v", help="Print the full document on write replies.")
 
 
 def build_client(url: str) -> PlanClient:
@@ -46,6 +47,7 @@ def _root(
     ctx: typer.Context,
     url: Annotated[str | None, _URL] = None,
     uid: Annotated[str | None, _UID] = None,
+    full: Annotated[bool, _FULL] = False,
 ) -> None:
     """Agent client for the claudeplans service."""
     cfg = read_config()
@@ -60,6 +62,7 @@ def _root(
         client=build_client(resolved_url),
         uid=resolved_uid,
         base_url=resolved_url,
+        full=full,
     )
 
 

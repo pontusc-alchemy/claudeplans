@@ -11,7 +11,7 @@ import typer
 
 from ..context import AppContext
 from ..errors import handle_errors
-from ..output import emit
+from ..output import emit_write
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -33,7 +33,7 @@ def add(
     """Append a task to a phase."""
     c: AppContext = ctx.obj
     reply = c.client.add_task(c.uid, project, slug, phase_slug, text)
-    emit(reply)
+    emit_write(reply, full=c.full)
 
 
 @app.command()
@@ -52,7 +52,7 @@ def toggle(
     reply = c.client.toggle_task(
         c.uid, project, slug, phase_slug, task_index, checked, rev=rev
     )
-    emit(reply)
+    emit_write(reply, full=c.full, slice_=f"phase:{phase_slug}")
 
 
 @app.command()
@@ -71,7 +71,7 @@ def edit(
     reply = c.client.edit_task(
         c.uid, project, slug, phase_slug, task_index, text, rev=rev
     )
-    emit(reply)
+    emit_write(reply, full=c.full, slice_=f"phase:{phase_slug}")
 
 
 @app.command()
@@ -87,4 +87,4 @@ def rm(
     """Remove a task (conditional on --rev)."""
     c: AppContext = ctx.obj
     reply = c.client.remove_task(c.uid, project, slug, phase_slug, task_index, rev=rev)
-    emit(reply)
+    emit_write(reply, full=c.full, slice_=f"phase:{phase_slug}")

@@ -7,6 +7,7 @@ boundary every command wears so that contract is enforced in one place.
 """
 
 import functools
+import json
 from collections.abc import Callable
 
 import typer
@@ -48,12 +49,19 @@ def handle_errors[**P, R](func: Callable[P, R]) -> Callable[P, R]:
     Domain `PlanError` -> its mapped exit code; client-side pydantic
     `ValidationError` (a malformed create body) -> ExitCode.VALIDATION. Both echo
     their message to stderr so the human/agent sees the cause without a traceback.
+
+    StaleRevision is special: prints `{"error":"stale_rev","current_rev":"<N>"}` as
+    compact JSON to stderr so the agent can retry without a re-read.
     """
 
     @functools.wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         try:
             return func(*args, **kwargs)
+        except StaleRevision as exc:
+            payload = {"error": "stale_rev", "current_rev": exc.current_rev}
+            typer.echo(json.dumps(payload, separators=(",", ":")), err=True)
+            raise typer.Exit(ExitCode.STALE_REV) from exc
         except PlanError as exc:
             typer.echo(str(exc), err=True)
             raise typer.Exit(exit_code_for(exc)) from exc
