@@ -74,16 +74,21 @@ All mutations go through the `claudeplans` CLI — state is never hand-edited:
 
 ```
 claudeplans config set|show
-claudeplans project list|view
-claudeplans doc create|get|delete|status|phases|link|unlink|list|view
-claudeplans phase add|set-status|move|rm
-claudeplans task add|toggle|edit|rm
-claudeplans section add|set|patch|rm
+claudeplans project list|lineage|view
+claudeplans doc create|get|delete|status|set-status|set|phases|link|unlink|list|rev|view
+claudeplans phase add|set|set-status|move|rm
+claudeplans task add|toggle|set-checked|edit|rm
+claudeplans section add|set|patch|move|rm
+claudeplans search|schema
 ```
 
-Position-sensitive ops (`task toggle`, `task edit`, `task rm`, `phase move`, `doc delete`) require `--rev` (the `rev` field from a prior `doc phases` or write reply) — this is the optimistic-concurrency token. Exit 9 means stale rev; re-read and retry.
+`doc list` takes `--type research|plan`; `task add` / `section add` take `--at INDEX` for a positional insert (append if omitted). `claudeplans schema` dumps the authoritative machine-readable contract — enums, exit codes, envelope shapes, the `conditional_writes` (which ops need `--rev`), and the `NO_COLOR` env note.
 
-## Server-side invariants (exit 4 = ValidationError)
+Position-sensitive ops (`task toggle`, `task set-checked`, `task edit`, `task rm`, `phase move`, `section move`, `doc delete`) require `--rev` (the `rev` field from a prior `doc phases`/`doc rev` or a write reply) — the optimistic-concurrency token. Exit 9 means stale rev; re-read and retry. Stable-key ops (`status`, `set`, `add`, rename) are rev-free.
+
+Exit codes: `0` ok · `2` usage error (bad flag/arg — reserved, never a domain error) · `3` forbidden · `4` validation · `5` not-found · `6` transport (service unreachable / bad `--url`) · `9` stale-rev. Every domain error also prints a structured `{"error":<kind>,…}` line to stderr (never a stacktrace); stale-rev carries `current_rev`.
+
+## Server-side invariants (validation → exit 4)
 
 - Research docs carry no phases.
 - `primary_research_ref` must be a member of `research_refs`.

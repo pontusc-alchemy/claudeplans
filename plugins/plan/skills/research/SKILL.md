@@ -18,7 +18,7 @@ Generate a URL-safe slug from the topic (kebab-case, ≤40 chars). Create the do
 claudeplans doc create "<project>" --type research --slug "<slug>" --title "<topic title>"
 ```
 
-→ the reply envelope `{rev, data:{...}, warnings}` (the created doc's fields are under `data`); non-zero exit → relay stderr and stop. The project is created implicitly on first doc — double-check the project name is right before continuing (there is no new-project warning). Sections are added via `claudeplans section add` — the section contract is in `${CLAUDE_PLUGIN_ROOT}/AUTHORING.md`.
+→ the slim create reply `{slug, type, rev, warnings}` (pass `--full`/`-v` for the whole `{rev, data, warnings}` envelope); non-zero exit → relay stderr and stop. The project is created implicitly on first doc — double-check the project name is right before continuing (there is no new-project warning). Sections are added via `claudeplans section add` — the section contract is in `${CLAUDE_PLUGIN_ROOT}/AUTHORING.md`.
 
 ## 1 — Survey (delegate, sonnet)
 

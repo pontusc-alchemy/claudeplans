@@ -57,4 +57,4 @@ claudeplans doc status "<project>" "<slug>" draft|active|done
 
 ## Validate
 
-A write that violates a server-side invariant is **rejected** with exit 4 (ValidationError) — relay the error and stop; there is no separate drift linter. If the edit closes all open gaps or re-opens decided work, propose the matching `doc status` flip.
+A write that violates a server-side invariant is **rejected** with exit 4 (ValidationError) — relay the error and stop. Soft drift (e.g. a `done` doc with an open phase, or a `done` phase with unchecked tasks) is NOT rejected: the service returns it as `warnings[]` in the reply envelope, scoped to the subtree you touched (a full `doc get` returns all drift). If the edit closes all open gaps or re-opens decided work, propose the matching `doc status` flip.

@@ -18,7 +18,7 @@ Arguments must carry both `<project>` and `<slug>` — there is no fuzzy resolve
 claudeplans doc phases "<project>" "<slug>"
 ```
 
-→ JSON `{rev, phases:[{slug, name, status, tasks:[{text, checked}]}]}`; hold `rev`. Then read prose sections using projections:
+→ JSON `{rev, phases:[{slug, name, status, tasks:[{text, checked}]}], warnings}`; hold `rev`. Then read prose sections using projections:
 
 ```shell
 claudeplans doc get "<project>" "<slug>" --section "<anchor>"

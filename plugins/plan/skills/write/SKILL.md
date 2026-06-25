@@ -20,7 +20,7 @@ Generate a URL-safe slug for the plan title (kebab-case, ≤40 chars). Create th
 claudeplans doc create "<project>" --type plan --slug "<slug>" --title "<plan title>"
 ```
 
-→ the reply envelope `{rev, data:{...}, warnings}` (the created doc's fields are under `data`); non-zero exit → relay stderr and stop. The project is created implicitly on first doc — double-check the project name is right before continuing (there is no new-project warning).
+→ the slim create reply `{slug, type, rev, warnings}` (pass `--full`/`-v` for the whole `{rev, data, warnings}` envelope); non-zero exit → relay stderr and stop. The project is created implicitly on first doc — double-check the project name is right before continuing (there is no new-project warning).
 
 ## Input — where the plan comes from
 

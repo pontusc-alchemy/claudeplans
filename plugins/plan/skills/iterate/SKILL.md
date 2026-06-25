@@ -14,7 +14,7 @@ Drive a plan document through execution, mutating it via the claudeplans CLI as 
 claudeplans doc phases "<project>" "<slug>"
 ```
 
-→ JSON `{rev, phases:[{slug, name, status, tasks:[{text, checked}]}]}`; non-zero exit → relay stderr and stop. The `current` phase is the first entry whose `status` is not `done` — compute this from the list. Hold the `rev` value — it is required for every position-sensitive write. Read only the current phase's section prose inline if needed for exit criteria.
+→ JSON `{rev, phases:[{slug, name, status, tasks:[{text, checked}]}], warnings}`; non-zero exit → relay stderr and stop. The `current` phase is the first entry whose `status` is not `done` — compute this from the list. Hold the `rev` value — it is required for every position-sensitive write. Read only the current phase's section prose inline if needed for exit criteria.
 
 Arguments must carry both `<project>` and `<slug>` — there is no fuzzy resolve. For project-wide discovery: list projects with `claudeplans project list`, list a project's documents with `claudeplans doc list <project>` (both return JSON). The lineage page is the human browser view — open it with `claudeplans project view <project>` which prints its URL. (The search endpoint requires `?q=<term>` and performs keyword search, not enumeration.)
 
