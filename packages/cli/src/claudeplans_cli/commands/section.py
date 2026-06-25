@@ -22,10 +22,19 @@ app = typer.Typer(no_args_is_help=True)
 _ADD_HEADING = typer.Argument()
 _ADD_BODY = typer.Option("--body")
 _ADD_LEVEL = typer.Option("--level")
+_AT = typer.Option(
+    "--at",
+    help="0-based insert position; appends if omitted. Unconditional (no --rev).",
+)
 _SET_HEADING = typer.Option()
 _SET_BODY = typer.Option()
 _SET_LEVEL = typer.Option()
 _MERGE_PATCH = typer.Option("--merge-patch", help="JSON object")
+_TO_INDEX = typer.Argument()
+_REV = typer.Option(
+    "--rev",
+    help="current rev; this write is position-sensitive (see 'doc rev')",
+)
 
 
 @app.command()
@@ -38,10 +47,27 @@ def add(
     heading: Annotated[str, _ADD_HEADING],
     body: Annotated[str, _ADD_BODY] = "",
     level: Annotated[int, _ADD_LEVEL] = 2,
+    at: Annotated[int | None, _AT] = None,
 ) -> None:
-    """Append a section."""
+    """Append a section, or insert at --at if given."""
     c: AppContext = ctx.obj
-    reply = c.client.add_section(c.uid, project, slug, anchor, heading, body, level)
+    reply = c.client.add_section(c.uid, project, slug, anchor, heading, body, level, at)
+    emit_write(reply, full=c.full)
+
+
+@app.command()
+@handle_errors
+def move(
+    ctx: typer.Context,
+    project: str,
+    slug: str,
+    anchor: str,
+    to_index: Annotated[int, _TO_INDEX],
+    rev: Annotated[str, _REV],
+) -> None:
+    """Move a section to a new index (conditional on --rev)."""
+    c: AppContext = ctx.obj
+    reply = c.client.move_section(c.uid, project, slug, anchor, to_index, rev=rev)
     emit_write(reply, full=c.full)
 
 

@@ -9,6 +9,63 @@ from claudeplans_contracts import (
     document_key,
     key_for_document,
 )
+from claudeplans_contracts.keys import validate_key_segment
+
+# ---------------------------------------------------------------------------
+# validate_key_segment allowlist (FIX 1)
+# ---------------------------------------------------------------------------
+
+# Characters that were previously accepted by the old check but must now be
+# rejected: NUL (server 500), '#'/'?' (permanently unaddressable slug),
+# newline (httpx.InvalidURL on client).
+_BAD_SEGMENTS = [
+    "",  # empty
+    "a/b",  # path separator
+    "..",  # path traversal
+    ".",  # path traversal
+    "bad slug",  # space
+    "frag#ment",  # URL fragment separator
+    "query?x",  # URL query separator
+    "at@sign",  # URL metachar
+    "nul\x00byte",  # NUL byte → server HTTP 500
+    "new\nline",  # newline → httpx.InvalidURL
+    "dot.ted",  # dot ambiguous in phases.<slug> locator
+]
+
+_GOOD_SEGMENTS = ["dev", "alice", "demo", "v2-implementation", "my_project", "ABC123"]
+
+
+@pytest.mark.parametrize("bad", _BAD_SEGMENTS)
+def test_validate_key_segment_rejects_bad(bad: str) -> None:
+    with pytest.raises(ValueError, match="invalid key segment"):
+        validate_key_segment(bad)
+
+
+@pytest.mark.parametrize("good", _GOOD_SEGMENTS)
+def test_validate_key_segment_accepts_clean(good: str) -> None:
+    assert validate_key_segment(good) == good
+
+
+@pytest.mark.parametrize("field", ["owner_id", "project", "slug"])
+@pytest.mark.parametrize(
+    "bad",
+    ["\x00", "\n", "#", "?"],
+)
+def test_key_segment_illegal_chars_reject_at_document_boundary(
+    field: str, bad: str
+) -> None:
+    # These chars slipped through the old validator; the new allowlist rejects them,
+    # surfacing as a pydantic ValidationError (-> HTTP 422 -> CLI exit 4).
+    fields: dict[str, str] = {"owner_id": "u1", "project": "demo", "slug": "p1"}
+    fields[field] = bad
+    with pytest.raises(PydanticValidationError):
+        Document(
+            type=DocType.plan,
+            title="Plan One",
+            owner_id=fields["owner_id"],
+            project=fields["project"],
+            slug=fields["slug"],
+        )
 
 
 def _doc() -> Document:

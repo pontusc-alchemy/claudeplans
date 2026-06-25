@@ -51,11 +51,19 @@ class Forbidden(PlanError):
 
 
 class ExitCode(IntEnum):
-    """claudeplans-cli process exit codes (agent-client phase wires these to errors)."""
+    """claudeplans-cli process exit codes (agent-client phase wires these to errors).
+
+    `2` is RESERVED by Typer/Click for malformed command lines (bad flag, missing
+    arg, bad enum, misplaced global option) and is never raised by us, so domain
+    failures avoid it: NOT_FOUND lives at `5` so a genuine not-found is
+    distinguishable from a usage error.
+    """
 
     OK = 0
     ERROR = 1  # generic failure: an unmapped PlanError (e.g. CorruptDocument)
-    NOT_FOUND = 2
+    USAGE = 2  # reserved by Typer/Click for usage errors; never raised by us
     FORBIDDEN = 3
     VALIDATION = 4
+    NOT_FOUND = 5
+    TRANSPORT = 6  # the service could not be reached (connect/timeout/DNS failure)
     STALE_REV = 9

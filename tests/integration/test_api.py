@@ -242,6 +242,48 @@ async def test_drift_warning_surfaces_in_envelope(tmp_path: Path) -> None:
         )
 
 
+async def test_drift_warning_suppressed_for_unrelated_phase_write(
+    tmp_path: Path,
+) -> None:
+    async with _client(tmp_path) as client:
+        # Build a doc with two phases: a (will carry drift) and b (write target).
+        await client.post(
+            BASE,
+            json={
+                "type": "plan",
+                "slug": "p1",
+                "title": "Plan One",
+                "phases": [
+                    {"slug": "a", "name": "Alpha", "tasks": [{"text": "t1"}]},
+                    {"slug": "b", "name": "Beta"},
+                ],
+            },
+        )
+        # Mark phase a done while it still has an open task -> drift on phases.a.
+        resp = await client.put(
+            f"{BASE}/p1/phases/a/status",
+            json={"status": "done"},
+        )
+        assert resp.status_code == 200
+        assert any(
+            w["code"] == "phase-done-open-tasks" and w["path"] == "phases.a"
+            for w in resp.json()["warnings"]
+        )
+        # Write that touches only phase b (scope=phases.b): phases.a drift suppressed.
+        resp = await client.put(
+            f"{BASE}/p1/phases/b/status",
+            json={"status": "done"},
+        )
+        assert resp.status_code == 200
+        assert not any(w["path"] == "phases.a" for w in resp.json()["warnings"])
+        # Plain doc GET (scope=None) must still surface the phases.a warning.
+        body = (await client.get(f"{BASE}/p1")).json()
+        assert any(
+            w["code"] == "phase-done-open-tasks" and w["path"] == "phases.a"
+            for w in body["warnings"]
+        )
+
+
 @pytest.fixture
 async def health_client(tmp_path: Path) -> AsyncIterator[httpx.AsyncClient]:
     async with _client(tmp_path) as client:
@@ -364,13 +406,18 @@ async def test_patch_section_invalid_type_returns_422(tmp_path: Path) -> None:
 async def test_research_refs_invariant_422_and_valid_set_200(tmp_path: Path) -> None:
     async with _client(tmp_path) as client:
         await _create_plan(client)
+        # Create the research doc so the ref resolves.
+        await client.post(
+            BASE,
+            json={"type": "research", "slug": "r1", "title": "R1"},
+        )
         # primary not among refs violates the invariant -> 422 on write-time revalidate.
         resp = await client.put(
             f"{BASE}/p1/research-refs",
             json={"research_refs": ["r1"], "primary_research_ref": "other"},
         )
         assert resp.status_code == 422
-        # A consistent set succeeds.
+        # A consistent set with a valid research ref succeeds.
         resp = await client.put(
             f"{BASE}/p1/research-refs",
             json={"research_refs": ["r1"], "primary_research_ref": "r1"},

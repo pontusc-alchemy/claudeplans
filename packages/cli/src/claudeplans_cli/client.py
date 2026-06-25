@@ -22,17 +22,31 @@ from claudeplans_contracts import (
     EditTaskRequest,
     Forbidden,
     MovePhaseRequest,
+    MoveSectionRequest,
     NotFound,
     PatchSectionRequest,
     PhaseStatus,
     PhaseStatusRequest,
     PlanError,
     ResearchRefsRequest,
+    SetDocumentMetaRequest,
+    SetPhaseRequest,
     SetSectionRequest,
     StaleRevision,
     ToggleTaskRequest,
     ValidationError,
+    validate_key_segment,
 )
+
+
+def _seg(value: str) -> str:
+    """Validate a URL path segment client-side so a bad uid/project/slug can't
+    silently mis-target a route (e.g. '#'/'?' truncating the URL)."""
+    try:
+        return validate_key_segment(value)
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
+
 
 # HTTP status -> domain error. 428 (missing If-Match precondition) is a client
 # misuse of the conditional-write contract, surfaced as a domain ValidationError.
@@ -133,25 +147,27 @@ class PlanClient:
 
     def list_projects(self, uid: str) -> object:
         """GET /v1/users/{uid}/projects → ProjectList plain JSON."""
-        return self._get_json(f"/v1/users/{uid}/projects")
+        return self._get_json(f"/v1/users/{_seg(uid)}/projects")
 
     def list_docs(self, uid: str, project: str) -> object:
         """GET /v1/users/{uid}/projects/{project}/docs → DocList plain JSON."""
-        return self._get_json(f"/v1/users/{uid}/projects/{project}/docs")
+        return self._get_json(f"/v1/users/{_seg(uid)}/projects/{_seg(project)}/docs")
 
     def _doc_base(self, uid: str, project: str, slug: str) -> str:
         """The collection-item URL a single document's mutations hang off."""
-        return f"/v1/users/{uid}/projects/{project}/docs/{slug}"
+        return f"/v1/users/{_seg(uid)}/projects/{_seg(project)}/docs/{_seg(slug)}"
 
     def _task_base(
         self, uid: str, project: str, slug: str, phase_slug: str, task_index: int
     ) -> str:
         """The item URL a single task's conditional mutations hang off."""
         doc = self._doc_base(uid, project, slug)
-        return f"{doc}/phases/{phase_slug}/tasks/{task_index}"
+        return f"{doc}/phases/{_seg(phase_slug)}/tasks/{task_index}"
 
     def create_document(self, uid: str, project: str, body: dict) -> Reply:
-        resp = self._http.post(f"/v1/users/{uid}/projects/{project}/docs", json=body)
+        resp = self._http.post(
+            f"/v1/users/{_seg(uid)}/projects/{_seg(project)}/docs", json=body
+        )
         return self._reply(resp)
 
     def get_document(self, uid: str, project: str, slug: str) -> Reply:
@@ -209,12 +225,28 @@ class PlanClient:
         )
         return self._reply(resp)
 
+    def set_phase(
+        self,
+        uid: str,
+        project: str,
+        slug: str,
+        phase_slug: str,
+        name: str | None,
+    ) -> Reply:
+        # exclude_none: an omitted flag leaves that field unchanged server-side.
+        body = SetPhaseRequest(name=name)
+        resp = self._http.put(
+            f"{self._doc_base(uid, project, slug)}/phases/{_seg(phase_slug)}",
+            json=body.model_dump(mode="json", exclude_none=True),
+        )
+        return self._reply(resp)
+
     def set_phase_status(
         self, uid: str, project: str, slug: str, phase_slug: str, status: str
     ) -> Reply:
         body = PhaseStatusRequest(status=PhaseStatus(status))
         resp = self._http.put(
-            f"{self._doc_base(uid, project, slug)}/phases/{phase_slug}/status",
+            f"{self._doc_base(uid, project, slug)}/phases/{_seg(phase_slug)}/status",
             json=body.model_dump(mode="json"),
         )
         return self._reply(resp)
@@ -231,7 +263,7 @@ class PlanClient:
     ) -> Reply:
         body = MovePhaseRequest(to_index=to_index)
         resp = self._http.post(
-            f"{self._doc_base(uid, project, slug)}/phases/{phase_slug}/move",
+            f"{self._doc_base(uid, project, slug)}/phases/{_seg(phase_slug)}/move",
             json=body.model_dump(mode="json"),
             headers={"If-Match": rev},
         )
@@ -240,17 +272,23 @@ class PlanClient:
     def remove_phase(self, uid: str, project: str, slug: str, phase_slug: str) -> Reply:
         resp = self._http.request(
             "DELETE",
-            f"{self._doc_base(uid, project, slug)}/phases/{phase_slug}",
+            f"{self._doc_base(uid, project, slug)}/phases/{_seg(phase_slug)}",
         )
         return self._reply(resp)
 
     def add_task(
-        self, uid: str, project: str, slug: str, phase_slug: str, text: str
+        self,
+        uid: str,
+        project: str,
+        slug: str,
+        phase_slug: str,
+        text: str,
+        at: int | None = None,
     ) -> Reply:
-        body = AddTaskRequest(text=text)
+        body = AddTaskRequest(text=text, at=at)
         resp = self._http.post(
-            f"{self._doc_base(uid, project, slug)}/phases/{phase_slug}/tasks",
-            json=body.model_dump(mode="json"),
+            f"{self._doc_base(uid, project, slug)}/phases/{_seg(phase_slug)}/tasks",
+            json=body.model_dump(mode="json", exclude_none=True),
         )
         return self._reply(resp)
 
@@ -321,11 +359,32 @@ class PlanClient:
         heading: str,
         body: str,
         level: int,
+        at: int | None = None,
     ) -> Reply:
-        req = AddSectionRequest(anchor=anchor, heading=heading, body=body, level=level)
+        req = AddSectionRequest(
+            anchor=anchor, heading=heading, body=body, level=level, at=at
+        )
         resp = self._http.post(
             f"{self._doc_base(uid, project, slug)}/sections",
-            json=req.model_dump(mode="json"),
+            json=req.model_dump(mode="json", exclude_none=True),
+        )
+        return self._reply(resp)
+
+    def move_section(
+        self,
+        uid: str,
+        project: str,
+        slug: str,
+        anchor: str,
+        to_index: int,
+        *,
+        rev: str,
+    ) -> Reply:
+        body = MoveSectionRequest(to_index=to_index)
+        resp = self._http.post(
+            f"{self._doc_base(uid, project, slug)}/sections/{_seg(anchor)}/move",
+            json=body.model_dump(mode="json"),
+            headers={"If-Match": rev},
         )
         return self._reply(resp)
 
@@ -342,7 +401,7 @@ class PlanClient:
         # exclude_none: an omitted flag leaves that field unchanged server-side.
         req = SetSectionRequest(heading=heading, body=body, level=level)
         resp = self._http.put(
-            f"{self._doc_base(uid, project, slug)}/sections/{anchor}",
+            f"{self._doc_base(uid, project, slug)}/sections/{_seg(anchor)}",
             json=req.model_dump(mode="json", exclude_none=True),
         )
         return self._reply(resp)
@@ -352,7 +411,7 @@ class PlanClient:
     ) -> Reply:
         req = PatchSectionRequest(patch=patch)
         resp = self._http.patch(
-            f"{self._doc_base(uid, project, slug)}/sections/{anchor}",
+            f"{self._doc_base(uid, project, slug)}/sections/{_seg(anchor)}",
             json=req.model_dump(mode="json"),
         )
         return self._reply(resp)
@@ -360,6 +419,48 @@ class PlanClient:
     def remove_section(self, uid: str, project: str, slug: str, anchor: str) -> Reply:
         resp = self._http.request(
             "DELETE",
-            f"{self._doc_base(uid, project, slug)}/sections/{anchor}",
+            f"{self._doc_base(uid, project, slug)}/sections/{_seg(anchor)}",
+        )
+        return self._reply(resp)
+
+    def search(self, uid: str, project: str, q: str) -> object:
+        """GET /v1/users/{uid}/projects/{project}/search?q=... → SearchResults JSON."""
+        resp = self._http.get(
+            f"/v1/users/{_seg(uid)}/projects/{_seg(project)}/search", params={"q": q}
+        )
+        self._raise_for_status(resp)
+        return resp.json()
+
+    def lineage(self, uid: str, project: str) -> object:
+        """GET /v1/users/{uid}/projects/{project}/lineage → lineage dict plain JSON."""
+        return self._get_json(f"/v1/users/{_seg(uid)}/projects/{_seg(project)}/lineage")
+
+    def get_rev(self, uid: str, project: str, slug: str) -> str:
+        """HEAD the document and return its ETag (rev) without fetching the body."""
+        resp = self._http.head(self._doc_base(uid, project, slug))
+        self._raise_for_status(resp)
+        return resp.headers.get("ETag", "")
+
+    def set_document_meta(
+        self,
+        uid: str,
+        project: str,
+        slug: str,
+        *,
+        title: str | None,
+        description: str | None,
+        date: str | None,
+        frontmatter: dict | None,
+    ) -> Reply:
+        # exclude_none: omitted fields are left unchanged server-side.
+        body = SetDocumentMetaRequest(
+            title=title,
+            description=description,
+            date=date,
+            frontmatter=frontmatter,
+        )
+        resp = self._http.put(
+            self._doc_base(uid, project, slug),
+            json=body.model_dump(mode="json", exclude_none=True),
         )
         return self._reply(resp)

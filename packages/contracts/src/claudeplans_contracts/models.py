@@ -7,6 +7,9 @@ escape hatch is Document.frontmatter, a free-form dict for metadata we don't mod
 
 from __future__ import annotations
 
+import re
+import unicodedata
+
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -19,12 +22,76 @@ from pydantic import (
 from .enums import DocStatus, DocType, PhaseStatus
 from .keys import validate_key_segment
 
+# Unicode categories that must never appear in single-line content: Cc (C0/C1
+# controls + DEL, which includes tab/newline/CR and NEL U+0085), Zl (line separator
+# U+2028), Zp (paragraph separator U+2029). Normal spaces (Zs) and zero-width/format
+# chars (Cf) are left alone; the multi-line `body` is exempt entirely (raw markdown).
+_FORBIDDEN_TEXT_CATEGORIES = frozenset({"Cc", "Zl", "Zp"})
+
+# A clean, routable identifier: letters, digits, '-', '_'. Excludes '/', '.', URL
+# metacharacters, and whitespace by construction (see validate_anchor).
+_ANCHOR_RE = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def validate_text_field(value: str, *, field: str) -> str:
+    """Reject empty/whitespace-only content and embedded control chars / line breaks.
+
+    Applied to single-line content fields (title, description, section heading, phase
+    name, task text) so an agent cannot persist a blank or line-break-laden value that
+    corrupts rendering. Line breaks include the Unicode separators U+2028/U+2029 and
+    NEL, not just ASCII newlines. Raises ValueError -> pydantic ValidationError (HTTP
+    422 -> CLI exit 4).
+    """
+    if not value.strip():
+        raise ValueError(f"{field} must not be empty or whitespace-only")
+    bad = next(
+        (c for c in value if unicodedata.category(c) in _FORBIDDEN_TEXT_CATEGORIES),
+        None,
+    )
+    if bad is not None:
+        raise ValueError(
+            f"{field} must not contain control characters or line breaks "
+            f"(found {bad!r})"
+        )
+    return value
+
+
+def validate_anchor(value: str, *, field: str) -> str:
+    """Validate a phase slug / section anchor as a clean, routable identifier.
+
+    Restricts to `[A-Za-z0-9_-]`. The identifier is interpolated raw into request URLs
+    (so a URL metacharacter like '#'/'?'/space would corrupt routing — a '#' silently
+    truncates the request to a *different* target) and into the `phases.<slug>`
+    drift-locator grammar (so '.' would make the locator ambiguous); the allowlist
+    excludes all of these plus '/', path-traversal, and control chars in one rule. The
+    '@'-prefix gets a tailored message: it is the `@end` footgun — agents reach for
+    '@end' expecting append semantics, but sections and phases are always appended in
+    order.
+    """
+    if _ANCHOR_RE.fullmatch(value) is None:
+        if value.startswith("@"):
+            raise ValueError(
+                f"{field} {value!r}: '@'-prefixed anchors are reserved — sections and "
+                "phases are appended in order, so there is no '@end'/position target; "
+                "use a plain identifier"
+            )
+        raise ValueError(
+            f"{field} {value!r} must be a non-empty identifier of letters, digits, "
+            "'-' or '_' (no '/', '.', whitespace, or URL metacharacters)"
+        )
+    return value
+
 
 class Task(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     text: str
     checked: bool = False
+
+    @field_validator("text")
+    @classmethod
+    def _validate_text(cls, v: str) -> str:
+        return validate_text_field(v, field="task text")
 
 
 class Section(BaseModel):
@@ -39,6 +106,16 @@ class Section(BaseModel):
     # which would silently drop the heading. Reject out of range at the boundary.
     level: int = Field(2, ge=1, le=6)
 
+    @field_validator("anchor")
+    @classmethod
+    def _validate_anchor(cls, v: str) -> str:
+        return validate_anchor(v, field="section anchor")
+
+    @field_validator("heading")
+    @classmethod
+    def _validate_heading(cls, v: str) -> str:
+        return validate_text_field(v, field="section heading")
+
 
 class Phase(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -47,6 +124,16 @@ class Phase(BaseModel):
     name: str
     status: PhaseStatus = PhaseStatus.todo
     tasks: list[Task] = Field(default_factory=list)
+
+    @field_validator("slug")
+    @classmethod
+    def _validate_slug(cls, v: str) -> str:
+        return validate_anchor(v, field="phase slug")
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, v: str) -> str:
+        return validate_text_field(v, field="phase name")
 
 
 class Document(BaseModel):
@@ -87,6 +174,16 @@ class Document(BaseModel):
         # the model and raw document_key callers validate against one shared source.
         return validate_key_segment(v)
 
+    @field_validator("title")
+    @classmethod
+    def _validate_title(cls, v: str) -> str:
+        return validate_text_field(v, field="title")
+
+    @field_validator("description")
+    @classmethod
+    def _validate_description(cls, v: str | None) -> str | None:
+        return v if v is None else validate_text_field(v, field="description")
+
     @field_validator("research_refs")
     @classmethod
     def _dedup_research_refs(cls, v: list[str]) -> list[str]:
@@ -105,13 +202,20 @@ class Document(BaseModel):
         ):
             raise ValueError("primary_research_ref must be one of research_refs")
         # Phase slug is the identity key for phase ops (set-status/move/rm) and the
-        # locator in DriftWarning.path; duplicates make both ambiguous.
-        if len({p.slug for p in self.phases}) != len(self.phases):
-            raise ValueError("phase slugs must be unique")
+        # locator in DriftWarning.path; duplicates make both ambiguous. Name the
+        # offender so an agent can fix it without diffing the whole phase list.
+        seen_slugs: set[str] = set()
+        for p in self.phases:
+            if p.slug in seen_slugs:
+                raise ValueError(f"duplicate phase slug {p.slug!r}")
+            seen_slugs.add(p.slug)
         # Section anchor is the identity key for section ops (set/patch/rm); duplicates
         # make addressing ambiguous, exactly as for phase slugs.
-        if len({s.anchor for s in self.sections}) != len(self.sections):
-            raise ValueError("section anchors must be unique")
+        seen_anchors: set[str] = set()
+        for s in self.sections:
+            if s.anchor in seen_anchors:
+                raise ValueError(f"duplicate section anchor {s.anchor!r}")
+            seen_anchors.add(s.anchor)
         return self
 
 

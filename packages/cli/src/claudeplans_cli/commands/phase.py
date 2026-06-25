@@ -21,7 +21,11 @@ _NAME = typer.Argument()
 _ADD_STATUS = typer.Option()
 _STATUS = typer.Argument()
 _TO_INDEX = typer.Argument()
-_REV = typer.Option("--rev")
+_REV = typer.Option(
+    "--rev",
+    help="current rev; this write is position-sensitive (see 'doc rev')",
+)
+_SET_NAME = typer.Option("--name")
 
 
 @app.command()
@@ -34,9 +38,24 @@ def add(
     name: Annotated[str, _NAME],
     status: Annotated[PhaseStatus, _ADD_STATUS] = PhaseStatus.todo,
 ) -> None:
-    """Append a phase."""
+    """Append a phase (plan docs only; research docs cannot carry phases)."""
     c: AppContext = ctx.obj
     reply = c.client.add_phase(c.uid, project, slug, phase_slug, name, status.value)
+    emit_write(reply, full=c.full)
+
+
+@app.command("set")
+@handle_errors
+def set_phase(
+    ctx: typer.Context,
+    project: str,
+    slug: str,
+    phase_slug: str,
+    name: Annotated[str | None, _SET_NAME] = None,
+) -> None:
+    """Absolute-set a phase's fields (omitted flags are left unchanged)."""
+    c: AppContext = ctx.obj
+    reply = c.client.set_phase(c.uid, project, slug, phase_slug, name)
     emit_write(reply, full=c.full)
 
 

@@ -1,8 +1,15 @@
 """Task routes — thin over core.py.
 
-Append (add_task) is retry-safe and needs no client rev. Index-addressed ops
-(toggle/edit/remove) require the client's rev via If-Match: a concurrent
-insert/remove would shift indices, so the caller must target the rev it last saw.
+add_task with no --at is a retry-safe append (no client rev needed). add_task with
+--at N is a positional insert that goes through the same retry-safe
+read_modify_write path (no --rev), but is best-effort under concurrent inserts: a
+CAS retry re-inserts at the same absolute index, so under a concurrent insert the
+final ordinal may differ from what the caller observed. This is the deliberate
+phase-3/phase-5 --rev-gating decision, not a bug.
+
+Index-addressed ops (toggle/edit/remove) require the client's rev via If-Match: a
+concurrent insert/remove would shift indices, so the caller must target the rev it
+last saw.
 """
 
 from fastapi import APIRouter, Response
@@ -38,10 +45,10 @@ async def add_task(
     feed: FeedDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
-    rev, doc = await core.add_task(repo, key, phase_slug, body.text, user=user)
+    rev, doc = await core.add_task(repo, key, phase_slug, body.text, body.at, user=user)
     response.headers["ETag"] = rev
     feed.publish(Event(key=key, rev=rev))
-    return envelope(doc)
+    return envelope(doc, scope=f"phases.{phase_slug}")
 
 
 @router.put("/{task_index}/toggle")
@@ -64,7 +71,7 @@ async def toggle_task(
     )
     response.headers["ETag"] = rev
     feed.publish(Event(key=key, rev=rev))
-    return envelope(doc)
+    return envelope(doc, scope=f"phases.{phase_slug}")
 
 
 @router.put("/{task_index}")
@@ -87,7 +94,7 @@ async def edit_task(
     )
     response.headers["ETag"] = rev
     feed.publish(Event(key=key, rev=rev))
-    return envelope(doc)
+    return envelope(doc, scope=f"phases.{phase_slug}")
 
 
 @router.delete("/{task_index}")
@@ -110,4 +117,4 @@ async def remove_task(
     )
     response.headers["ETag"] = rev
     feed.publish(Event(key=key, rev=rev))
-    return envelope(doc)
+    return envelope(doc, scope=f"phases.{phase_slug}")

@@ -148,7 +148,7 @@ def test_project_list_contains_created_projects(patched_cli: None) -> None:
     result = runner.invoke(cli.app, ["project", "list"])
     assert result.exit_code == 0
     parsed = json.loads(result.stdout)
-    projects = {item["project"] for item in parsed["items"]}
+    projects = {item["project"] for item in parsed["data"]["items"]}
     assert "proj-a" in projects
     assert "proj-b" in projects
 
@@ -165,7 +165,7 @@ def test_doc_list_contains_created_docs(patched_cli: None) -> None:
     result = runner.invoke(cli.app, ["doc", "list", "myproj"])
     assert result.exit_code == 0
     parsed = json.loads(result.stdout)
-    slugs = {item["slug"] for item in parsed["items"]}
+    slugs = {item["slug"] for item in parsed["data"]["items"]}
     assert "p1" in slugs
     assert "r1" in slugs
 
@@ -174,7 +174,7 @@ def test_doc_list_empty_project_returns_ok(patched_cli: None) -> None:
     result = runner.invoke(cli.app, ["doc", "list", "no-such-proj"])
     assert result.exit_code == 0
     parsed = json.loads(result.stdout)
-    assert parsed["items"] == []
+    assert parsed["data"]["items"] == []
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +197,10 @@ def test_doc_view_prints_correct_url(patched_cli: None) -> None:
         ],
     )
     assert result.exit_code == 0
-    assert result.stdout.strip() == (
+    import json
+
+    parsed = json.loads(result.stdout)
+    assert parsed["url"] == (
         "http://myhost:9000/v1/users/alice/projects/myproj/docs/my-slug/view"
     )
 
@@ -216,9 +219,10 @@ def test_project_view_prints_correct_url(patched_cli: None) -> None:
         ],
     )
     assert result.exit_code == 0
-    assert result.stdout.strip() == (
-        "http://myhost:9000/v1/users/alice/projects/myproj/"
-    )
+    import json
+
+    parsed = json.loads(result.stdout)
+    assert parsed["url"] == "http://myhost:9000/v1/users/alice/projects/myproj/"
 
 
 # ---------------------------------------------------------------------------

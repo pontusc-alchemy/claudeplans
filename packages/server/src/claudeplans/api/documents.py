@@ -11,6 +11,7 @@ from claudeplans_contracts import (
     DocStatusRequest,
     DocumentCreate,
     ResearchRefsRequest,
+    SetDocumentMetaRequest,
     document_key,
 )
 
@@ -20,6 +21,20 @@ from .deps import CurrentUserDep, FeedDep, IfMatchDep, RepoDep
 from .envelope import ResponseEnvelope, envelope
 
 router = APIRouter(prefix="/v1/users/{uid}/projects/{project}/docs", tags=["documents"])
+
+
+@router.head("/{slug}")
+async def head(
+    uid: str,
+    project: str,
+    slug: str,
+    response: Response,
+    repo: RepoDep,
+) -> Response:
+    """Return the current ETag (rev) for a document without a body."""
+    key = document_key(uid, project, slug)
+    rev, _ = await core.get_document(repo, key)
+    return Response(status_code=200, headers={"ETag": rev})
 
 
 @router.post("", status_code=201)
@@ -70,6 +85,32 @@ async def delete(
     # the deleted frame.
     feed.publish(Event(key=key, rev=expected_rev))
     return Response(status_code=204)
+
+
+@router.put("/{slug}")
+async def set_document_meta(
+    uid: str,
+    project: str,
+    slug: str,
+    body: SetDocumentMetaRequest,
+    response: Response,
+    repo: RepoDep,
+    user: CurrentUserDep,
+    feed: FeedDep,
+) -> ResponseEnvelope:
+    key = document_key(uid, project, slug)
+    rev, doc = await core.set_document_meta(
+        repo,
+        key,
+        title=body.title,
+        description=body.description,
+        date=body.date,
+        frontmatter=body.frontmatter,
+        user=user,
+    )
+    response.headers["ETag"] = rev
+    feed.publish(Event(key=key, rev=rev))
+    return envelope(doc)
 
 
 @router.put("/{slug}/status")

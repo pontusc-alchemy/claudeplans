@@ -10,6 +10,7 @@ from claudeplans_contracts import (
     AddPhaseRequest,
     MovePhaseRequest,
     PhaseStatusRequest,
+    SetPhaseRequest,
     document_key,
 )
 
@@ -41,7 +42,26 @@ async def add_phase(
     )
     response.headers["ETag"] = rev
     feed.publish(Event(key=key, rev=rev))
-    return envelope(doc)
+    return envelope(doc, scope=f"phases.{body.slug}")
+
+
+@router.put("/{phase_slug}")
+async def set_phase(
+    uid: str,
+    project: str,
+    slug: str,
+    phase_slug: str,
+    body: SetPhaseRequest,
+    response: Response,
+    repo: RepoDep,
+    user: CurrentUserDep,
+    feed: FeedDep,
+) -> ResponseEnvelope:
+    key = document_key(uid, project, slug)
+    rev, doc = await core.set_phase(repo, key, phase_slug, body.name, user=user)
+    response.headers["ETag"] = rev
+    feed.publish(Event(key=key, rev=rev))
+    return envelope(doc, scope=f"phases.{phase_slug}")
 
 
 @router.put("/{phase_slug}/status")
@@ -62,7 +82,7 @@ async def set_phase_status(
     )
     response.headers["ETag"] = rev
     feed.publish(Event(key=key, rev=rev))
-    return envelope(doc)
+    return envelope(doc, scope=f"phases.{phase_slug}")
 
 
 @router.post("/{phase_slug}/move")
@@ -104,4 +124,4 @@ async def remove_phase(
     rev, doc = await core.remove_phase(repo, key, phase_slug, user=user)
     response.headers["ETag"] = rev
     feed.publish(Event(key=key, rev=rev))
-    return envelope(doc)
+    return envelope(doc, scope=f"phases.{phase_slug}")

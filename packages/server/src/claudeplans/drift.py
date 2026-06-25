@@ -45,7 +45,11 @@ def lint(doc: Document) -> list[DriftWarning]:
                 DriftWarning(
                     code="doc-done-phase-open",
                     message=f"document is done but phase '{phase.slug}' is not done",
-                    path=f"phases.{phase.slug}",
+                    # path=None: this is a DOCUMENT-level invariant, not scoped to the
+                    # phase. A scoped write to phase A must still surface a
+                    # doc-done-phase-open warning about phase B, so it cannot be
+                    # filtered by the envelope's scope=f"phases.{phase_slug}" logic.
+                    path=None,
                 )
             )
     return warnings

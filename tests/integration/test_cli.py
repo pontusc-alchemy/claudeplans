@@ -52,7 +52,7 @@ def test_set_document_status_round_trips(client: PlanClient) -> None:
 def test_get_missing_slug_raises_not_found(client: PlanClient) -> None:
     with pytest.raises(NotFound) as excinfo:
         client.get_document("dev", "demo", "ghost")
-    assert exit_code_for(excinfo.value) == 2
+    assert exit_code_for(excinfo.value) == 5  # NOT_FOUND, moved off Typer's usage 2
 
 
 def test_cross_namespace_write_raises_forbidden(client: PlanClient) -> None:

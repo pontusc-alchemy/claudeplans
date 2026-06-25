@@ -135,6 +135,13 @@ def test_toggle_task_out_of_range_raises() -> None:
         deltas.toggle_task(_doc(), "a", 9, True)
 
 
+def test_toggle_task_sets_absolute_not_flip() -> None:
+    # Task index 1 starts checked=True in _doc(); setting False yields False (a flip
+    # would return True). Proves the absolute set that `set-checked` relies on.
+    out = deltas.toggle_task(_doc(), "a", 1, False)
+    assert out.phases[0].tasks[1].checked is False
+
+
 def test_edit_task() -> None:
     doc = _doc()
     before = _snapshot(doc)
@@ -229,6 +236,167 @@ def test_put_research_refs() -> None:
     assert out.research_refs == ["r1", "r2"]
     assert out.primary_research_ref == "r1"
     assert _snapshot(doc) == before
+
+
+# --- set_phase ---------------------------------------------------------------
+
+
+def test_set_phase_renames_target_leaves_others() -> None:
+    doc = _doc()
+    before = _snapshot(doc)
+    out = deltas.set_phase(doc, "a", name="Alpha Renamed")
+    assert out.phases[0].name == "Alpha Renamed"
+    # phase "b" is untouched
+    assert out.phases[1].name == "Beta"
+    assert _snapshot(doc) == before
+
+
+def test_set_phase_none_name_leaves_unchanged() -> None:
+    doc = _doc()
+    out = deltas.set_phase(doc, "a", name=None)
+    assert out.phases[0].name == "Alpha"
+
+
+def test_set_phase_missing_raises() -> None:
+    with pytest.raises(ValidationError):
+        deltas.set_phase(_doc(), "zzz", name="X")
+
+
+# --- move_section ------------------------------------------------------------
+
+
+def test_move_section_reorders() -> None:
+    doc = _doc()
+    # Add a second section so we have something to move.
+    doc2 = deltas.add_section(doc, "ctx", "Context", "body", 2)
+    before = _snapshot(doc2)
+    out = deltas.move_section(doc2, "ctx", 0)
+    assert [s.anchor for s in out.sections] == ["ctx", "intro"]
+    assert _snapshot(doc2) == before
+
+
+def test_move_section_out_of_range_raises() -> None:
+    doc = _doc()
+    doc2 = deltas.add_section(doc, "ctx", "Context", "body", 2)
+    with pytest.raises(ValidationError):
+        deltas.move_section(doc2, "intro", 5)
+
+
+def test_move_section_missing_raises() -> None:
+    with pytest.raises(ValidationError):
+        deltas.move_section(_doc(), "zzz", 0)
+
+
+# --- add_task / add_section with --at ----------------------------------------
+
+
+def test_add_task_at_inserts_at_index() -> None:
+    doc = _doc()
+    before = _snapshot(doc)
+    out = deltas.add_task(doc, "a", "t0", at=0)
+    assert [t.text for t in out.phases[0].tasks] == ["t0", "t1", "t2"]
+    assert _snapshot(doc) == before
+
+
+def test_add_task_at_none_appends() -> None:
+    doc = _doc()
+    out = deltas.add_task(doc, "a", "t3", at=None)
+    assert [t.text for t in out.phases[0].tasks] == ["t1", "t2", "t3"]
+
+
+def test_add_task_at_out_of_range_raises() -> None:
+    with pytest.raises(ValidationError):
+        deltas.add_task(_doc(), "a", "x", at=99)
+
+
+def test_add_task_at_len_appends() -> None:
+    # at == len(tasks) is the inclusive upper bound: it appends, same as at=None.
+    doc = _doc()  # phase "a" has 2 tasks
+    out = deltas.add_task(doc, "a", "t3", at=len(doc.phases[0].tasks))
+    assert [t.text for t in out.phases[0].tasks] == ["t1", "t2", "t3"]
+
+
+def test_add_section_at_inserts_at_index() -> None:
+    doc = _doc()
+    doc2 = deltas.add_section(doc, "ctx", "Context", "body", 2)
+    before = _snapshot(doc2)
+    out = deltas.add_section(doc2, "new", "New", "", 2, at=0)
+    assert [s.anchor for s in out.sections] == ["new", "intro", "ctx"]
+    assert _snapshot(doc2) == before
+
+
+def test_add_section_at_none_appends() -> None:
+    doc = _doc()
+    out = deltas.add_section(doc, "ctx", "Context", "body", 2, at=None)
+    assert [s.anchor for s in out.sections] == ["intro", "ctx"]
+
+
+def test_add_section_at_out_of_range_raises() -> None:
+    with pytest.raises(ValidationError):
+        deltas.add_section(_doc(), "new", "New", "", 2, at=99)
+
+
+# --- set_document_meta -------------------------------------------------------
+
+
+def test_set_document_meta_sets_provided_fields() -> None:
+    doc = _doc()
+    before = _snapshot(doc)
+    out = deltas.set_document_meta(
+        doc,
+        title="New Title",
+        description="A description",
+        date=None,
+        frontmatter=None,
+    )
+    assert out.title == "New Title"
+    assert out.description == "A description"
+    # date and frontmatter were None so they are left unchanged
+    assert out.date == doc.date
+    assert _snapshot(doc) == before
+
+
+def test_set_document_meta_leaves_omitted_unchanged() -> None:
+    doc = _doc()
+    out1 = deltas.set_document_meta(
+        doc,
+        title="T1",
+        description="D1",
+        date=None,
+        frontmatter=None,
+    )
+    out2 = deltas.set_document_meta(
+        out1,
+        title="T2",
+        description=None,
+        date=None,
+        frontmatter=None,
+    )
+    assert out2.title == "T2"
+    # description was None on the second call — left as "D1"
+    assert out2.description == "D1"
+
+
+def test_set_document_meta_frontmatter() -> None:
+    doc = _doc()
+    out = deltas.set_document_meta(
+        doc,
+        title=None,
+        description=None,
+        date=None,
+        frontmatter={"key": "val"},
+    )
+    assert out.frontmatter == {"key": "val"}
+
+
+def test_set_document_meta_frontmatter_replaces_whole_dict() -> None:
+    # Providing frontmatter is an absolute REPLACE, not a merge: seed {"a":1}, set
+    # {"b":2} -> exactly {"b":2} (distinguishes it from section patch's merge-patch).
+    seeded = _doc().model_copy(update={"frontmatter": {"a": 1}})
+    out = deltas.set_document_meta(
+        seeded, title=None, description=None, date=None, frontmatter={"b": 2}
+    )
+    assert out.frontmatter == {"b": 2}
 
 
 def test_merge_patch_null_deletes() -> None:

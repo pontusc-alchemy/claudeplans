@@ -9,13 +9,17 @@ once and narrow the printed view without a second round-trip.
 Write replies have a slimmer default shape that omits the full document body.
 Pass `full=True` (--full/-v) to restore the full `{rev, data, warnings}` envelope.
 Slice directives narrow the output further without a second request:
-  - "create"          → {slug, rev, warnings}
+  - "create"          → {slug, type, rev, warnings}
   - "phase:<slug>"    → {rev, warnings, phase:{slug, tasks}}
   - "phases-ordering" → {rev, warnings, phases:[{slug, status}]}
   - None (default)    → {rev, warnings}
+task-add shape (emit_task_added, full=False):
+  - {rev, warnings, task:{phase:<slug>, index:<int>}}
 """
 
 import json
+
+from claudeplans_contracts import ValidationError
 
 from .client import Reply
 
@@ -40,17 +44,26 @@ def emit(
     """
     data = reply.data
     if fields is not None and data is not None:
-        projected: object = {k: data[k] for k in fields if k in data}
+        missing = [k for k in fields if k not in data]
+        if missing:
+            raise ValidationError(f"unknown field(s): {', '.join(missing)}")
+        projected: object = {k: data[k] for k in fields}
     elif section is not None and data is not None:
-        projected = next(
+        found_section = next(
             (s for s in data.get("sections", []) if s.get("anchor") == section),
             None,
         )
+        if found_section is None:
+            raise ValidationError(f"no section with anchor {section!r}")
+        projected = found_section
     elif phase is not None and data is not None:
-        projected = next(
+        found_phase = next(
             (p for p in data.get("phases", []) if p.get("slug") == phase),
             None,
         )
+        if found_phase is None:
+            raise ValidationError(f"no phase with slug {phase!r}")
+        projected = found_phase
     else:
         _compact({"rev": reply.rev, "data": data, "warnings": reply.warnings})
         return
@@ -67,7 +80,7 @@ def emit_write(
 
     Default (full=False): slim shape; `slice_` controls what is included:
       - None            → {rev, warnings}
-      - "create"        → {slug, rev, warnings}
+      - "create"        → {slug, type, rev, warnings}
       - "phase:<slug>"  → {rev, warnings, phase:{slug, tasks}}
       - "phases-ordering" → {rev, warnings, phases:[{slug, status}]}
 
@@ -82,7 +95,10 @@ def emit_write(
 
     if slice_ == "create":
         slug = data.get("slug") if isinstance(data, dict) else None
-        _compact({"slug": slug, "rev": reply.rev, "warnings": reply.warnings})
+        type_ = data.get("type") if isinstance(data, dict) else None
+        _compact(
+            {"slug": slug, "type": type_, "rev": reply.rev, "warnings": reply.warnings}
+        )
         return
 
     if slice_ is not None and slice_.startswith("phase:"):
@@ -117,10 +133,30 @@ def emit_write(
     _compact({"rev": reply.rev, "warnings": reply.warnings})
 
 
+def emit_task_added(
+    reply: Reply, *, phase_slug: str, index: int, full: bool = False
+) -> None:
+    """Print a task-add reply as compact JSON.
+
+    full=True: full {rev, data, warnings} envelope.
+    full=False: {rev, warnings, task:{phase:<slug>, index:<int>}}.
+    """
+    if full:
+        _compact({"rev": reply.rev, "data": reply.data, "warnings": reply.warnings})
+        return
+    _compact(
+        {
+            "rev": reply.rev,
+            "warnings": reply.warnings,
+            "task": {"phase": phase_slug, "index": index},
+        }
+    )
+
+
 def emit_phases(reply: Reply) -> None:
-    """Print just the document's phases list (plus rev) as compact JSON."""
+    """Print just the document's phases list (plus rev and warnings) as compact JSON."""
     phases = reply.data.get("phases", []) if reply.data is not None else []
-    _compact({"rev": reply.rev, "phases": phases})
+    _compact({"rev": reply.rev, "phases": phases, "warnings": reply.warnings})
 
 
 def emit_obj(obj: object) -> None:

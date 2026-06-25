@@ -9,6 +9,7 @@ defaults) because ruff B008 forbids function calls in argument defaults; the
 descriptor is shared and immutable, so a singleton is the sanctioned form.
 """
 
+import json
 import sys
 from typing import Annotated
 
@@ -29,16 +30,40 @@ from ..output import emit, emit_obj, emit_phases, emit_write
 app = typer.Typer(no_args_is_help=True)
 
 _TYPE = typer.Option("--type")
-_FROM_JSON = typer.Option("--from-json", help="'-' for stdin, or a literal JSON string")
-_SLUG = typer.Option()
+_FROM_JSON = typer.Option(
+    "--from-json",
+    help=(
+        "'-' for stdin, or a literal JSON string. "
+        "Accepts the full DocumentCreate shape — express the entire scaffold "
+        "in one call, including nested sections and phases-with-tasks. "
+        "Shape: {type, slug, title, status?(draft), date?, description?, "
+        "frontmatter{}, research_refs[], primary_research_ref?, "
+        "sections:[{anchor, heading, body?, level?(1-6)}], "
+        "phases:[{slug, name, status?(todo), tasks:[{text, checked?(false)}]}]}. "
+        'Example: \'{"type":"plan","slug":"p","title":"P",'
+        '"sections":[{"anchor":"intro","heading":"Intro"}],'
+        '"phases":[{"slug":"ph1","name":"Phase 1","tasks":[{"text":"do x"}]}]}\''
+    ),
+)
+_SLUG = typer.Option(help="required unless --from-json (which carries its own slug)")
 _TITLE = typer.Option()
 _FIELDS = typer.Option(help="comma-separated")
 _SECTION = typer.Option()
 _PHASE = typer.Option()
-_REV = typer.Option("--rev")
+_REV = typer.Option(
+    "--rev",
+    help="current rev; this write is position-sensitive (see 'doc rev')",
+)
 _STATUS_VALUE = typer.Argument()
 _REF = typer.Argument()
 _PRIMARY = typer.Option("--primary")
+_SET_TITLE = typer.Option("--title")
+_SET_DESCRIPTION = typer.Option("--description")
+_SET_DATE = typer.Option("--date")
+_SET_FRONTMATTER = typer.Option(
+    "--frontmatter",
+    help="JSON object; REPLACES the entire frontmatter dict (omitted keys are lost).",
+)
 
 
 @app.command()
@@ -95,8 +120,8 @@ def delete(
 ) -> None:
     """Delete a document (conditional on --rev)."""
     c: AppContext = ctx.obj
-    c.client.delete_document(c.uid, project, slug, rev=rev)
-    print('{"deleted":true}')
+    reply = c.client.delete_document(c.uid, project, slug, rev=rev)
+    emit_write(reply, full=c.full)
 
 
 @app.command()
@@ -111,6 +136,9 @@ def status(
     c: AppContext = ctx.obj
     reply = c.client.set_document_status(c.uid, project, slug, value.value)
     emit_write(reply, full=c.full)
+
+
+app.command("set-status")(status)
 
 
 @app.command()
@@ -166,12 +194,68 @@ def unlink(
     emit_write(reply, full=c.full)
 
 
+@app.command("set")
+@handle_errors
+def set_meta(
+    ctx: typer.Context,
+    project: str,
+    slug: str,
+    title: Annotated[str | None, _SET_TITLE] = None,
+    description: Annotated[str | None, _SET_DESCRIPTION] = None,
+    date: Annotated[str | None, _SET_DATE] = None,
+    frontmatter: Annotated[str | None, _SET_FRONTMATTER] = None,
+) -> None:
+    """Set document metadata fields (omitted flags are left unchanged)."""
+    c: AppContext = ctx.obj
+    # Parse inside the handle_errors boundary: a malformed --frontmatter is a client
+    # error (-> exit 4), not an uncaught JSONDecodeError that escapes as exit 1.
+    fm: dict | None = None
+    if frontmatter is not None:
+        try:
+            fm = json.loads(frontmatter)
+        except json.JSONDecodeError as exc:
+            raise ValidationError(f"--frontmatter is not valid JSON: {exc}") from exc
+    reply = c.client.set_document_meta(
+        c.uid,
+        project,
+        slug,
+        title=title,
+        description=description,
+        date=date,
+        frontmatter=fm,
+    )
+    emit_write(reply, full=c.full)
+
+
 @app.command("list")
 @handle_errors
-def list_(ctx: typer.Context, project: str) -> None:
-    """List all documents in a project."""
+def list_(
+    ctx: typer.Context,
+    project: str,
+    type_: Annotated[DocType | None, _TYPE] = None,
+) -> None:
+    """List all documents in a project, optionally filtered by --type."""
     c: AppContext = ctx.obj
-    emit_obj(c.client.list_docs(c.uid, project))
+    raw = c.client.list_docs(c.uid, project)
+    if type_ is not None and isinstance(raw, dict):
+        items = raw.get("items", [])
+        filtered = [
+            item
+            for item in (items if isinstance(items, list) else [])
+            if isinstance(item, dict) and item.get("type") == type_.value
+        ]
+        result: object = {"project": raw.get("project"), "items": filtered}
+    else:
+        result = raw
+    emit_obj({"data": result, "warnings": []})
+
+
+@app.command()
+@handle_errors
+def rev(ctx: typer.Context, project: str, slug: str) -> None:
+    """Print the current rev (ETag) for a document without fetching its body."""
+    c: AppContext = ctx.obj
+    emit_obj({"rev": c.client.get_rev(c.uid, project, slug)})
 
 
 @app.command()
@@ -179,6 +263,5 @@ def list_(ctx: typer.Context, project: str) -> None:
 def view(ctx: typer.Context, project: str, slug: str) -> None:
     """Print the rendered view URL for a document (no network request)."""
     c: AppContext = ctx.obj
-    print(
-        f"{c.base_url.rstrip('/')}/v1/users/{c.uid}/projects/{project}/docs/{slug}/view"
-    )
+    base = c.base_url.rstrip("/")
+    emit_obj({"url": f"{base}/v1/users/{c.uid}/projects/{project}/docs/{slug}/view"})

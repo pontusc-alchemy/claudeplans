@@ -25,7 +25,7 @@ def _callback() -> None:
 def list_(ctx: typer.Context) -> None:
     """List all projects for the configured user."""
     c: AppContext = ctx.obj
-    emit_obj(c.client.list_projects(c.uid))
+    emit_obj({"data": c.client.list_projects(c.uid), "warnings": []})
 
 
 @app.command()
@@ -33,4 +33,13 @@ def list_(ctx: typer.Context) -> None:
 def view(ctx: typer.Context, project: str) -> None:
     """Print the API URL for a project (no network request)."""
     c: AppContext = ctx.obj
-    print(f"{c.base_url.rstrip('/')}/v1/users/{c.uid}/projects/{project}/")
+    base = c.base_url.rstrip("/")
+    emit_obj({"url": f"{base}/v1/users/{c.uid}/projects/{project}/"})
+
+
+@app.command()
+@handle_errors
+def lineage(ctx: typer.Context, project: str) -> None:
+    """Return the lineage tree for a project as JSON."""
+    c: AppContext = ctx.obj
+    emit_obj({"data": c.client.lineage(c.uid, project), "warnings": []})

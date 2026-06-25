@@ -85,6 +85,17 @@ def add_phase(doc: Document, slug: str, name: str, status: PhaseStatus) -> Docum
     return doc.model_copy(update={"phases": [*doc.phases, phase]})
 
 
+def set_phase(doc: Document, slug: str, name: str | None) -> Document:
+    """Absolute set of the provided phase fields; None leaves a field unchanged."""
+    i = _find_phase(doc, slug)
+    update: dict[str, JsonValue] = {}
+    if name is not None:
+        update["name"] = name
+    phases = list(doc.phases)
+    phases[i] = phases[i].model_copy(update=update)
+    return doc.model_copy(update={"phases": phases})
+
+
 def set_phase_status(doc: Document, slug: str, status: PhaseStatus) -> Document:
     """Set the status of the phase identified by `slug`."""
     i = _find_phase(doc, slug)
@@ -114,10 +125,18 @@ def remove_phase(doc: Document, slug: str) -> Document:
     return doc.model_copy(update={"phases": phases})
 
 
-def add_task(doc: Document, phase_slug: str, text: str) -> Document:
-    """Append a task to phase `phase_slug` (the task list is append-only)."""
+def add_task(
+    doc: Document, phase_slug: str, text: str, at: int | None = None
+) -> Document:
+    """Append a task to phase `phase_slug`, or insert at `at` if given."""
     i = _find_phase(doc, phase_slug)
-    tasks = [*doc.phases[i].tasks, Task(text=text)]
+    tasks = list(doc.phases[i].tasks)
+    if at is None:
+        tasks.append(Task(text=text))
+    else:
+        if not 0 <= at <= len(tasks):
+            raise ValidationError(f"at {at} out of range")
+        tasks.insert(at, Task(text=text))
     phases = list(doc.phases)
     phases[i] = phases[i].model_copy(update={"tasks": tasks})
     return doc.model_copy(update={"phases": phases})
@@ -158,21 +177,42 @@ def remove_task(doc: Document, phase_slug: str, task_index: int) -> Document:
     return doc.model_copy(update={"phases": phases})
 
 
+def move_section(doc: Document, anchor: str, to_index: int) -> Document:
+    """Move the section `anchor` to `to_index` in the ordering."""
+    i = _find_section(doc, anchor)
+    sections = list(doc.sections)
+    section = sections.pop(i)
+    # After removal the valid insert range is [0, len(sections)]; reject anything else
+    # so a bad target surfaces as a 422 rather than silently clamping.
+    if not 0 <= to_index <= len(sections):
+        raise ValidationError(f"to_index {to_index} out of range")
+    sections.insert(to_index, section)
+    return doc.model_copy(update={"sections": sections})
+
+
 def add_section(
     doc: Document,
     anchor: str,
     heading: str,
     body: str,
     level: int,
+    at: int | None = None,
 ) -> Document:
-    """Append a section (the section surface is append-only).
+    """Append a section, or insert at `at` if given.
 
     Pre-checks anchor uniqueness for a clean domain error, mirroring add_phase.
     """
     if any(s.anchor == anchor for s in doc.sections):
         raise ValidationError(f"section {anchor!r} already exists")
     section = Section(anchor=anchor, heading=heading, body=body, level=level)
-    return doc.model_copy(update={"sections": [*doc.sections, section]})
+    sections = list(doc.sections)
+    if at is None:
+        sections.append(section)
+    else:
+        if not 0 <= at <= len(sections):
+            raise ValidationError(f"at {at} out of range")
+        sections.insert(at, section)
+    return doc.model_copy(update={"sections": sections})
 
 
 def set_section(
@@ -225,3 +265,24 @@ def put_research_refs(
     return doc.model_copy(
         update={"research_refs": research_refs, "primary_research_ref": primary}
     )
+
+
+def set_document_meta(
+    doc: Document,
+    *,
+    title: str | None,
+    description: str | None,
+    date: str | None,
+    frontmatter: dict[str, JsonValue] | None,
+) -> Document:
+    """Absolute set of provided document metadata fields; None leaves unchanged."""
+    update: dict[str, JsonValue] = {}
+    if title is not None:
+        update["title"] = title
+    if description is not None:
+        update["description"] = description
+    if date is not None:
+        update["date"] = date
+    if frontmatter is not None:
+        update["frontmatter"] = frontmatter
+    return doc.model_copy(update=update)

@@ -1,10 +1,15 @@
 """Unit coverage of the error -> exit-code mapping and `_reply` status mapping."""
 
+import json
+
 import httpx
 import pytest
+import typer
+from pydantic import BaseModel
+from pydantic import ValidationError as PydanticValidationError
 
 from claudeplans_cli.client import PlanClient
-from claudeplans_cli.errors import exit_code_for
+from claudeplans_cli.errors import exit_code_for, handle_errors, kind_for
 from claudeplans_contracts import (
     CorruptDocument,
     ExitCode,
@@ -28,6 +33,125 @@ _CASES = [
 @pytest.mark.parametrize(("exc", "expected"), _CASES)
 def test_exit_code_for(exc: PlanError, expected: ExitCode) -> None:
     assert exit_code_for(exc) == int(expected)
+
+
+# The exit-code matrix: every domain failure class is distinguishable by exit code
+# AND a parseable stderr `{"error":"<kind>",…}`. (USAGE/2 is Typer/Click's own and
+# is exercised end-to-end, not here.)
+_BOUNDARY_CASES = [
+    (NotFound("missing"), ExitCode.NOT_FOUND, "not_found"),
+    (Forbidden("nope"), ExitCode.FORBIDDEN, "forbidden"),
+    (ValidationError("bad"), ExitCode.VALIDATION, "validation"),
+    (CorruptDocument("corrupt"), ExitCode.ERROR, "error"),
+    (PlanError("boom"), ExitCode.ERROR, "error"),
+]
+
+
+# Pin the exact kind string for every error class (a typo like `not_found` ->
+# `notfound` must fail this, not slip through).
+_KIND_CASES = [
+    (NotFound(), "not_found"),
+    (Forbidden(), "forbidden"),
+    (ValidationError(), "validation"),
+    (StaleRevision(), "stale_rev"),
+    (CorruptDocument(), "error"),
+    (PlanError(), "error"),
+]
+
+
+@pytest.mark.parametrize(("exc", "expected_kind"), _KIND_CASES)
+def test_kind_for_matches_exit_mapping(exc: PlanError, expected_kind: str) -> None:
+    # A mapped domain error gets its specific kind; the unmapped generic failures
+    # (CorruptDocument, the PlanError base) report the generic "error".
+    assert kind_for(exc) == expected_kind
+
+
+@pytest.mark.parametrize(("exc", "code", "kind"), _BOUNDARY_CASES)
+def test_handle_errors_emits_structured_stderr(
+    exc: PlanError,
+    code: ExitCode,
+    kind: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    @handle_errors
+    def boom() -> None:
+        raise exc
+
+    with pytest.raises(typer.Exit) as excinfo:
+        boom()
+    assert excinfo.value.exit_code == int(code)
+    err = json.loads(capsys.readouterr().err)
+    assert err["error"] == kind
+    assert err["detail"]
+
+
+def test_handle_errors_stale_rev_carries_current_rev(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    @handle_errors
+    def boom() -> None:
+        raise StaleRevision("lost race", current_rev="7")
+
+    with pytest.raises(typer.Exit) as excinfo:
+        boom()
+    assert excinfo.value.exit_code == int(ExitCode.STALE_REV)
+    err = json.loads(capsys.readouterr().err)
+    assert err == {"error": "stale_rev", "current_rev": "7"}
+
+
+# Every request-side httpx failure must map to a structured transport error, not
+# just the connect case: ConnectError/timeouts are TransportError, but DecodingError
+# and TooManyRedirects are RequestError siblings that are NOT TransportError and
+# would otherwise escape as a raw traceback.
+_TRANSPORT_CASES = [
+    httpx.ConnectError("connection refused"),
+    httpx.ConnectTimeout("timed out"),
+    httpx.DecodingError("bad body"),
+    httpx.TooManyRedirects("loop"),
+]
+
+
+@pytest.mark.parametrize("exc", _TRANSPORT_CASES)
+def test_handle_errors_transport_no_traceback(
+    exc: httpx.RequestError, capsys: pytest.CaptureFixture[str]
+) -> None:
+    @handle_errors
+    def boom() -> None:
+        raise exc
+
+    with pytest.raises(typer.Exit) as excinfo:
+        boom()
+    assert excinfo.value.exit_code == int(ExitCode.TRANSPORT)
+    err = json.loads(capsys.readouterr().err)
+    assert err["error"] == "transport"
+    assert err["detail"]
+
+
+def test_handle_errors_stderr_is_single_line_for_multiline_detail(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # A pydantic ValidationError's message spans multiple lines; the whole agent
+    # contract rests on one parseable JSON object per error, so the embedded newlines
+    # must be escaped, not emitted raw.
+    class _M(BaseModel):
+        n: int
+
+    with pytest.raises(PydanticValidationError) as ve:
+        _M.model_validate({"n": "not-an-int"})
+    multiline = ve.value
+
+    @handle_errors
+    def boom() -> None:
+        raise multiline
+
+    with pytest.raises(typer.Exit) as excinfo:
+        boom()
+    assert excinfo.value.exit_code == int(ExitCode.VALIDATION)
+    out = capsys.readouterr().err
+    assert out.strip().count("\n") == 0  # exactly one physical line
+    err = json.loads(out)
+    assert err["error"] == "validation"
+    assert "\n" in err["detail"]  # the newline survived, escaped, inside the JSON
 
 
 def _response(status_code: int, detail: object = "boom") -> httpx.Response:

@@ -6,6 +6,7 @@ import pytest
 
 from claudeplans_cli.client import Reply
 from claudeplans_cli.output import emit, emit_phases, emit_write
+from claudeplans_contracts import ValidationError
 
 _DATA = {
     "slug": "p1",
@@ -53,18 +54,14 @@ def test_emit_phase_returns_that_phase(capsys: pytest.CaptureFixture[str]) -> No
     }
 
 
-def test_emit_section_miss_yields_null_data(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    emit(_REPLY, section="missing")
-    assert _captured(capsys)["data"] is None
+def test_emit_section_miss_raises_validation_error() -> None:
+    with pytest.raises(ValidationError, match="missing"):
+        emit(_REPLY, section="missing")
 
 
-def test_emit_phase_miss_yields_null_data(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    emit(_REPLY, phase="missing")
-    assert _captured(capsys)["data"] is None
+def test_emit_phase_miss_raises_validation_error() -> None:
+    with pytest.raises(ValidationError, match="missing"):
+        emit(_REPLY, phase="missing")
 
 
 def test_emit_with_none_data_does_not_crash(
@@ -85,6 +82,7 @@ def test_emit_phases_returns_phases_list(
     parsed = json.loads(out)
     assert parsed["rev"] == "3"
     assert parsed["phases"] == _DATA["phases"]
+    assert "warnings" in parsed
 
 
 # --- emit_write unit tests ---

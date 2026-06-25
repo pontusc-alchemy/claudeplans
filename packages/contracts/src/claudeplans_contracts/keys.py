@@ -7,6 +7,7 @@ user, matching the /v1/users/{uid}/... routes.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -15,19 +16,28 @@ if TYPE_CHECKING:
     # a string — so this import breaks the keys <-> models cycle.
     from .models import Document
 
+# Positive allowlist identical in spirit to validate_anchor: only letters, digits,
+# '-', '_'. Excludes '/', '.', URL metacharacters (#, ?, space, @), NUL/control
+# chars, and newlines by construction. A NUL byte triggers a server HTTP 500 on
+# filesystem._path_for; '#'/'?' make the slug permanently unaddressable when
+# interpolated raw into request URLs; a newline causes httpx.InvalidURL on the
+# client side. The allowlist stops all of these in one rule.
+_KEY_SEGMENT_RE = re.compile(r"[A-Za-z0-9_-]+")
+
 
 def validate_key_segment(value: str) -> str:
     """Validate one storage-key segment (owner_id / project / slug).
 
-    Segments compose the opaque storage key `owner/project/slug`; one that is
-    empty, contains '/', or is '.'/'..' would let the key collide or escape its
-    directory. Raises ValueError so the Document field validator surfaces it as a
-    pydantic ValidationError (-> HTTP 422) at the boundary.
+    Segments compose the opaque storage key `owner/project/slug`. The allowlist
+    `[A-Za-z0-9_-]` prevents: path traversal ('/', '.', '..'), URL metacharacters
+    ('#', '?', '@', space) that silently truncate request URLs to the wrong key,
+    NUL bytes that crash the filesystem layer, and newlines/control chars that
+    cause httpx.InvalidURL on the client. Raises ValueError so the Document field
+    validator surfaces it as a pydantic ValidationError (-> HTTP 422 -> CLI exit 4).
     """
-    if not value or "/" in value or value in (".", ".."):
+    if _KEY_SEGMENT_RE.fullmatch(value) is None:
         raise ValueError(
-            f"invalid key segment {value!r}: must be non-empty and contain no "
-            "'/' or path-traversal segment"
+            f"invalid key segment {value!r}: only letters, digits, '-' and '_' allowed"
         )
     return value
 

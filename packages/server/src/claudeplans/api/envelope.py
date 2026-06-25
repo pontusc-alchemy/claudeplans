@@ -20,6 +20,17 @@ class ResponseEnvelope(BaseModel):
     warnings: list[DriftWarning]
 
 
-def envelope(doc: Document) -> ResponseEnvelope:
-    """Wrap `doc` with its drift warnings — the single place the linter is run."""
-    return ResponseEnvelope(data=doc, warnings=lint(doc))
+def envelope(doc: Document, *, scope: str | None = None) -> ResponseEnvelope:
+    """Wrap `doc` with its drift warnings — the single place the linter is run.
+
+    scope: when set, only warnings whose `path` is None, equals `scope`, or starts
+    with `scope + "."` are included. Pass None (default) to include all warnings.
+    """
+    warnings = lint(doc)
+    if scope is not None:
+        warnings = [
+            w
+            for w in warnings
+            if w.path is None or w.path == scope or w.path.startswith(scope + ".")
+        ]
+    return ResponseEnvelope(data=doc, warnings=warnings)

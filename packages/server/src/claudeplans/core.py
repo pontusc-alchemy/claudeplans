@@ -84,8 +84,14 @@ async def read_modify_write(
         except StaleRevision:
             continue
         return new_rev, updated
+    # Retry budget spent on a genuinely contended key: re-read so the 409 still
+    # carries a usable current rev (the "retry without re-read" promise must hold
+    # exactly when this fires). NotFound here means the key was deleted mid-contention
+    # and propagates as a 404, which is the truthful outcome.
+    current_rev, _ = await repo.get(key)
     raise StaleRevision(
-        f"write to {key!r} lost {MAX_WRITE_RETRIES} CAS races", current_rev=""
+        f"write to {key!r} lost {MAX_WRITE_RETRIES} CAS races",
+        current_rev=current_rev,
     )
 
 
@@ -195,6 +201,19 @@ async def add_phase(
     )
 
 
+async def set_phase(
+    repo: Repository,
+    key: str,
+    slug: str,
+    name: str | None,
+    *,
+    user: CurrentUser,
+) -> tuple[str, Document]:
+    return await read_modify_write(
+        repo, key, lambda doc: deltas.set_phase(doc, slug, name), user=user
+    )
+
+
 async def set_phase_status(
     repo: Repository, key: str, slug: str, status: PhaseStatus, *, user: CurrentUser
 ) -> tuple[str, Document]:
@@ -212,10 +231,16 @@ async def remove_phase(
 
 
 async def add_task(
-    repo: Repository, key: str, phase_slug: str, text: str, *, user: CurrentUser
+    repo: Repository,
+    key: str,
+    phase_slug: str,
+    text: str,
+    at: int | None,
+    *,
+    user: CurrentUser,
 ) -> tuple[str, Document]:
     return await read_modify_write(
-        repo, key, lambda doc: deltas.add_task(doc, phase_slug, text), user=user
+        repo, key, lambda doc: deltas.add_task(doc, phase_slug, text, at), user=user
     )
 
 
@@ -226,13 +251,14 @@ async def add_section(
     heading: str,
     body: str,
     level: int,
+    at: int | None,
     *,
     user: CurrentUser,
 ) -> tuple[str, Document]:
     return await read_modify_write(
         repo,
         key,
-        lambda doc: deltas.add_section(doc, anchor, heading, body, level),
+        lambda doc: deltas.add_section(doc, anchor, heading, body, level, at),
         user=user,
     )
 
@@ -276,6 +302,30 @@ async def remove_section(
     )
 
 
+async def set_document_meta(
+    repo: Repository,
+    key: str,
+    *,
+    title: str | None,
+    description: str | None,
+    date: str | None,
+    frontmatter: dict[str, JsonValue] | None,
+    user: CurrentUser,
+) -> tuple[str, Document]:
+    return await read_modify_write(
+        repo,
+        key,
+        lambda doc: deltas.set_document_meta(
+            doc,
+            title=title,
+            description=description,
+            date=date,
+            frontmatter=frontmatter,
+        ),
+        user=user,
+    )
+
+
 async def put_research_refs(
     repo: Repository,
     key: str,
@@ -284,6 +334,23 @@ async def put_research_refs(
     *,
     user: CurrentUser,
 ) -> tuple[str, Document]:
+    # Authz first: a cross-namespace caller must get 403 before any repo access.
+    _require_write(user, owner_of(key))
+    # Validate that every ref resolves to a research-type doc in the same project.
+    # key = "{owner}/{project}/{slug}"; project prefix = "{owner}/{project}/".
+    from claudeplans_contracts import ValidationError
+
+    prefix = key.rsplit("/", 1)[0] + "/"
+    entries = await repo.list(prefix)
+    research_slugs = {
+        e.key.rsplit("/", 1)[1] for e in entries if e.metadata.get("type") == "research"
+    }
+    unresolved = [r for r in research_refs if r not in research_slugs]
+    if unresolved:
+        raise ValidationError(
+            f"research ref(s) do not resolve to a research doc in project: "
+            f"{', '.join(unresolved)}"
+        )
     return await read_modify_write(
         repo,
         key,
@@ -315,6 +382,24 @@ async def move_phase(
         key,
         expected_rev,
         lambda doc: deltas.move_phase(doc, slug, to_index),
+        user=user,
+    )
+
+
+async def move_section(
+    repo: Repository,
+    key: str,
+    anchor: str,
+    to_index: int,
+    expected_rev: str,
+    *,
+    user: CurrentUser,
+) -> tuple[str, Document]:
+    return await _write_at_rev(
+        repo,
+        key,
+        expected_rev,
+        lambda doc: deltas.move_section(doc, anchor, to_index),
         user=user,
     )
 

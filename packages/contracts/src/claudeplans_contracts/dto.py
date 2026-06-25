@@ -74,6 +74,14 @@ class PhaseStatusRequest(BaseModel):
     status: PhaseStatus
 
 
+class SetPhaseRequest(BaseModel):
+    """Absolute set of the provided phase fields; None leaves a field unchanged."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = None
+
+
 class MovePhaseRequest(BaseModel):
     """Move a phase to a new position in the ordering."""
 
@@ -83,11 +91,12 @@ class MovePhaseRequest(BaseModel):
 
 
 class AddTaskRequest(BaseModel):
-    """Add a task to a phase (appended)."""
+    """Add a task to a phase (appended, or at a specific index)."""
 
     model_config = ConfigDict(extra="forbid")
 
     text: str
+    at: int | None = None
 
 
 class ToggleTaskRequest(BaseModel):
@@ -109,8 +118,16 @@ class EditTaskRequest(BaseModel):
     text: str
 
 
+class MoveSectionRequest(BaseModel):
+    """Move a section to a new position in the ordering."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    to_index: int
+
+
 class AddSectionRequest(BaseModel):
-    """Add a prose section (appended)."""
+    """Add a prose section (appended, or at a specific index)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -118,6 +135,7 @@ class AddSectionRequest(BaseModel):
     heading: str
     body: str = ""
     level: int = Field(2, ge=1, le=6)
+    at: int | None = None
 
 
 class SetSectionRequest(BaseModel):
@@ -145,6 +163,17 @@ class ResearchRefsRequest(BaseModel):
 
     research_refs: list[str]
     primary_research_ref: str | None = None
+
+
+class SetDocumentMetaRequest(BaseModel):
+    """Absolute set of the provided document metadata fields; None leaves unchanged."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = None
+    description: str | None = None
+    date: str | None = None
+    frontmatter: dict[str, JsonValue] | None = None
 
 
 class SearchHit(BaseModel):
@@ -212,3 +241,36 @@ class ProjectList(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     items: list[ProjectEntry]
+
+
+class LineagePlanRef(BaseModel):
+    """A plan reduced to what the lineage surface needs to link and label it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    slug: str
+    title: str
+    owner_id: str
+    project: str
+
+
+class LineageResearchNode(BaseModel):
+    """A research doc plus the plans related to it in the lineage tree."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    slug: str
+    title: str
+    owner_id: str
+    project: str
+    plans: list[LineagePlanRef]
+    backlinks: list[LineagePlanRef]
+
+
+class LineageResponse(BaseModel):
+    """The full lineage tree: research roots plus orphaned plans."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    research: list[LineageResearchNode]
+    unlinked_plans: list[LineagePlanRef]

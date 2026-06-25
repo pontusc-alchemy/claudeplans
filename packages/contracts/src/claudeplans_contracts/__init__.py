@@ -19,7 +19,11 @@ from .dto import DocStatusRequest as DocStatusRequest
 from .dto import DocumentCreate as DocumentCreate
 from .dto import DriftWarning as DriftWarning
 from .dto import EditTaskRequest as EditTaskRequest
+from .dto import LineagePlanRef as LineagePlanRef
+from .dto import LineageResearchNode as LineageResearchNode
+from .dto import LineageResponse as LineageResponse
 from .dto import MovePhaseRequest as MovePhaseRequest
+from .dto import MoveSectionRequest as MoveSectionRequest
 from .dto import PatchSectionRequest as PatchSectionRequest
 from .dto import PhaseStatusRequest as PhaseStatusRequest
 from .dto import ProjectEntry as ProjectEntry
@@ -27,6 +31,8 @@ from .dto import ProjectList as ProjectList
 from .dto import ResearchRefsRequest as ResearchRefsRequest
 from .dto import SearchHit as SearchHit
 from .dto import SearchResults as SearchResults
+from .dto import SetDocumentMetaRequest as SetDocumentMetaRequest
+from .dto import SetPhaseRequest as SetPhaseRequest
 from .dto import SetSectionRequest as SetSectionRequest
 from .dto import ToggleTaskRequest as ToggleTaskRequest
 from .enums import DocStatus as DocStatus

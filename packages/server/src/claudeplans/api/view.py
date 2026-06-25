@@ -9,6 +9,7 @@ and again on every matching change Event. A strict CSP (`script-src 'self'`, no
 scripts can run.
 """
 
+import dataclasses
 from collections.abc import AsyncIterator
 from typing import Final
 
@@ -16,6 +17,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 
 from claudeplans_contracts import NotFound, document_key
+from claudeplans_contracts.dto import LineageResponse
 
 from .. import core, templates
 from ..cache import FragmentCache
@@ -140,3 +142,17 @@ async def project_lineage(uid: str, project: str, repo: RepoDep) -> HTMLResponse
         view_url=lambda slug: _view_url(uid, project, slug),
     )
     return HTMLResponse(html, headers={"Content-Security-Policy": CSP})
+
+
+@router.get("/v1/users/{uid}/projects/{project}/lineage")
+async def project_lineage_json(
+    uid: str, project: str, repo: RepoDep
+) -> LineageResponse:
+    """Return the lineage tree for one user+project as plain JSON."""
+    prefix = f"{uid}/{project}/"
+    docs = []
+    for entry in await repo.list(prefix):
+        _, doc = await core.get_document(repo, entry.key)
+        docs.append(doc)
+    lineage = build_lineage(docs)
+    return LineageResponse.model_validate(dataclasses.asdict(lineage))
