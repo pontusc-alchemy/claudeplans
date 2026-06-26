@@ -2,10 +2,23 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
 from .enums import DocStatus, DocType, PhaseStatus
-from .models import Phase, Section
+from .models import Phase, Section, validate_text_field
+
+
+class ProjectName(BaseModel):
+    """Set the display name for a project."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, v: str) -> str:
+        return validate_text_field(v, field="project name")
 
 
 class DriftWarning(BaseModel):
@@ -233,6 +246,7 @@ class ProjectEntry(BaseModel):
 
     project: str
     docs: int
+    name: str | None = None
 
 
 class ProjectList(BaseModel):

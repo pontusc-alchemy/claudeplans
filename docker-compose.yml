@@ -26,8 +26,14 @@ services:
       # The image's WORKDIR /app is not writable by the non-root app user; point the
       # filesystem root at /data, owned by app and backed by the named volume below.
       CLAUDEPLANS_FILESYSTEM__ROOT: /data
+      # Registry files (user + project display names) must sit OUTSIDE the storage
+      # root and be both writable and persisted — their own /state volume (the image
+      # creates the dir app-owned; see Dockerfile).
+      CLAUDEPLANS_REGISTRY_PATH: /state/users.json
+      CLAUDEPLANS_PROJECT_REGISTRY_PATH: /state/projects.json
     volumes:
       - data:/data
+      - state:/state
     healthcheck:
       test:
         - CMD
@@ -42,3 +48,4 @@ services:
 
 volumes:
   data:
+  state:

@@ -35,6 +35,11 @@ RUN useradd --no-create-home --uid 10001 app
 # Seeding is first-mount-only: a pre-existing root-owned volume, a host bind mount,
 # or a uid-remapping (rootless/Podman) engine each need their own ownership setup.
 RUN install -d -o app -g app /data
+# Registry state (user + project display names) must live OUTSIDE the storage root
+# /data — fail_closed_check rejects a registry inside it, since the repository's
+# *.json walk would otherwise sweep it up as a stray document. Its own writable,
+# app-owned dir, backed by a named volume in compose so names persist across redeploys.
+RUN install -d -o app -g app /state
 COPY --from=build --chown=app:app /opt/venv /opt/venv
 WORKDIR /app
 USER app

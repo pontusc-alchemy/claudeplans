@@ -12,6 +12,7 @@ from ..auth.provider import CurrentUser, UserProvider
 from ..auth.registry import UserRegistry
 from ..config import Settings
 from ..events import EventFeed
+from ..projects import ProjectRegistry
 from ..search import SearchIndex
 from ..storage.repository import Repository
 
@@ -47,6 +48,11 @@ def get_registry(request: Request) -> UserRegistry:
     return request.app.state.registry
 
 
+def get_project_registry(request: Request) -> ProjectRegistry:
+    """The process-wide project display-name registry, built at startup."""
+    return request.app.state.project_registry
+
+
 def require_if_match(
     if_match: str | None = Header(default=None, alias="If-Match"),
 ) -> str:
@@ -70,3 +76,4 @@ SettingsDep = Annotated[Settings, Depends(get_settings)]
 IfMatchDep = Annotated[str, Depends(require_if_match)]
 CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]
 RegistryDep = Annotated[UserRegistry, Depends(get_registry)]
+ProjectRegistryDep = Annotated[ProjectRegistry, Depends(get_project_registry)]

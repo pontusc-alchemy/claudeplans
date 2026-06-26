@@ -12,7 +12,7 @@
     {% for proj in sidebar.projects %}
     <li class="sidebar-project{% if proj.current %} current{% endif %}">
       <details{% if proj.current %} open{% endif %}>
-        <summary class="project-title"><a href="{{ proj.lineage_url }}"{% if proj.is_current_page %} aria-current="page"{% endif %}>{{ proj.project }}</a></summary>
+        <summary class="project-title"><a href="{{ proj.lineage_url }}"{% if proj.is_current_page %} aria-current="page"{% endif %}>{{ proj.name }}</a></summary>
         <ul class="research-roots">
           {% for r in proj.research %}
           <li class="research-node">
@@ -21,14 +21,6 @@
             <ul class="plans">
               {% for p in r.plans %}
               <li class="plan"><a href="{{ p.view_url }}"{% if p.current %} aria-current="page"{% endif %}><span class="status-dot status-{{ p.status }}"></span><span class="doc-type doc-type-{{ p.type }}"></span><span class="sr-only">{{ p.type }}, {{ p.status }}: </span>{{ p.title }}</a></li>
-              {% endfor %}
-            </ul>
-            {% endif %}
-            {% if r.backlinks %}
-            <ul class="backlinks">
-              <li class="backlinks-label">referenced by</li>
-              {% for p in r.backlinks %}
-              <li class="plan backlink"><a href="{{ p.view_url }}"{% if p.current %} aria-current="page"{% endif %}><span class="status-dot status-{{ p.status }}"></span><span class="doc-type doc-type-{{ p.type }}"></span><span class="sr-only">{{ p.type }}, {{ p.status }}: </span>{{ p.title }}</a></li>
               {% endfor %}
             </ul>
             {% endif %}

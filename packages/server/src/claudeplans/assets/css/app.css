@@ -152,17 +152,6 @@ body.md-typeset {
   font-weight: 600;
 }
 
-.sidebar .backlinks-label {
-  font-size: 0.75rem;
-  color: var(--fg-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.sidebar .backlink {
-  color: var(--fg-muted);
-}
-
 .sidebar [aria-current="page"] {
   font-weight: 700;
   color: var(--fg);
@@ -220,12 +209,17 @@ body.md-typeset {
 
 .doc-type {
   display: inline-block;
-  width: 1.1em;
   margin-right: 0.3em;
   font-size: 0.7em;
   font-weight: 700;
-  text-align: center;
   color: var(--fg-muted);
+}
+
+.doc-type::after {
+  content: "|";
+  margin-left: 0.35em;
+  font-weight: 400;
+  color: var(--border);
 }
 
 .doc-type-research::before {
@@ -233,7 +227,7 @@ body.md-typeset {
 }
 
 .doc-type-plan::before {
-  content: "I";
+  content: "P";
 }
 
 @media (max-width: 48rem) {
@@ -494,15 +488,4 @@ details.admonition {
 
 #lineage .research-title {
   font-weight: 600;
-}
-
-#lineage .backlinks-label {
-  font-size: 0.8rem;
-  color: var(--fg-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-#lineage .backlink {
-  color: var(--fg-muted);
 }

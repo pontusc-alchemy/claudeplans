@@ -7,6 +7,7 @@ from pydantic import JsonValue
 from claudeplans import templates
 from claudeplans.auth.registry import UserRegistry
 from claudeplans.navigation import build_user_tree, list_users
+from claudeplans.projects import ProjectRegistry
 from claudeplans.storage.filesystem import FilesystemRepository
 from claudeplans.storage.repository import CREATE
 from claudeplans_contracts import document_key
@@ -166,7 +167,9 @@ async def test_build_sidebar_marks_active_doc_by_project_and_slug(
     assert by_project["projB"]["current"] is False
 
 
-async def test_build_sidebar_includes_backlinks(tmp_path: Path) -> None:
+async def test_build_sidebar_plan_appears_under_primary_research_node(
+    tmp_path: Path,
+) -> None:
     repo = FilesystemRepository(tmp_path / "data")
     registry = UserRegistry(tmp_path / "users.json")
     await _put(repo, _doc("projA", "r1", "research"))
@@ -188,9 +191,6 @@ async def test_build_sidebar_includes_backlinks(tmp_path: Path) -> None:
 
     sb_projects = cast(list[dict[str, Any]], sidebar["projects"])
     research = {r["title"]: r for r in sb_projects[0]["research"]}
-    r1 = research["r1 title"]
-    assert [b["title"] for b in r1["backlinks"]] == ["p2 title"]
-    assert r1["backlinks"][0]["current"] is True  # p2 is the open doc
     r2 = research["r2 title"]
     assert [pl["title"] for pl in r2["plans"]] == ["p2 title"]
 
@@ -301,3 +301,51 @@ async def test_build_sidebar_entries_carry_status_and_type(tmp_path: Path) -> No
     plan = research["plans"][0]
     assert plan["type"] == "plan"
     assert plan["status"] == "draft"
+
+
+async def test_build_user_tree_uses_registry_display_name(tmp_path: Path) -> None:
+    repo = FilesystemRepository(tmp_path / "data")
+    await _put(repo, _doc("projA", "p1", "plan"))
+    project_registry = ProjectRegistry(tmp_path / "projects.json")
+    project_registry.set("dev", "projA", "Project Alpha (2026)")
+
+    trees = await build_user_tree(repo, "dev", project_registry)
+
+    assert trees[0].project == "projA"  # slug identity unchanged
+    assert trees[0].name == "Project Alpha (2026)"  # display name from registry
+
+
+async def test_build_user_tree_falls_back_to_slug_when_name_unset(
+    tmp_path: Path,
+) -> None:
+    repo = FilesystemRepository(tmp_path / "data")
+    await _put(repo, _doc("projA", "p1", "plan"))
+
+    trees = await build_user_tree(repo, "dev")
+
+    assert trees[0].name == "projA"  # no registry → slug is the display name
+
+
+async def test_sidebar_carries_display_name(tmp_path: Path) -> None:
+    repo = FilesystemRepository(tmp_path / "data")
+    registry = UserRegistry(tmp_path / "users.json")
+    project_registry = ProjectRegistry(tmp_path / "projects.json")
+    await _put(repo, _doc("projA", "p1", "plan"))
+    project_registry.set("dev", "projA", "My Named Project")
+
+    projects = await build_user_tree(repo, "dev", project_registry)
+    users = await list_users(repo, registry, "dev")
+    sidebar = templates.build_sidebar(
+        users=users,
+        projects=projects,
+        current_uid="dev",
+        current_project=None,
+        current_slug=None,
+        view_url=lambda p, s: f"/view/{p}/{s}",
+        lineage_url=lambda p: f"/lin/{p}",
+    )
+
+    sb_projects = cast(list[dict[str, Any]], sidebar["projects"])
+    proj = sb_projects[0]
+    assert proj["project"] == "projA"  # identity key preserved
+    assert proj["name"] == "My Named Project"  # display name in context

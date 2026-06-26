@@ -15,14 +15,6 @@
         {% endfor %}
       </ul>
       {% endif %}
-      {% if r.backlinks %}
-      <ul class="backlinks">
-        <li class="backlinks-label">referenced by</li>
-        {% for p in r.backlinks %}
-        <li class="plan backlink"><a href="{{ p.view_url }}">{{ p.title }}</a></li>
-        {% endfor %}
-      </ul>
-      {% endif %}
     </li>
     {% endfor %}
   </ul>

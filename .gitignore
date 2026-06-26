@@ -9,3 +9,6 @@ build/
 .ty_cache/
 data/
 .env
+# Runtime registry files — written by the server at cwd; never committed.
+users.json
+projects.json

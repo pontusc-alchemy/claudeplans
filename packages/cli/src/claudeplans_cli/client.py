@@ -431,6 +431,15 @@ class PlanClient:
         self._raise_for_status(resp)
         return resp.json()
 
+    def set_project_name(self, uid: str, project: str, name: str) -> dict[str, str]:
+        """PUT /v1/users/{uid}/projects/{project}/name → {project, name}."""
+        resp = self._http.put(
+            f"/v1/users/{_seg(uid)}/projects/{_seg(project)}/name",
+            json={"name": name},
+        )
+        self._raise_for_status(resp)
+        return resp.json()  # type: ignore[return-value]
+
     def lineage(self, uid: str, project: str) -> object:
         """GET /v1/users/{uid}/projects/{project}/lineage → lineage dict plain JSON."""
         return self._get_json(f"/v1/users/{_seg(uid)}/projects/{_seg(project)}/lineage")

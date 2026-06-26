@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     # User registry path (CLAUDEPLANS_REGISTRY_PATH). MUST sit OUTSIDE filesystem.root,
     # or FilesystemRepository's rglob("*.json") walk would sweep it up as a stray key.
     registry_path: str = "./users.json"
+    # Project display-name registry path (CLAUDEPLANS_PROJECT_REGISTRY_PATH). MUST sit
+    # OUTSIDE filesystem.root for the same reason as registry_path above.
+    project_registry_path: str = "./projects.json"
     # 1 MiB cap on request bodies (CLAUDEPLANS_MAX_BODY_BYTES); must be positive.
     max_body_bytes: int = Field(default=1_048_576, gt=0)
 
@@ -83,4 +86,11 @@ def fail_closed_check(settings: Settings) -> None:
                 "fail-closed: CLAUDEPLANS_REGISTRY_PATH must sit OUTSIDE "
                 "CLAUDEPLANS_FILESYSTEM__ROOT (else the repository's *.json walk "
                 "would sweep the registry file as a stray document)"
+            )
+        project_registry = Path(settings.project_registry_path).resolve()
+        if project_registry == root or root in project_registry.parents:
+            raise RuntimeError(
+                "fail-closed: CLAUDEPLANS_PROJECT_REGISTRY_PATH must sit OUTSIDE "
+                "CLAUDEPLANS_FILESYSTEM__ROOT (else the repository's *.json walk "
+                "would sweep the project registry file as a stray document)"
             )

@@ -20,7 +20,7 @@ Generate a URL-safe slug for the plan title (kebab-case, ≤40 chars). Create th
 claudeplans doc create "<project>" --type plan --slug "<slug>" --title "<plan title>"
 ```
 
-→ the slim create reply `{slug, type, rev, warnings}` (pass `--full`/`-v` for the whole `{rev, data, warnings}` envelope); non-zero exit → relay stderr and stop. The project is created implicitly on first doc — double-check the project name is right before continuing (there is no new-project warning).
+→ the slim create reply `{slug, type, rev, warnings}` (pass `--full`/`-v` for the whole `{rev, data, warnings}` envelope); non-zero exit → relay stderr and stop. The project is created implicitly on the first doc and there is no new-project warning — so if this is a NEW project (not in `claudeplans project list`), **confirm the project name with the user first**: both the URL-safe slug and the intended display name. Keep the plan `--title` short and navigable (a few words); the descriptive detail belongs in the doc's summary, not the title. After creating a new project's first doc, set its display name: `claudeplans project set-name "<project>" "<Display Name>"`.
 
 ## Input — where the plan comes from
 

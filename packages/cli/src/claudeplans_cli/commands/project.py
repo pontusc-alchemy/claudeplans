@@ -2,6 +2,7 @@
 
 `project list` queries the server for all projects under the caller's uid.
 `project view` prints the lineage URL for a project without making a request.
+`project set-name` sets the human display name for a project.
 
 Typer descriptors are module-level singletons to satisfy ruff B008.
 """
@@ -43,3 +44,12 @@ def lineage(ctx: typer.Context, project: str) -> None:
     """Return the lineage tree for a project as JSON."""
     c: AppContext = ctx.obj
     emit_obj({"data": c.client.lineage(c.uid, project), "warnings": []})
+
+
+@app.command("set-name")
+@handle_errors
+def set_name(ctx: typer.Context, project: str, name: str) -> None:
+    """Set the display name for a project."""
+    c: AppContext = ctx.obj
+    reply = c.client.set_project_name(c.uid, project, name)
+    emit_obj(reply)

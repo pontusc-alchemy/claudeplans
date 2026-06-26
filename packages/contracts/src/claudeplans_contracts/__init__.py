@@ -28,6 +28,7 @@ from .dto import PatchSectionRequest as PatchSectionRequest
 from .dto import PhaseStatusRequest as PhaseStatusRequest
 from .dto import ProjectEntry as ProjectEntry
 from .dto import ProjectList as ProjectList
+from .dto import ProjectName as ProjectName
 from .dto import ResearchRefsRequest as ResearchRefsRequest
 from .dto import SearchHit as SearchHit
 from .dto import SearchResults as SearchResults

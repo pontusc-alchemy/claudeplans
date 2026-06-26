@@ -44,11 +44,17 @@ class SyncASGITransport(BaseTransport):
 
 
 def build_app(tmp_path: Path) -> FastAPI:
-    """The ASGI app wired to a tmp_path data root with dev no-op auth."""
+    """The ASGI app wired to a tmp_path data root with dev no-op auth.
+
+    Both registry paths are pinned under tmp_path so test runs never write
+    registry files into the repo working directory.
+    """
     return create_app(
         Settings(
             auth_mode=AuthMode.noop,
-            filesystem=FilesystemSettings(root=str(tmp_path)),
+            filesystem=FilesystemSettings(root=str(tmp_path / "data")),
+            registry_path=str(tmp_path / "users.json"),
+            project_registry_path=str(tmp_path / "projects.json"),
         )
     )
 

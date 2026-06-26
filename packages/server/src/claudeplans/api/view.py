@@ -25,8 +25,9 @@ from .. import core, navigation, templates
 from ..auth.registry import UserRegistry
 from ..cache import FragmentCache
 from ..events import EventFeed
+from ..projects import ProjectRegistry
 from ..storage.repository import Repository
-from .deps import CurrentUserDep, RegistryDep, RepoDep
+from .deps import CurrentUserDep, ProjectRegistryDep, RegistryDep, RepoDep
 
 router = APIRouter(tags=["view"])
 
@@ -57,12 +58,13 @@ def _user_url(uid: str) -> str:
 async def _build_sidebar(
     repo: Repository,
     registry: UserRegistry,
+    project_registry: ProjectRegistry,
     uid: str,
     project: str | None,
     slug: str | None,
 ) -> dict[str, object]:
     """Assemble the sidebar context for `uid`'s tree, marking the open doc active."""
-    projects = await navigation.build_user_tree(repo, uid)
+    projects = await navigation.build_user_tree(repo, uid, project_registry)
     users = await navigation.list_users(repo, registry, uid)
     return templates.build_sidebar(
         users=users,
@@ -97,12 +99,17 @@ _UNAVAILABLE_FRAME: Final = _sse_frame(
 
 @router.get("/v1/users/{uid}/projects/{project}/docs/{slug}/view")
 async def view_document(
-    uid: str, project: str, slug: str, repo: RepoDep, registry: RegistryDep
+    uid: str,
+    project: str,
+    slug: str,
+    repo: RepoDep,
+    registry: RegistryDep,
+    project_registry: ProjectRegistryDep,
 ) -> HTMLResponse:
     """Render the full document page (the live-view morph target)."""
     key = document_key(uid, project, slug)
     _, doc = await core.get_document(repo, key)
-    sidebar = await _build_sidebar(repo, registry, uid, project, slug)
+    sidebar = await _build_sidebar(repo, registry, project_registry, uid, project, slug)
     html = templates.render_page(
         doc, events_url=_events_url(uid, project, slug), sidebar=sidebar
     )
@@ -176,14 +183,19 @@ async def document_events(
 
 @router.get("/v1/users/{uid}/projects/{project}/")
 async def project_lineage(
-    uid: str, project: str, repo: RepoDep, registry: RegistryDep
+    uid: str,
+    project: str,
+    repo: RepoDep,
+    registry: RegistryDep,
+    project_registry: ProjectRegistryDep,
 ) -> HTMLResponse:
     """Render the lineage index for one user+project."""
     lineage = await navigation.load_project_lineage(repo, uid, project)
-    sidebar = await _build_sidebar(repo, registry, uid, project, None)
+    sidebar = await _build_sidebar(repo, registry, project_registry, uid, project, None)
+    title = project_registry.get(uid, project) or project
     html = templates.render_lineage_page(
         lineage,
-        title=project,
+        title=title,
         view_url=lambda slug: _view_url(uid, project, slug),
         sidebar=sidebar,
     )
@@ -191,9 +203,11 @@ async def project_lineage(
 
 
 @router.get("/v1/users/{uid}/")
-async def user_landing(uid: str, repo: RepoDep, registry: RegistryDep) -> HTMLResponse:
+async def user_landing(
+    uid: str, repo: RepoDep, registry: RegistryDep, project_registry: ProjectRegistryDep
+) -> HTMLResponse:
     """Landing page for a user: the sidebar chrome plus a minimal welcome pane."""
-    sidebar = await _build_sidebar(repo, registry, uid, None, None)
+    sidebar = await _build_sidebar(repo, registry, project_registry, uid, None, None)
     html = templates.render_landing_page(title=f"{uid} · plans", sidebar=sidebar)
     return HTMLResponse(html, headers={"Content-Security-Policy": CSP})
 

@@ -22,6 +22,7 @@ from .auth.registry import UserRegistry
 from .cache import FragmentCache
 from .config import AuthMode, Settings, fail_closed_check, load_settings
 from .events import EventFeed
+from .projects import ProjectRegistry
 from .search import SearchIndex
 from .storage.filesystem import FilesystemRepository
 
@@ -89,6 +90,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # User registry (display names for the switcher). Path is OUTSIDE the storage
     # root so the repository's *.json walk never treats it as a document.
     app.state.registry = UserRegistry(Path(settings.registry_path))
+    # Project display-name registry. Path is OUTSIDE the storage root for the same
+    # reason as the user registry above.
+    app.state.project_registry = ProjectRegistry(Path(settings.project_registry_path))
     # Built here (not only in lifespan) so app.state always carries them — unit tests
     # drive routes without entering lifespan; lifespan's shutdown half closes the feed.
     app.state.feed = EventFeed()

@@ -25,6 +25,22 @@ Fields:
 | `sections` | list[Section] | ordered prose sections |
 | `phases` | list[Phase] | ordered phases (plan docs only) |
 
+Keep `title` short and navigable — it is the label in every sidebar and lineage list, so a few words, not a full sentence. Put the descriptive detail in the document's executive summary / first section, not the title.
+
+## Projects
+
+The `project` key segment in `(owner_id, project, slug)` must use URL-safe chars only (`[A-Za-z0-9_-]`), lowercase-kebab, kept short and stable. It appears in every URL and is the namespace identity; renaming a project means re-creating its docs.
+
+A project also carries an optional **display name** — free-form text shown in the sidebar and as the lineage/landing page title (e.g. slug `arch-decisions` → "Architecture Decisions"). The display name does NOT affect routing or identity. Set or change it with:
+
+```
+claudeplans project set-name <project> "<Display Name>"
+```
+
+`claudeplans project list` reports it as the `name` field (null when unset; the UI falls back to the slug).
+
+**Confirm the project name with the user before creating a new project.** A project is created implicitly on the first `doc create` and there is no new-project warning, so a typo silently starts a new namespace. Before the first doc in a project not already listed by `claudeplans project list`, confirm the slug AND the intended display name with the user.
+
 ### Section
 
 | Field | Type | Notes |

@@ -94,9 +94,6 @@ def render_lineage_page(
             "plans": [
                 {"title": p.title, "view_url": view_url(p.slug)} for p in node.plans
             ],
-            "backlinks": [
-                {"title": p.title, "view_url": view_url(p.slug)} for p in node.backlinks
-            ],
         }
         for node in lineage.research
     ]
@@ -161,7 +158,6 @@ def build_sidebar(
             {
                 **_doc(pt.project, n),
                 "plans": [_doc(pt.project, p) for p in n.plans],
-                "backlinks": [_doc(pt.project, p) for p in n.backlinks],
             }
             for n in pt.lineage.research
         ]
@@ -169,6 +165,7 @@ def build_sidebar(
         proj_ctx.append(
             {
                 "project": pt.project,
+                "name": pt.name,
                 "lineage_url": lineage_url(pt.project),
                 "current": pt.project == current_project,
                 "is_current_page": pt.project == current_project

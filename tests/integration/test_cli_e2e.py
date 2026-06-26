@@ -448,7 +448,9 @@ def live_url(tmp_path: Path) -> Iterator[str]:
     app = create_app(
         Settings(
             auth_mode=AuthMode.noop,
-            filesystem=FilesystemSettings(root=str(tmp_path)),
+            filesystem=FilesystemSettings(root=str(tmp_path / "data")),
+            registry_path=str(tmp_path / "users.json"),
+            project_registry_path=str(tmp_path / "projects.json"),
         )
     )
     port = _free_port()
@@ -1177,3 +1179,66 @@ def test_valid_segments_still_work(patched_cli: None) -> None:
     assert result.exit_code == 0
     parsed = json.loads(result.stdout)
     assert parsed["slug"] == "p1"
+
+
+# ---------------------------------------------------------------------------
+# Feature: project set-name / display-name registry
+# ---------------------------------------------------------------------------
+
+
+def test_project_set_name_round_trips(patched_cli: None) -> None:
+    # set-name exits 0 and returns {project, name}.
+    result = runner.invoke(
+        cli.app, ["project", "set-name", "demo", "My Project (2026)"]
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    assert parsed["project"] == "demo"
+    assert parsed["name"] == "My Project (2026)"
+
+
+def test_project_list_reports_name_after_set(patched_cli: None) -> None:
+    # Create a doc so the project exists, then name it and verify list carries name.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    runner.invoke(cli.app, ["project", "set-name", "demo", "Demo Project"])
+    result = runner.invoke(cli.app, ["project", "list"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    items = parsed["data"]["items"]
+    demo = next((i for i in items if i["project"] == "demo"), None)
+    assert demo is not None
+    assert demo["name"] == "Demo Project"
+
+
+def test_project_list_name_is_none_when_unset(patched_cli: None) -> None:
+    # A project with no display name set should return name=null in the listing.
+    # Use a unique project slug that has never been named in this fixture scope.
+    unnamed_body = json.dumps({"type": "plan", "slug": "u1", "title": "Unnamed"})
+    runner.invoke(
+        cli.app,
+        ["doc", "create", "unnamed-proj", "--from-json", "-"],
+        input=unnamed_body,
+    )
+    result = runner.invoke(cli.app, ["project", "list"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    items = parsed["data"]["items"]
+    proj = next((i for i in items if i["project"] == "unnamed-proj"), None)
+    assert proj is not None
+    assert proj["name"] is None
+
+
+def test_project_set_name_empty_exits_validation(patched_cli: None) -> None:
+    result = runner.invoke(cli.app, ["project", "set-name", "demo", "   "])
+    assert result.exit_code == ExitCode.VALIDATION
+    err = json.loads(result.stderr)
+    assert err["error"] == "validation"
+
+
+def test_project_set_name_foreign_uid_exits_forbidden(patched_cli: None) -> None:
+    result = runner.invoke(
+        cli.app, ["--uid", "evil", "project", "set-name", "demo", "Name"]
+    )
+    assert result.exit_code == ExitCode.FORBIDDEN

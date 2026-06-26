@@ -18,6 +18,7 @@ from claudeplans_contracts.errors import PlanError
 from . import core
 from .auth.registry import UserRegistry
 from .lineage import Lineage, build_lineage
+from .projects import ProjectRegistry
 from .storage.repository import Repository
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ class ProjectTree:
     """One project's documents, grouped into a lineage tree for the sidebar."""
 
     project: str
+    name: str
     lineage: Lineage
     doc_count: int
 
@@ -69,11 +71,14 @@ async def load_project_lineage(repo: Repository, uid: str, project: str) -> Line
     return build_lineage(await _load_documents(repo, keys))
 
 
-async def build_user_tree(repo: Repository, uid: str) -> list[ProjectTree]:
+async def build_user_tree(
+    repo: Repository, uid: str, project_registry: ProjectRegistry | None = None
+) -> list[ProjectTree]:
     """Group `uid`'s documents by project and fold each into a Lineage.
 
     Mirrors api.view.project_lineage's load pattern (list -> get each -> build_lineage)
     but across every project the user owns, returned sorted by project name.
+    `project_registry` supplies display names; falls back to slug when None or unset.
     """
     by_project: dict[str, list[str]] = {}
     for entry in await repo.list(f"{uid}/"):
@@ -82,12 +87,17 @@ async def build_user_tree(repo: Repository, uid: str) -> list[ProjectTree]:
             continue
         by_project.setdefault(parts[1], []).append(entry.key)
 
+    names: dict[str, str] = (
+        project_registry.names_for(uid) if project_registry is not None else {}
+    )
+
     trees: list[ProjectTree] = []
     for project in sorted(by_project):
         docs = await _load_documents(repo, by_project[project])
         trees.append(
             ProjectTree(
                 project=project,
+                name=names.get(project, project),
                 lineage=build_lineage(docs),
                 doc_count=len(docs),
             )
