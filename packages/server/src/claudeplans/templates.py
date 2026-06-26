@@ -19,7 +19,8 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from claudeplans_contracts import Document
 
 from . import render
-from .lineage import Lineage
+from .lineage import Lineage, PlanRef, ResearchNode
+from .navigation import ProjectTree, UserEntry
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 
@@ -70,15 +71,20 @@ def render_doc_body(doc: Document) -> str:
     return env.get_template("_doc_body.html").render(**_doc_context(doc))
 
 
-def render_page(doc: Document, events_url: str) -> str:
+def render_page(
+    doc: Document, events_url: str, sidebar: dict[str, object] | None = None
+) -> str:
     """Render the full document page (the morph target wrapping the body)."""
     return env.get_template("document.html").render(
-        title=doc.title, events_url=events_url, **_doc_context(doc)
+        title=doc.title, events_url=events_url, sidebar=sidebar, **_doc_context(doc)
     )
 
 
 def render_lineage_page(
-    lineage: Lineage, title: str, view_url: Callable[[str], str]
+    lineage: Lineage,
+    title: str,
+    view_url: Callable[[str], str],
+    sidebar: dict[str, object] | None = None,
 ) -> str:
     """Render the project lineage index. `view_url(slug)` builds each doc link."""
     research = [
@@ -100,4 +106,80 @@ def render_lineage_page(
     return env.get_template("lineage.html").render(
         title=title,
         lineage={"research": research, "unlinked_plans": unlinked},
+        sidebar=sidebar,
     )
+
+
+def render_landing_page(title: str, sidebar: dict[str, object] | None = None) -> str:
+    """Render the minimal landing page: sidebar chrome + an empty welcome pane."""
+    return env.get_template("landing.html").render(title=title, sidebar=sidebar)
+
+
+def render_user_picker(
+    title: str, users: list[UserEntry], user_url: Callable[[str], str]
+) -> str:
+    """Render the root user-picker: each user links into their own tree.
+
+    `user_url(uid)` is supplied by the route layer (like the other renderers), so
+    this module stays unaware of the route shape.
+    """
+    return env.get_template("users.html").render(
+        title=title,
+        users=[{"name": u.name, "url": user_url(u.uid)} for u in users],
+    )
+
+
+def build_sidebar(
+    *,
+    users: list[UserEntry],
+    projects: list[ProjectTree],
+    current_uid: str,
+    current_project: str | None,
+    current_slug: str | None,
+    view_url: Callable[[str, str], str],
+    lineage_url: Callable[[str], str],
+) -> dict[str, object]:
+    """Build the render-ready sidebar context.
+
+    Logic-free templates: every link URL and the active-entry (`current`) flags are
+    computed here in Python, so `_sidebar.html` only iterates. `view_url(project,
+    slug)` and `lineage_url(project)` are supplied by the route layer.
+    """
+
+    def _doc(project: str, ref: PlanRef | ResearchNode) -> dict[str, object]:
+        return {
+            "title": ref.title,
+            "view_url": view_url(project, ref.slug),
+            "current": project == current_project and ref.slug == current_slug,
+            "status": ref.status.value,
+            "type": ref.type.value,
+        }
+
+    proj_ctx: list[dict[str, object]] = []
+    for pt in projects:
+        research = [
+            {
+                **_doc(pt.project, n),
+                "plans": [_doc(pt.project, p) for p in n.plans],
+                "backlinks": [_doc(pt.project, p) for p in n.backlinks],
+            }
+            for n in pt.lineage.research
+        ]
+        unlinked = [_doc(pt.project, p) for p in pt.lineage.unlinked_plans]
+        proj_ctx.append(
+            {
+                "project": pt.project,
+                "lineage_url": lineage_url(pt.project),
+                "current": pt.project == current_project,
+                "is_current_page": pt.project == current_project
+                and current_slug is None,
+                "doc_count": pt.doc_count,
+                "research": research,
+                "unlinked_plans": unlinked,
+            }
+        )
+    return {
+        "users": [{"uid": u.uid, "name": u.name, "current": u.current} for u in users],
+        "switch_base": "/v1/users/",
+        "projects": proj_ctx,
+    }

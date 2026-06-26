@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="user-picker" id="user-picker">
+  <div class="picker-inner">
+    {% include "_logo.html" %}
+    <ul class="user-list">
+      {% for u in users %}
+      <li><a href="{{ u.url }}">{{ u.name }}</a></li>
+      {% endfor %}
+    </ul>
+  </div>
+</main>
+{% endblock %}

@@ -9,6 +9,7 @@ from typing import Annotated
 from fastapi import Depends, Header, HTTPException, Request
 
 from ..auth.provider import CurrentUser, UserProvider
+from ..auth.registry import UserRegistry
 from ..config import Settings
 from ..events import EventFeed
 from ..search import SearchIndex
@@ -41,6 +42,11 @@ def get_settings(request: Request) -> Settings:
     return request.app.state.settings
 
 
+def get_registry(request: Request) -> UserRegistry:
+    """The process-wide user registry, built at startup."""
+    return request.app.state.registry
+
+
 def require_if_match(
     if_match: str | None = Header(default=None, alias="If-Match"),
 ) -> str:
@@ -63,3 +69,4 @@ SearchIndexDep = Annotated[SearchIndex, Depends(get_search_index)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 IfMatchDep = Annotated[str, Depends(require_if_match)]
 CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]
+RegistryDep = Annotated[UserRegistry, Depends(get_registry)]

@@ -70,6 +70,10 @@ class UserRegistry:
         """The record for `uid`, or None if unregistered."""
         return self._users.get(uid)
 
+    def records(self) -> list[UserRecord]:
+        """All registered records, sorted by name — a read-only listing accessor."""
+        return sorted(self._users.values(), key=lambda r: r.name)
+
     def resolve_by_identity(self, identity_ref: str) -> UserRecord | None:
         """The first record carrying `identity_ref`, or None."""
         for record in self._users.values():

@@ -7,7 +7,7 @@ deterministic slug ordering the template relies on.
 
 from claudeplans.lineage import build_lineage
 from claudeplans_contracts import Document
-from claudeplans_contracts.enums import DocType
+from claudeplans_contracts.enums import DocStatus, DocType
 
 
 def _research(slug: str) -> Document:
@@ -96,3 +96,30 @@ def test_deterministic_slug_ordering() -> None:
     assert [n.slug for n in lineage.research] == ["ra", "rb"]
     ra = next(n for n in lineage.research if n.slug == "ra")
     assert [p.slug for p in ra.plans] == ["pa", "pb"]
+
+
+def test_lineage_carries_status_and_type() -> None:
+    research = Document(
+        type=DocType.research,
+        project="demo",
+        slug="r1",
+        title="r1",
+        owner_id="dev",
+        status=DocStatus.active,
+    )
+    plan = Document(
+        type=DocType.plan,
+        project="demo",
+        slug="p1",
+        title="p1",
+        owner_id="dev",
+        status=DocStatus.done,
+        research_refs=["r1"],
+        primary_research_ref="r1",
+    )
+    lineage = build_lineage([research, plan])
+    node = lineage.research[0]
+    assert node.status is DocStatus.active
+    assert node.type is DocType.research
+    assert node.plans[0].status is DocStatus.done
+    assert node.plans[0].type is DocType.plan

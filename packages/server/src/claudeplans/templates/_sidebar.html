@@ -1,0 +1,50 @@
+{% if sidebar %}
+<div class="user-switch">
+  <label for="user-select">User</label>
+  <select id="user-select" data-switch-base="{{ sidebar.switch_base }}">
+    {% for u in sidebar.users %}
+    <option value="{{ u.uid }}"{% if u.current %} selected{% endif %}>{{ u.name }}</option>
+    {% endfor %}
+  </select>
+</div>
+<nav class="sidebar-nav" aria-label="Documents">
+  <ul class="sidebar-projects">
+    {% for proj in sidebar.projects %}
+    <li class="sidebar-project{% if proj.current %} current{% endif %}">
+      <details{% if proj.current %} open{% endif %}>
+        <summary class="project-title"><a href="{{ proj.lineage_url }}"{% if proj.is_current_page %} aria-current="page"{% endif %}>{{ proj.project }}</a></summary>
+        <ul class="research-roots">
+          {% for r in proj.research %}
+          <li class="research-node">
+            <a class="research-title" href="{{ r.view_url }}"{% if r.current %} aria-current="page"{% endif %}><span class="status-dot status-{{ r.status }}"></span><span class="doc-type doc-type-{{ r.type }}"></span><span class="sr-only">{{ r.type }}, {{ r.status }}: </span>{{ r.title }}</a>
+            {% if r.plans %}
+            <ul class="plans">
+              {% for p in r.plans %}
+              <li class="plan"><a href="{{ p.view_url }}"{% if p.current %} aria-current="page"{% endif %}><span class="status-dot status-{{ p.status }}"></span><span class="doc-type doc-type-{{ p.type }}"></span><span class="sr-only">{{ p.type }}, {{ p.status }}: </span>{{ p.title }}</a></li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+            {% if r.backlinks %}
+            <ul class="backlinks">
+              <li class="backlinks-label">referenced by</li>
+              {% for p in r.backlinks %}
+              <li class="plan backlink"><a href="{{ p.view_url }}"{% if p.current %} aria-current="page"{% endif %}><span class="status-dot status-{{ p.status }}"></span><span class="doc-type doc-type-{{ p.type }}"></span><span class="sr-only">{{ p.type }}, {{ p.status }}: </span>{{ p.title }}</a></li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% if proj.unlinked_plans %}
+        <ul class="unlinked-plans">
+          {% for p in proj.unlinked_plans %}
+          <li class="plan"><a href="{{ p.view_url }}"{% if p.current %} aria-current="page"{% endif %}><span class="status-dot status-{{ p.status }}"></span><span class="doc-type doc-type-{{ p.type }}"></span><span class="sr-only">{{ p.type }}, {{ p.status }}: </span>{{ p.title }}</a></li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </details>
+    </li>
+    {% endfor %}
+  </ul>
+</nav>
+{% endif %}

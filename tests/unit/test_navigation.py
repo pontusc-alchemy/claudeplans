@@ -1,0 +1,303 @@
+import json
+from pathlib import Path
+from typing import Any, cast
+
+from pydantic import JsonValue
+
+from claudeplans import templates
+from claudeplans.auth.registry import UserRegistry
+from claudeplans.navigation import build_user_tree, list_users
+from claudeplans.storage.filesystem import FilesystemRepository
+from claudeplans.storage.repository import CREATE
+from claudeplans_contracts import document_key
+
+
+def _doc(
+    project: str,
+    slug: str,
+    doc_type: str,
+    *,
+    owner: str = "dev",
+    primary: str | None = None,
+    refs: list[str] | None = None,
+) -> dict[str, JsonValue]:
+    doc: dict[str, JsonValue] = {
+        "type": doc_type,
+        "project": project,
+        "slug": slug,
+        "title": f"{slug} title",
+        "owner_id": owner,
+    }
+    if primary is not None:
+        doc["primary_research_ref"] = primary
+    if refs is not None:
+        doc["research_refs"] = refs
+    return doc
+
+
+async def _put(repo: FilesystemRepository, doc: dict[str, JsonValue]) -> None:
+    key = document_key(str(doc["owner_id"]), str(doc["project"]), str(doc["slug"]))
+    await repo.put(key, doc, CREATE)
+
+
+async def test_build_user_tree_groups_sorts_and_reflects_lineage(
+    tmp_path: Path,
+) -> None:
+    repo = FilesystemRepository(tmp_path / "data")
+    # projB inserted first, projA second — must come back sorted A then B.
+    await _put(repo, _doc("projB", "r1", "research"))
+    await _put(repo, _doc("projB", "p1", "plan", primary="r1", refs=["r1"]))
+    await _put(repo, _doc("projA", "solo", "plan"))
+
+    trees = await build_user_tree(repo, "dev")
+
+    assert [t.project for t in trees] == ["projA", "projB"]
+    proj_a, proj_b = trees
+    assert proj_a.doc_count == 1
+    assert proj_a.lineage.research == ()
+    assert len(proj_a.lineage.unlinked_plans) == 1
+    assert proj_b.doc_count == 2
+    assert len(proj_b.lineage.research) == 1
+    node = proj_b.lineage.research[0]
+    assert node.slug == "r1"
+    assert [p.slug for p in node.plans] == ["p1"]
+
+
+async def test_build_user_tree_scoped_to_user(tmp_path: Path) -> None:
+    repo = FilesystemRepository(tmp_path / "data")
+    await _put(repo, _doc("projA", "p1", "plan", owner="dev"))
+    await _put(repo, _doc("projX", "p9", "plan", owner="alice"))
+
+    trees = await build_user_tree(repo, "dev")
+
+    assert [t.project for t in trees] == ["projA"]
+
+
+async def test_list_users_unions_storage_registry_current(tmp_path: Path) -> None:
+    repo = FilesystemRepository(tmp_path / "data")
+    await _put(repo, _doc("projA", "p1", "plan", owner="dev"))
+    await _put(repo, _doc("projX", "p9", "plan", owner="zoe"))
+    registry = UserRegistry(tmp_path / "users.json")
+    alice = registry.mint("Alice")  # registered but owns no documents
+
+    users = await list_users(repo, registry, "dev")
+    by_uid = {u.uid: u for u in users}
+
+    assert set(by_uid) == {"dev", "zoe", alice.uid}
+    assert by_uid["dev"].current is True
+    assert by_uid["zoe"].current is False
+    assert by_uid[alice.uid].current is False
+    assert by_uid[alice.uid].name == "Alice"  # registry display name
+    assert by_uid["zoe"].name == "zoe"  # raw uid when no registry record
+    assert [u.name for u in users] == sorted(u.name for u in users)  # sorted by name
+
+
+async def test_registry_path_outside_storage_walk(tmp_path: Path) -> None:
+    repo = FilesystemRepository(tmp_path / "data")
+    registry = UserRegistry(tmp_path / "users.json")
+    registry.mint("Alice")  # writes tmp_path/users.json, a sibling of data/
+    await _put(repo, _doc("projA", "p1", "plan", owner="dev"))
+
+    keys = [e.key for e in await repo.list("")]
+
+    assert keys == ["dev/projA/p1"]  # the registry file is never walked as a doc
+
+
+async def test_build_user_tree_skips_unloadable_doc(tmp_path: Path) -> None:
+    root = tmp_path / "data"
+    repo = FilesystemRepository(root)
+    await _put(repo, _doc("projA", "good", "plan"))
+    # An envelope repo.list() returns (rev is a string) but get_document rejects:
+    # the body carries a forbidden extra field, so strict validation fails.
+    poison = root / "dev" / "projA" / "bad.json"
+    poison.write_text(
+        json.dumps(
+            {
+                "rev": "1",
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-01T00:00:00Z",
+                "document": {
+                    "type": "plan",
+                    "project": "projA",
+                    "slug": "bad",
+                    "title": "bad",
+                    "owner_id": "dev",
+                    "BOGUS_FIELD": 1,
+                },
+            }
+        )
+    )
+
+    trees = await build_user_tree(repo, "dev")
+
+    assert [t.project for t in trees] == ["projA"]
+    assert trees[0].doc_count == 1  # poison skipped, only the good doc counts
+    assert [n.slug for n in trees[0].lineage.unlinked_plans] == ["good"]
+
+
+async def test_build_sidebar_marks_active_doc_by_project_and_slug(
+    tmp_path: Path,
+) -> None:
+    repo = FilesystemRepository(tmp_path / "data")
+    registry = UserRegistry(tmp_path / "users.json")
+    await _put(repo, _doc("projA", "shared", "plan"))
+    await _put(repo, _doc("projB", "shared", "plan"))  # same slug, other project
+
+    projects = await build_user_tree(repo, "dev")
+    users = await list_users(repo, registry, "dev")
+    sidebar = templates.build_sidebar(
+        users=users,
+        projects=projects,
+        current_uid="dev",
+        current_project="projA",
+        current_slug="shared",
+        view_url=lambda p, s: f"/view/{p}/{s}",
+        lineage_url=lambda p: f"/lin/{p}",
+    )
+
+    sb_projects = cast(list[dict[str, Any]], sidebar["projects"])
+    by_project = {p["project"]: p for p in sb_projects}
+    a_doc = by_project["projA"]["unlinked_plans"][0]
+    b_doc = by_project["projB"]["unlinked_plans"][0]
+    assert a_doc["current"] is True
+    assert a_doc["view_url"] == "/view/projA/shared"
+    assert b_doc["current"] is False  # the project guard discriminates
+    assert by_project["projA"]["current"] is True
+    assert by_project["projB"]["current"] is False
+
+
+async def test_build_sidebar_includes_backlinks(tmp_path: Path) -> None:
+    repo = FilesystemRepository(tmp_path / "data")
+    registry = UserRegistry(tmp_path / "users.json")
+    await _put(repo, _doc("projA", "r1", "research"))
+    await _put(repo, _doc("projA", "r2", "research"))
+    # p2's primary is r2 but it also cites r1 -> p2 is a backlink under r1.
+    await _put(repo, _doc("projA", "p2", "plan", primary="r2", refs=["r1", "r2"]))
+
+    projects = await build_user_tree(repo, "dev")
+    users = await list_users(repo, registry, "dev")
+    sidebar = templates.build_sidebar(
+        users=users,
+        projects=projects,
+        current_uid="dev",
+        current_project="projA",
+        current_slug="p2",
+        view_url=lambda p, s: f"/view/{p}/{s}",
+        lineage_url=lambda p: f"/lin/{p}",
+    )
+
+    sb_projects = cast(list[dict[str, Any]], sidebar["projects"])
+    research = {r["title"]: r for r in sb_projects[0]["research"]}
+    r1 = research["r1 title"]
+    assert [b["title"] for b in r1["backlinks"]] == ["p2 title"]
+    assert r1["backlinks"][0]["current"] is True  # p2 is the open doc
+    r2 = research["r2 title"]
+    assert [pl["title"] for pl in r2["plans"]] == ["p2 title"]
+
+
+async def test_build_sidebar_no_active_when_no_current_doc(tmp_path: Path) -> None:
+    repo = FilesystemRepository(tmp_path / "data")
+    registry = UserRegistry(tmp_path / "users.json")
+    await _put(repo, _doc("projA", "p1", "plan"))
+
+    projects = await build_user_tree(repo, "dev")
+    users = await list_users(repo, registry, "dev")
+    sidebar = templates.build_sidebar(
+        users=users,
+        projects=projects,
+        current_uid="dev",
+        current_project=None,
+        current_slug=None,
+        view_url=lambda p, s: f"/view/{p}/{s}",
+        lineage_url=lambda p: f"/lin/{p}",
+    )
+
+    sb_projects = cast(list[dict[str, Any]], sidebar["projects"])
+    proj = sb_projects[0]
+    assert proj["current"] is False
+    assert all(not d["current"] for d in proj["unlinked_plans"])
+
+
+async def test_build_sidebar_project_is_current_page_only_on_lineage(
+    tmp_path: Path,
+) -> None:
+    repo = FilesystemRepository(tmp_path / "data")
+    registry = UserRegistry(tmp_path / "users.json")
+    await _put(repo, _doc("projA", "p1", "plan"))
+    projects = await build_user_tree(repo, "dev")
+    users = await list_users(repo, registry, "dev")
+
+    # Doc-view page (a slug is open): project is the active ancestor, NOT current-page.
+    on_doc = templates.build_sidebar(
+        users=users,
+        projects=projects,
+        current_uid="dev",
+        current_project="projA",
+        current_slug="p1",
+        view_url=lambda p, s: f"/view/{p}/{s}",
+        lineage_url=lambda p: f"/lin/{p}",
+    )
+    a_on_doc = cast(list[dict[str, Any]], on_doc["projects"])[0]
+    assert a_on_doc["current"] is True
+    assert a_on_doc["is_current_page"] is False
+
+    # Lineage page (no slug open): project IS the current page (gets the box).
+    on_lin = templates.build_sidebar(
+        users=users,
+        projects=projects,
+        current_uid="dev",
+        current_project="projA",
+        current_slug=None,
+        view_url=lambda p, s: f"/view/{p}/{s}",
+        lineage_url=lambda p: f"/lin/{p}",
+    )
+    a_on_lin = cast(list[dict[str, Any]], on_lin["projects"])[0]
+    assert a_on_lin["current"] is True
+    assert a_on_lin["is_current_page"] is True
+
+
+async def test_list_users_ignores_stray_root_level_file(tmp_path: Path) -> None:
+    root = tmp_path / "data"
+    repo = FilesystemRepository(root)
+    registry = UserRegistry(tmp_path / "users.json")
+    await _put(repo, _doc("projA", "p1", "plan", owner="dev"))
+    # A stray single-segment *.json directly under the root must not mint a user.
+    (root / "stray.json").write_text('{"rev": "1", "document": {}}')
+
+    users = await list_users(repo, registry, "dev")
+
+    assert {u.uid for u in users} == {"dev"}
+
+
+def test_registry_records_sorted_by_name(tmp_path: Path) -> None:
+    registry = UserRegistry(tmp_path / "users.json")
+    assert registry.records() == []
+    registry.mint("Zoe")
+    registry.mint("Alice")
+    assert [r.name for r in registry.records()] == ["Alice", "Zoe"]
+
+
+async def test_build_sidebar_entries_carry_status_and_type(tmp_path: Path) -> None:
+    repo = FilesystemRepository(tmp_path / "data")
+    registry = UserRegistry(tmp_path / "users.json")
+    await _put(repo, _doc("projA", "r1", "research"))
+    await _put(repo, _doc("projA", "p1", "plan", primary="r1", refs=["r1"]))
+
+    projects = await build_user_tree(repo, "dev")
+    users = await list_users(repo, registry, "dev")
+    sidebar = templates.build_sidebar(
+        users=users,
+        projects=projects,
+        current_uid="dev",
+        current_project="projA",
+        current_slug=None,
+        view_url=lambda p, s: f"/view/{p}/{s}",
+        lineage_url=lambda p: f"/lin/{p}",
+    )
+    sb_projects = cast(list[dict[str, Any]], sidebar["projects"])
+    research = sb_projects[0]["research"][0]
+    assert research["type"] == "research"
+    assert research["status"] == "draft"  # _doc helper leaves the default status
+    plan = research["plans"][0]
+    assert plan["type"] == "plan"
+    assert plan["status"] == "draft"

@@ -17,7 +17,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from claudeplans_contracts import Document
-from claudeplans_contracts.enums import DocType
+from claudeplans_contracts.enums import DocStatus, DocType
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +28,8 @@ class PlanRef:
     title: str
     owner_id: str
     project: str
+    status: DocStatus
+    type: DocType
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +44,8 @@ class ResearchNode:
     title: str
     owner_id: str
     project: str
+    status: DocStatus
+    type: DocType
     plans: tuple[PlanRef, ...]
     backlinks: tuple[PlanRef, ...]
 
@@ -56,7 +60,12 @@ class Lineage:
 
 def _plan_ref(doc: Document) -> PlanRef:
     return PlanRef(
-        slug=doc.slug, title=doc.title, owner_id=doc.owner_id, project=doc.project
+        slug=doc.slug,
+        title=doc.title,
+        owner_id=doc.owner_id,
+        project=doc.project,
+        status=doc.status,
+        type=doc.type,
     )
 
 
@@ -89,6 +98,8 @@ def build_lineage(docs: Iterable[Document]) -> Lineage:
                 title=research.title,
                 owner_id=research.owner_id,
                 project=research.project,
+                status=research.status,
+                type=research.type,
                 plans=tuple(sorted(primary, key=lambda r: r.slug)),
                 backlinks=tuple(sorted(backlinks, key=lambda r: r.slug)),
             )

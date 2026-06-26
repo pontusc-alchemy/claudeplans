@@ -2,13 +2,21 @@
 and the auth/error seams behave.
 """
 
+from pathlib import Path
+
 import pytest
 from fastapi import FastAPI
 from typer.testing import CliRunner
 
 from claudeplans.auth.authz import can_write
 from claudeplans.auth.provider import CurrentUser
-from claudeplans.config import AuthMode, Settings, StorageBackend, fail_closed_check
+from claudeplans.config import (
+    AuthMode,
+    FilesystemSettings,
+    Settings,
+    StorageBackend,
+    fail_closed_check,
+)
 from claudeplans.main import create_app
 from claudeplans_cli.cli import app as claudeplans_app
 from claudeplans_contracts.errors import ExitCode, NotFound, StaleRevision
@@ -31,6 +39,23 @@ def test_fail_closed_rejects_noop_with_cloud_backend() -> None:
     bad = Settings(auth_mode=AuthMode.noop, storage_backend=StorageBackend.gcs)
     with pytest.raises(RuntimeError):
         fail_closed_check(bad)
+
+
+def test_fail_closed_rejects_registry_inside_storage_root(tmp_path: Path) -> None:
+    bad = Settings(
+        filesystem=FilesystemSettings(root=str(tmp_path / "data")),
+        registry_path=str(tmp_path / "data" / "users.json"),
+    )
+    with pytest.raises(RuntimeError, match="REGISTRY_PATH"):
+        fail_closed_check(bad)
+
+
+def test_fail_closed_allows_registry_outside_storage_root(tmp_path: Path) -> None:
+    ok = Settings(
+        filesystem=FilesystemSettings(root=str(tmp_path / "data")),
+        registry_path=str(tmp_path / "users.json"),
+    )
+    fail_closed_check(ok)  # must not raise
 
 
 def test_can_write_is_write_own() -> None:

@@ -52,7 +52,7 @@ def migrate(raw: dict[str, JsonValue]) -> dict[str, JsonValue]:
     while version < CURRENT_SCHEMA_VERSION:
         step = MIGRATIONS.get(version)
         if step is None:
-            raise ValueError(f"no migration path from schema_version {version}")
+            raise ValidationError(f"no migration path from schema_version {version}")
         data = step(data)
         version += 1
         data["schema_version"] = version

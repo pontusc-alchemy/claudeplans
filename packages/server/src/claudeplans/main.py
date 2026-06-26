@@ -12,15 +12,29 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import Response
+from starlette.types import Scope
 
 from .api import install
 from .api.limits import BodySizeLimitMiddleware
 from .auth.provider import IapProvider, NoopProvider, UserProvider
+from .auth.registry import UserRegistry
 from .cache import FragmentCache
 from .config import AuthMode, Settings, fail_closed_check, load_settings
 from .events import EventFeed
 from .search import SearchIndex
 from .storage.filesystem import FilesystemRepository
+
+
+class _NoCacheStaticFiles(StaticFiles):
+    """Serve assets with `Cache-Control: no-cache` so the browser revalidates via
+    ETag on every load — a redeploy's new CSS/JS shows up without a manual hard
+    refresh, while unchanged files still return 304."""
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
 
 
 def select_provider(settings: Settings) -> UserProvider:
@@ -72,6 +86,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.repo = FilesystemRepository(settings.filesystem.root)
     app.state.user_provider = select_provider(settings)
+    # User registry (display names for the switcher). Path is OUTSIDE the storage
+    # root so the repository's *.json walk never treats it as a document.
+    app.state.registry = UserRegistry(Path(settings.registry_path))
     # Built here (not only in lifespan) so app.state always carries them — unit tests
     # drive routes without entering lifespan; lifespan's shutdown half closes the feed.
     app.state.feed = EventFeed()
@@ -83,7 +100,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # strict CSP (`script-src 'self'`) admits them.
     app.mount(
         "/assets",
-        StaticFiles(directory=Path(__file__).parent / "assets"),
+        _NoCacheStaticFiles(directory=Path(__file__).parent / "assets"),
         name="assets",
     )
     return app

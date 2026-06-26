@@ -252,6 +252,8 @@ class LineagePlanRef(BaseModel):
     title: str
     owner_id: str
     project: str
+    status: DocStatus
+    type: DocType
 
 
 class LineageResearchNode(BaseModel):
@@ -263,6 +265,8 @@ class LineageResearchNode(BaseModel):
     title: str
     owner_id: str
     project: str
+    status: DocStatus
+    type: DocType
     plans: list[LineagePlanRef]
     backlinks: list[LineagePlanRef]
 
