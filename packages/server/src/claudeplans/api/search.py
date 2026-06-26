@@ -13,9 +13,21 @@ from fastapi import APIRouter, HTTPException, Query
 
 from claudeplans_contracts import SearchResults, validate_key_segment
 
-from .deps import SearchIndexDep
+from ..projects import ProjectRegistry
+from .deps import ProjectRegistryDep, SearchIndexDep
 
 router = APIRouter(tags=["search"])
+
+
+def _with_names(
+    results: SearchResults, registry: ProjectRegistry, uid: str
+) -> SearchResults:
+    """Stamp each hit with its project's display name (registry → slug fallback)."""
+    hits = [
+        h.model_copy(update={"project_name": registry.get(uid, h.project) or h.project})
+        for h in results.hits
+    ]
+    return SearchResults(query=results.query, hits=hits)
 
 
 @router.get("/v1/users/{uid}/projects/{project}/search")
@@ -23,6 +35,7 @@ async def search_project(
     uid: str,
     project: str,
     index: SearchIndexDep,
+    project_registry: ProjectRegistryDep,
     q: Annotated[str, Query(min_length=1, max_length=200, description="Search text")],
 ) -> SearchResults:
     """Return title/heading/phase-name hits within one user+project."""
@@ -34,4 +47,21 @@ async def search_project(
         validate_key_segment(project)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return index.query(q, prefix=f"{uid}/{project}/")
+    return _with_names(
+        index.query(q, prefix=f"{uid}/{project}/"), project_registry, uid
+    )
+
+
+@router.get("/v1/users/{uid}/search")
+async def search_user(
+    uid: str,
+    index: SearchIndexDep,
+    project_registry: ProjectRegistryDep,
+    q: Annotated[str, Query(min_length=1, max_length=200, description="Search text")],
+) -> SearchResults:
+    """Hits across all of `uid`'s projects, each tagged with its project name."""
+    try:
+        validate_key_segment(uid)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return _with_names(index.query(q, prefix=f"{uid}/"), project_registry, uid)

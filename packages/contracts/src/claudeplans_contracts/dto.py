@@ -208,6 +208,7 @@ class SearchHit(BaseModel):
     kind: Literal["title", "section", "phase"]
     text: str
     anchor: str | None = None
+    project_name: str | None = None
 
 
 class SearchResults(BaseModel):

@@ -130,3 +130,49 @@ async def test_search_requires_query(live_server: str) -> None:
         # q is bounded, so a pathological query is rejected, not scanned.
         too_long = await client.get(SEARCH, params={"q": "x" * 201})
         assert too_long.status_code == 422
+
+
+async def test_user_search_spans_multiple_projects(live_server: str) -> None:
+    """GET /v1/users/{uid}/search returns hits from all projects, with project_name."""
+    docs_other = "/v1/users/dev/projects/other/docs"
+    user_search = "/v1/users/dev/search"
+    plan_other: dict[str, object] = {
+        "type": "plan",
+        "slug": "q1",
+        "title": "Beta Plan",
+    }
+    async with httpx.AsyncClient(base_url=live_server) as client:
+        # Seed one doc in each of two projects.
+        await client.post(DOCS, json=PLAN_BODY)
+        await client.post(docs_other, json=plan_other)
+
+        # Poll until both are indexed (index is event-fed, so async).
+        async def _both_visible() -> bool:
+            r = await client.get(user_search, params={"q": "plan"})
+            if r.status_code != 200:
+                return False
+            slugs = {h["slug"] for h in r.json()["hits"]}
+            return "p1" in slugs and "q1" in slugs
+
+        for _ in range(100):
+            if await _both_visible():
+                break
+            await asyncio.sleep(0.02)
+        else:
+            raise AssertionError("user search did not return hits from both projects")
+
+        r = await client.get(user_search, params={"q": "plan"})
+        assert r.status_code == 200
+        hits = r.json()["hits"]
+        projects_hit = {h["project"] for h in hits}
+        assert "demo" in projects_hit
+        assert "other" in projects_hit
+
+        # project_name is populated: registry has no display name set, so it falls
+        # back to the project slug.
+        for h in hits:
+            assert h["project_name"] == h["project"]
+
+    # Endpoint also requires q.
+    async with httpx.AsyncClient(base_url=live_server) as client:
+        assert (await client.get(user_search)).status_code == 422

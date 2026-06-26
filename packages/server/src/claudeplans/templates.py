@@ -179,4 +179,6 @@ def build_sidebar(
         "users": [{"uid": u.uid, "name": u.name, "current": u.current} for u in users],
         "switch_base": "/v1/users/",
         "projects": proj_ctx,
+        "current_uid": current_uid,
+        "current_project": current_project,
     }

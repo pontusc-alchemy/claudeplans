@@ -12,3 +12,32 @@
     window.location.assign(base + encodeURIComponent(select.value) + "/");
   });
 })();
+
+// Sidebar collapse toggle. Persists across navigation via localStorage; the panel
+// lives outside the htmx morph region, so the body class survives live doc updates.
+(function () {
+  "use strict";
+  var btn = document.querySelector(".sidebar-toggle");
+  if (!btn) {
+    return;
+  }
+  var KEY = "sidebarCollapsed";
+  function apply(collapsed) {
+    document.body.classList.toggle("sidebar-collapsed", collapsed);
+    btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    btn.setAttribute(
+      "aria-label",
+      collapsed ? "Expand sidebar" : "Collapse sidebar"
+    );
+  }
+  apply(localStorage.getItem(KEY) === "1");
+  btn.addEventListener("click", function () {
+    var collapsed = !document.body.classList.contains("sidebar-collapsed");
+    apply(collapsed);
+    try {
+      localStorage.setItem(KEY, collapsed ? "1" : "0");
+    } catch (e) {
+      /* storage unavailable; the toggle still works for this page */
+    }
+  });
+})();
