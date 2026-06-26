@@ -95,9 +95,9 @@ body.md-typeset {
 
 .doc,
 .lineage {
-  max-width: 52rem;
+  max-width: 100rem;
   margin: 0 auto;
-  padding: 2rem 1.5rem 4rem;
+  padding: 2rem 2rem 4rem;
 }
 
 /* Sidebar nav ------------------------------------------------------------- */
@@ -290,8 +290,8 @@ body.md-typeset {
 /* Sections --------------------------------------------------------------- */
 
 .md-section {
-  margin: 1.5rem 0;
-  padding-bottom: 0.5rem;
+  margin: 2.75rem 0;
+  padding-bottom: 1.5rem;
   border-bottom: 1px solid var(--border);
 }
 
@@ -299,31 +299,41 @@ body.md-typeset {
   border-bottom: none;
 }
 
-/* Phases & tasks --------------------------------------------------------- */
-
-.phases {
-  list-style: none;
-  padding: 0;
-  margin: 1.5rem 0;
+/* Content lists: a consistent modest indent (tighter than the UA default) so
+   markdown bullets share the task checklist's text column. */
+.md-section ul:not(.tasks),
+.md-section ol {
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
 }
 
-.phase {
-  padding: 0.75rem 1rem;
-  margin: 0.5rem 0;
+/* Phases & tasks --------------------------------------------------------- */
+
+.phase-overview {
+  margin: 1.5rem 0;
+  padding: 0.5rem 1.25rem;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg-subtle);
 }
 
-.phase-name {
-  font-weight: 600;
+.phase-overview ol {
+  margin: 0.4rem 0;
+  padding-left: 1.5rem;
+}
+
+.phase-overview li {
+  padding: 0.2rem 0;
+}
+
+.phase-overview a {
   margin-right: 0.5rem;
 }
 
 .tasks {
   list-style: none;
-  padding: 0;
-  margin: 0.5rem 0 0;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
 }
 
 .task {
@@ -331,13 +341,12 @@ body.md-typeset {
   color: var(--fg);
 }
 
+/* Hang the checkbox glyph in the indent so task text lines up with the
+   markdown-bullet text column (Checklist and Exit criteria align). */
 .task .task-check {
-  margin-right: 0.35rem;
-}
-
-.task.done {
-  color: var(--fg-muted);
-  text-decoration: line-through;
+  display: inline-block;
+  width: 1.5rem;
+  margin-left: -1.5rem;
 }
 
 /* Admonitions (pymdownx.admonition / details) ---------------------------- */

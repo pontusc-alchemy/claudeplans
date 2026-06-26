@@ -135,9 +135,10 @@ async def test_morph_target_id_cannot_be_spoofed(tmp_path: Path) -> None:
         assert resp.text.count('id="doc-status"') == 1
 
 
-def test_research_body_has_no_phases_container() -> None:
-    # Research docs carry no phases, so the body must omit the <ol id="phases">
-    # container entirely (the template guards it behind `{% if phases %}`).
+def test_research_body_has_no_phase_blocks() -> None:
+    # Research docs carry no phases, so the body renders neither the phase overview
+    # nor any phase block (both are guarded by `{% if phases %}` / the block flow) —
+    # only its prose sections.
     doc = Document(
         type=DocType.research,
         project="demo",
@@ -146,7 +147,7 @@ def test_research_body_has_no_phases_container() -> None:
         owner_id="dev",
     )
     body = templates.render_doc_body(doc)
-    assert '<ol id="phases"' not in body
+    assert 'id="phase-' not in body
 
 
 async def test_lineage_page_renders(tmp_path: Path) -> None:

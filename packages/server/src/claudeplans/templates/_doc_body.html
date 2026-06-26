@@ -8,28 +8,39 @@
 {% else %}
 <div id="doc-description"></div>
 {% endif %}
-<div id="sections">
-  {% for s in sections %}
-  <section id="section-{{ s.anchor }}" class="md-section">
-    <h{{ s.level }}>{{ s.heading }}</h{{ s.level }}>
-    {{ s.body_html|safe }}
-  </section>
-  {% endfor %}
-</div>
 {% if phases %}
-<ol id="phases" class="phases">
-  {% for p in phases %}
-  <li id="phase-{{ p.slug }}" class="phase">
-    <span class="phase-name">{{ p.name }}</span>
-    <span id="phase-{{ p.slug }}-status" class="pill {{ p.status }}">{{ p.status }}</span>
+<nav id="phase-overview" class="phase-overview" aria-label="Phase overview">
+  <ol>
+    {% for p in phases %}
+    <li><a href="#phase-{{ p.slug }}">{{ p.name }}</a> <span class="pill {{ p.status }}">{{ p.status }}</span></li>
+    {% endfor %}
+  </ol>
+</nav>
+{% endif %}
+<div id="doc-body">
+  {% for b in blocks %}
+  {% if b.kind == "phase" %}
+  <section id="phase-{{ b.slug }}" class="md-section">
+    <h2>{{ b.name }} <span id="phase-{{ b.slug }}-status" class="pill {{ b.status }}">{{ b.status }}</span></h2>
+    {% if b.prose_html %}{{ b.prose_html|safe }}{% endif %}
+    {% if b.tasks %}
+    <h3>Checklist</h3>
     <ul class="tasks">
-      {% for t in p.tasks %}
-      <li id="phase-{{ p.slug }}-task-{{ loop.index0 }}" class="task {{ 'done' if t.checked else '' }}">
+      {% for t in b.tasks %}
+      <li id="phase-{{ b.slug }}-task-{{ loop.index0 }}" class="task {{ 'done' if t.checked else '' }}">
         <span class="task-check">{{ '☑' if t.checked else '☐' }}</span> {{ t.text }}
       </li>
       {% endfor %}
     </ul>
-  </li>
+    {% endif %}
+    {% if b.exit_html %}<h3>Exit criteria</h3>{{ b.exit_html|safe }}{% endif %}
+    {% if b.notes_html %}{{ b.notes_html|safe }}{% endif %}
+  </section>
+  {% else %}
+  <section id="section-{{ b.anchor }}" class="md-section">
+    <h{{ b.level }}>{{ b.heading }}</h{{ b.level }}>
+    {{ b.body_html|safe }}
+  </section>
+  {% endif %}
   {% endfor %}
-</ol>
-{% endif %}
+</div>

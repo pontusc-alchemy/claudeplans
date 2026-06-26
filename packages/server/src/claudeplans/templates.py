@@ -16,7 +16,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from claudeplans_contracts import Document
+from claudeplans_contracts import Document, Phase
 
 from . import render
 from .lineage import Lineage, PlanRef, ResearchNode
@@ -30,28 +30,93 @@ env = Environment(
 )
 
 
-def _section_context(doc: Document) -> list[dict[str, object]]:
+def _phase_overview(doc: Document) -> list[dict[str, object]]:
+    """The top summary list: one entry per phase (name + status), in order."""
     return [
-        {
-            "anchor": s.anchor,
-            "heading": s.heading,
-            "level": s.level,
-            "body_html": render.render_markdown(s.body),
-        }
-        for s in doc.sections
+        {"slug": p.slug, "name": p.name, "status": p.status.value} for p in doc.phases
     ]
 
 
-def _phase_context(doc: Document) -> list[dict[str, object]]:
-    return [
-        {
-            "slug": p.slug,
-            "name": p.name,
-            "status": p.status.value,
-            "tasks": [{"text": t.text, "checked": t.checked} for t in p.tasks],
-        }
-        for p in doc.phases
-    ]
+def _section_block(
+    anchor: str, heading: str, level: int, body: str
+) -> dict[str, object]:
+    return {
+        "kind": "section",
+        "anchor": anchor,
+        "heading": heading,
+        "level": level,
+        "body_html": render.render_markdown(body),
+    }
+
+
+def _split_admonitions(body: str) -> tuple[str, str]:
+    """Split a phase's prose into (main, notes). Admonition cards (`!!!` / `???`
+    blocks — the dated decision/revision callouts) are pulled out and returned as
+    `notes`, so a phase renders prose -> exit criteria -> checklist -> notes. A block
+    is its marker line plus the following blank/indented lines (pymdownx syntax)."""
+    lines = body.splitlines()
+    main: list[str] = []
+    notes: list[str] = []
+    i, n = 0, len(lines)
+    while i < n:
+        if lines[i].startswith(("!!!", "???")):
+            notes.append(lines[i])
+            i += 1
+            while i < n and (not lines[i].strip() or lines[i][:1] in (" ", "\t")):
+                notes.append(lines[i])
+                i += 1
+        else:
+            main.append(lines[i])
+            i += 1
+    return "\n".join(main).strip(), "\n".join(notes).strip()
+
+
+def _split_exit_criteria(main: str) -> tuple[str, str]:
+    """Split phase prose into (intro, exit_criteria) at the `**Exit criteria**`
+    lead-in. The lead-in line itself is dropped — the template renders it as a
+    styled label — so `exit_criteria` is just the criteria body."""
+    lines = main.splitlines()
+    for idx, line in enumerate(lines):
+        if line.strip().lower().startswith("**exit criteria"):
+            return "\n".join(lines[:idx]).strip(), "\n".join(lines[idx + 1 :]).strip()
+    return main, ""
+
+
+def _phase_block(phase: Phase, prose: str) -> dict[str, object]:
+    main, notes = _split_admonitions(prose) if prose else ("", "")
+    intro, exit_criteria = _split_exit_criteria(main)
+    return {
+        "kind": "phase",
+        "slug": phase.slug,
+        "name": phase.name,
+        "status": phase.status.value,
+        "prose_html": render.render_markdown(intro) if intro else "",
+        "exit_html": render.render_markdown(exit_criteria) if exit_criteria else "",
+        "notes_html": render.render_markdown(notes) if notes else "",
+        "tasks": [{"text": t.text, "checked": t.checked} for t in phase.tasks],
+    }
+
+
+def _blocks(doc: Document) -> list[dict[str, object]]:
+    """The linear render flow. Sections render in document order; a section whose
+    `anchor` equals a phase `slug` is that phase's prose and renders as one unified
+    phase block (prose + status + checklist) in place. Phases with no matching
+    section append afterward as bare checklist blocks (docs without per-phase prose
+    keep the old sections-then-phases layout)."""
+    phase_by_slug = {p.slug: p for p in doc.phases}
+    seen: set[str] = set()
+    blocks: list[dict[str, object]] = []
+    for s in doc.sections:
+        phase = phase_by_slug.get(s.anchor)
+        if phase is not None:
+            blocks.append(_phase_block(phase, s.body))
+            seen.add(phase.slug)
+        else:
+            blocks.append(_section_block(s.anchor, s.heading, s.level, s.body))
+    for p in doc.phases:
+        if p.slug not in seen:
+            blocks.append(_phase_block(p, ""))
+    return blocks
 
 
 def _doc_context(doc: Document) -> dict[str, object]:
@@ -61,8 +126,8 @@ def _doc_context(doc: Document) -> dict[str, object]:
     return {
         "doc": doc,
         "description_html": description_html,
-        "sections": _section_context(doc),
-        "phases": _phase_context(doc),
+        "phases": _phase_overview(doc),
+        "blocks": _blocks(doc),
     }
 
 
