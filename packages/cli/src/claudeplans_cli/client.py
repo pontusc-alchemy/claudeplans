@@ -29,6 +29,7 @@ from claudeplans_contracts import (
     PhaseStatusRequest,
     PlanError,
     ResearchRefsRequest,
+    SectionPlacement,
     SetDocumentMetaRequest,
     SetPhaseRequest,
     SetSectionRequest,
@@ -232,9 +233,14 @@ class PlanClient:
         slug: str,
         phase_slug: str,
         name: str | None,
+        intro: str | None = None,
+        exit_criteria: str | None = None,
+        notes: str | None = None,
     ) -> Reply:
         # exclude_none: an omitted flag leaves that field unchanged server-side.
-        body = SetPhaseRequest(name=name)
+        body = SetPhaseRequest(
+            name=name, intro=intro, exit_criteria=exit_criteria, notes=notes
+        )
         resp = self._http.put(
             f"{self._doc_base(uid, project, slug)}/phases/{_seg(phase_slug)}",
             json=body.model_dump(mode="json", exclude_none=True),
@@ -360,9 +366,15 @@ class PlanClient:
         body: str,
         level: int,
         at: int | None = None,
+        placement: SectionPlacement = SectionPlacement.lead,
     ) -> Reply:
         req = AddSectionRequest(
-            anchor=anchor, heading=heading, body=body, level=level, at=at
+            anchor=anchor,
+            heading=heading,
+            body=body,
+            level=level,
+            at=at,
+            placement=placement,
         )
         resp = self._http.post(
             f"{self._doc_base(uid, project, slug)}/sections",
@@ -397,9 +409,12 @@ class PlanClient:
         heading: str | None,
         body: str | None,
         level: int | None,
+        placement: SectionPlacement | None = None,
     ) -> Reply:
         # exclude_none: an omitted flag leaves that field unchanged server-side.
-        req = SetSectionRequest(heading=heading, body=body, level=level)
+        req = SetSectionRequest(
+            heading=heading, body=body, level=level, placement=placement
+        )
         resp = self._http.put(
             f"{self._doc_base(uid, project, slug)}/sections/{_seg(anchor)}",
             json=req.model_dump(mode="json", exclude_none=True),

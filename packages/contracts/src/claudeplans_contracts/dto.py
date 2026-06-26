@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
-from .enums import DocStatus, DocType, PhaseStatus
+from .enums import DocStatus, DocType, PhaseStatus, SectionPlacement
 from .models import Phase, Section, validate_text_field
 
 
@@ -93,6 +93,10 @@ class SetPhaseRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = None
+    # Prose fields; None leaves unchanged, "" clears.
+    intro: str | None = None
+    exit_criteria: str | None = None
+    notes: str | None = None
 
 
 class MovePhaseRequest(BaseModel):
@@ -148,6 +152,7 @@ class AddSectionRequest(BaseModel):
     heading: str
     body: str = ""
     level: int = Field(2, ge=1, le=6)
+    placement: SectionPlacement = SectionPlacement.lead
     at: int | None = None
 
 
@@ -159,6 +164,7 @@ class SetSectionRequest(BaseModel):
     heading: str | None = None
     body: str | None = None
     level: int | None = Field(None, ge=1, le=6)
+    placement: SectionPlacement | None = None
 
 
 class PatchSectionRequest(BaseModel):

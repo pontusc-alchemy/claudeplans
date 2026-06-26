@@ -38,7 +38,15 @@ async def add_section(
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
     rev, doc = await core.add_section(
-        repo, key, body.anchor, body.heading, body.body, body.level, body.at, user=user
+        repo,
+        key,
+        body.anchor,
+        body.heading,
+        body.body,
+        body.level,
+        body.placement,
+        body.at,
+        user=user,
     )
     response.headers["ETag"] = rev
     feed.publish(Event(key=key, rev=rev))
@@ -83,7 +91,14 @@ async def set_section(
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
     rev, doc = await core.set_section(
-        repo, key, anchor, body.heading, body.body, body.level, user=user
+        repo,
+        key,
+        anchor,
+        body.heading,
+        body.body,
+        body.level,
+        body.placement,
+        user=user,
     )
     response.headers["ETag"] = rev
     feed.publish(Event(key=key, rev=rev))

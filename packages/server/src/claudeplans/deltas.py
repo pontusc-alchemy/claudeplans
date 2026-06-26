@@ -20,7 +20,7 @@ from claudeplans_contracts import (
     Task,
     ValidationError,
 )
-from claudeplans_contracts.enums import DocStatus, PhaseStatus
+from claudeplans_contracts.enums import DocStatus, PhaseStatus, SectionPlacement
 
 
 def _find_phase(doc: Document, slug: str) -> int:
@@ -85,12 +85,25 @@ def add_phase(doc: Document, slug: str, name: str, status: PhaseStatus) -> Docum
     return doc.model_copy(update={"phases": [*doc.phases, phase]})
 
 
-def set_phase(doc: Document, slug: str, name: str | None) -> Document:
+def set_phase(
+    doc: Document,
+    slug: str,
+    name: str | None,
+    intro: str | None = None,
+    exit_criteria: str | None = None,
+    notes: str | None = None,
+) -> Document:
     """Absolute set of the provided phase fields; None leaves a field unchanged."""
     i = _find_phase(doc, slug)
     update: dict[str, JsonValue] = {}
     if name is not None:
         update["name"] = name
+    if intro is not None:
+        update["intro"] = intro
+    if exit_criteria is not None:
+        update["exit_criteria"] = exit_criteria
+    if notes is not None:
+        update["notes"] = notes
     phases = list(doc.phases)
     phases[i] = phases[i].model_copy(update=update)
     return doc.model_copy(update={"phases": phases})
@@ -196,6 +209,7 @@ def add_section(
     heading: str,
     body: str,
     level: int,
+    placement: SectionPlacement = SectionPlacement.lead,
     at: int | None = None,
 ) -> Document:
     """Append a section, or insert at `at` if given.
@@ -204,7 +218,9 @@ def add_section(
     """
     if any(s.anchor == anchor for s in doc.sections):
         raise ValidationError(f"section {anchor!r} already exists")
-    section = Section(anchor=anchor, heading=heading, body=body, level=level)
+    section = Section(
+        anchor=anchor, heading=heading, body=body, level=level, placement=placement
+    )
     sections = list(doc.sections)
     if at is None:
         sections.append(section)
@@ -221,6 +237,7 @@ def set_section(
     heading: str | None,
     body: str | None,
     level: int | None,
+    placement: SectionPlacement | None = None,
 ) -> Document:
     """Absolute set of the provided section fields; None leaves a field unchanged."""
     i = _find_section(doc, anchor)
@@ -231,6 +248,8 @@ def set_section(
         update["body"] = body
     if level is not None:
         update["level"] = level
+    if placement is not None:
+        update["placement"] = placement
     sections = list(doc.sections)
     sections[i] = sections[i].model_copy(update=update)
     return doc.model_copy(update={"sections": sections})

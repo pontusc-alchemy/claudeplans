@@ -58,7 +58,16 @@ async def set_phase(
     feed: FeedDep,
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
-    rev, doc = await core.set_phase(repo, key, phase_slug, body.name, user=user)
+    rev, doc = await core.set_phase(
+        repo,
+        key,
+        phase_slug,
+        body.name,
+        body.intro,
+        body.exit_criteria,
+        body.notes,
+        user=user,
+    )
     response.headers["ETag"] = rev
     feed.publish(Event(key=key, rev=rev))
     return envelope(doc, scope=f"phases.{phase_slug}")

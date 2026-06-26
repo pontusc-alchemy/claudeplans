@@ -18,7 +18,7 @@ Arguments must carry both `<project>` and `<slug>` — there is no fuzzy resolve
 claudeplans doc phases "<project>" "<slug>"
 ```
 
-→ JSON `{rev, phases:[{slug, name, status, tasks:[{text, checked}]}], warnings}`; hold `rev`. Then read prose sections using projections:
+→ JSON `{rev, phases:[{slug, name, status, tasks:[{text, checked}]}], warnings}`; hold `rev`. Then read prose using projections — `--phase` returns a phase with its `intro`/`exit_criteria`/`notes`; `--section` returns a section body:
 
 ```shell
 claudeplans doc get "<project>" "<slug>" --section "<anchor>"
@@ -54,8 +54,9 @@ On approval, revise the doc **in place** — never create a new slug or version:
   claudeplans task toggle "<project>" "<slug>" "<phase-slug>" <index> --rev <rev>
   ```
 - **Drifted** / **still open** items keep their status.
-- Where reality diverged, update the prose via `section set` or `section patch` to match (plain markdown — no HTML spans or admonitions):
+- Where reality diverged, update phase prose via `phase set` (`--intro`/`--exit-criteria`/`--notes`; revision cards go in `--notes`), or a section body via `section set` / `section patch` — plain markdown, no HTML spans or pills:
   ```shell
+  claudeplans phase set "<project>" "<slug>" "<phase-slug>" --notes "<!!! note ...>"
   claudeplans section set "<project>" "<slug>" "<anchor>" --body "<updated markdown>"
   claudeplans section patch "<project>" "<slug>" "<anchor>" --merge-patch '{"body":"<updated>"}'
   ```

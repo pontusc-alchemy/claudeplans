@@ -11,7 +11,7 @@ from typing import Annotated
 
 import typer
 
-from claudeplans_contracts import ValidationError
+from claudeplans_contracts import SectionPlacement, ValidationError
 
 from ..context import AppContext
 from ..errors import handle_errors
@@ -26,9 +26,16 @@ _AT = typer.Option(
     "--at",
     help="0-based insert position; appends if omitted. Unconditional (no --rev).",
 )
+_ADD_PLACEMENT = typer.Option(
+    "--placement", help="lead (renders before phases) or trail (after); default lead"
+)
 _SET_HEADING = typer.Option()
 _SET_BODY = typer.Option()
 _SET_LEVEL = typer.Option()
+_SET_PLACEMENT = typer.Option(
+    "--placement",
+    help="lead (renders before phases) or trail (after); omit to leave unchanged",
+)
 _MERGE_PATCH = typer.Option("--merge-patch", help="JSON object")
 _TO_INDEX = typer.Argument()
 _REV = typer.Option(
@@ -48,10 +55,13 @@ def add(
     body: Annotated[str, _ADD_BODY] = "",
     level: Annotated[int, _ADD_LEVEL] = 2,
     at: Annotated[int | None, _AT] = None,
+    placement: Annotated[SectionPlacement, _ADD_PLACEMENT] = SectionPlacement.lead,
 ) -> None:
     """Append a section, or insert at --at if given."""
     c: AppContext = ctx.obj
-    reply = c.client.add_section(c.uid, project, slug, anchor, heading, body, level, at)
+    reply = c.client.add_section(
+        c.uid, project, slug, anchor, heading, body, level, at, placement=placement
+    )
     emit_write(reply, full=c.full)
 
 
@@ -81,10 +91,13 @@ def set_section(
     heading: Annotated[str | None, _SET_HEADING] = None,
     body: Annotated[str | None, _SET_BODY] = None,
     level: Annotated[int | None, _SET_LEVEL] = None,
+    placement: Annotated[SectionPlacement | None, _SET_PLACEMENT] = None,
 ) -> None:
     """Absolute-set a section's fields (omitted flags are left unchanged)."""
     c: AppContext = ctx.obj
-    reply = c.client.set_section(c.uid, project, slug, anchor, heading, body, level)
+    reply = c.client.set_section(
+        c.uid, project, slug, anchor, heading, body, level, placement
+    )
     emit_write(reply, full=c.full)
 
 

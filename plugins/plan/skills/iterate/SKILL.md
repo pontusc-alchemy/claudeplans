@@ -14,7 +14,7 @@ Drive a plan document through execution, mutating it via the claudeplans CLI as 
 claudeplans doc phases "<project>" "<slug>"
 ```
 
-→ JSON `{rev, phases:[{slug, name, status, tasks:[{text, checked}]}], warnings}`; non-zero exit → relay stderr and stop. The `current` phase is the first entry whose `status` is not `done` — compute this from the list. Hold the `rev` value — it is required for every position-sensitive write. Read only the current phase's section prose inline if needed for exit criteria.
+→ JSON `{rev, phases:[{slug, name, status, tasks:[{text, checked}]}], warnings}`; non-zero exit → relay stderr and stop. The `current` phase is the first entry whose `status` is not `done` — compute this from the list. Hold the `rev` value — it is required for every position-sensitive write. The current phase's prose (`intro` / `exit_criteria` / `notes`) lives in its own fields — read them with `claudeplans doc get "<project>" "<slug>"` when you need the exit criteria or intro.
 
 Arguments must carry both `<project>` and `<slug>` — there is no fuzzy resolve. For project-wide discovery: list projects with `claudeplans project list`, list a project's documents with `claudeplans doc list <project>` (both return JSON). The lineage page is the human browser view — open it with `claudeplans project view <project>` which prints its URL. (The search endpoint requires `?q=<term>` and performs keyword search, not enumeration.)
 
@@ -42,6 +42,14 @@ Arguments must carry both `<project>` and `<slug>` — there is no fuzzy resolve
   claudeplans phase move "<project>" "<slug>" "<new-phase-slug>" <to_index> --rev <rev>
   ```
 
+  Set a phase's prose — intro / exit criteria / notes (markdown; omitted flags are
+  left unchanged, `""` clears; `--<flag>-file <path>` or `-` for stdin avoids shell
+  quoting for multi-line prose):
+  ```shell
+  claudeplans phase set "<project>" "<slug>" "<phase-slug>" --intro "<markdown>" --exit-criteria "<markdown>"
+  claudeplans phase set "<project>" "<slug>" "<phase-slug>" --notes-file notes.md
+  ```
+
   Record learnings in a dedicated section as discoveries happen:
   ```shell
   # Create on first use:
@@ -52,11 +60,11 @@ Arguments must carry both `<project>` and `<slug>` — there is no fuzzy resolve
   claudeplans section patch "<project>" "<slug>" "learnings" --merge-patch '{"body":"<full updated body>"}'
   ```
 
-  Section bodies are **plain markdown** — do not write HTML spans, pills, or admonitions.
+  Section bodies are **plain markdown** — no HTML spans or pills. A phase's prose lives in its `intro`/`exit_criteria`/`notes` fields (set via `phase set`), not in section bodies; revision/decision cards (`!!!`/`???` admonitions) go in `--notes`.
 
 ## Diverge & stop
 
-- If reality diverges from the plan mid-phase, update the relevant section body via `section set` / `section patch` to match.
+- If reality diverges from the plan mid-phase, update the relevant phase prose via `phase set` (`--intro`/`--exit-criteria`/`--notes`), or a section body via `section set` / `section patch`, to match.
 - **STOP at exit criteria** for explicit user sign-off before setting the phase to `done` and opening the next phase.
 - Doc status is **not** automatically set by the service when the last phase completes — once the last phase is `done`, set the doc status explicitly:
   ```shell

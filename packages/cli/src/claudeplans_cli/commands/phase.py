@@ -5,11 +5,13 @@ gates with If-Match; the other phase mutations are stable-key and retry-safe.
 Typer descriptors are module-level singletons to satisfy ruff B008.
 """
 
+import sys
+from pathlib import Path
 from typing import Annotated
 
 import typer
 
-from claudeplans_contracts import PhaseStatus
+from claudeplans_contracts import PhaseStatus, ValidationError
 
 from ..context import AppContext
 from ..errors import handle_errors
@@ -26,6 +28,45 @@ _REV = typer.Option(
     help="current rev; this write is position-sensitive (see 'doc rev')",
 )
 _SET_NAME = typer.Option("--name")
+_SET_INTRO = typer.Option(
+    "--intro", help="phase intro prose; '' clears, omit to leave unchanged"
+)
+_SET_EXIT = typer.Option(
+    "--exit-criteria", help="exit-criteria prose; '' clears, omit to leave unchanged"
+)
+_SET_NOTES = typer.Option(
+    "--notes", help="phase notes/revision prose; '' clears, omit to leave unchanged"
+)
+_SET_INTRO_FILE = typer.Option(
+    "--intro-file", help="read --intro from a file ('-' = stdin); excludes --intro"
+)
+_SET_EXIT_FILE = typer.Option(
+    "--exit-criteria-file",
+    help="read --exit-criteria from a file ('-' = stdin); excludes --exit-criteria",
+)
+_SET_NOTES_FILE = typer.Option(
+    "--notes-file", help="read --notes from a file ('-' = stdin); excludes --notes"
+)
+
+
+def _resolve_prose(inline: str | None, path: str | None, flag: str) -> str | None:
+    """Resolve a prose field from its inline value or a file/stdin path.
+
+    Returns the inline value when no file path is given (None = leave unchanged).
+    `-` reads stdin. Passing both the inline flag and its --<flag>-file is a usage
+    error. A missing/unreadable file surfaces as a domain ValidationError (exit 4)
+    via the handle_errors boundary, not an uncaught OSError.
+    """
+    if path is None:
+        return inline
+    if inline is not None:
+        raise ValidationError(f"pass either --{flag} or --{flag}-file, not both")
+    if path == "-":
+        return sys.stdin.read()
+    try:
+        return Path(path).read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ValidationError(f"--{flag}-file: {exc}") from exc
 
 
 @app.command()
@@ -52,10 +93,25 @@ def set_phase(
     slug: str,
     phase_slug: str,
     name: Annotated[str | None, _SET_NAME] = None,
+    intro: Annotated[str | None, _SET_INTRO] = None,
+    exit_criteria: Annotated[str | None, _SET_EXIT] = None,
+    notes: Annotated[str | None, _SET_NOTES] = None,
+    intro_file: Annotated[str | None, _SET_INTRO_FILE] = None,
+    exit_criteria_file: Annotated[str | None, _SET_EXIT_FILE] = None,
+    notes_file: Annotated[str | None, _SET_NOTES_FILE] = None,
 ) -> None:
-    """Absolute-set a phase's fields (omitted flags are left unchanged)."""
+    """Absolute-set a phase's fields (omitted flags are left unchanged).
+
+    Prose flags accept inline text or a --<flag>-file path ('-' = stdin) for
+    multi-line markdown without shell-quoting pain.
+    """
     c: AppContext = ctx.obj
-    reply = c.client.set_phase(c.uid, project, slug, phase_slug, name)
+    intro = _resolve_prose(intro, intro_file, "intro")
+    exit_criteria = _resolve_prose(exit_criteria, exit_criteria_file, "exit-criteria")
+    notes = _resolve_prose(notes, notes_file, "notes")
+    reply = c.client.set_phase(
+        c.uid, project, slug, phase_slug, name, intro, exit_criteria, notes
+    )
     emit_write(reply, full=c.full)
 
 

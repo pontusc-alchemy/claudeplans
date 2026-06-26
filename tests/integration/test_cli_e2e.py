@@ -704,6 +704,8 @@ def test_schema_command_shape(patched_cli: None) -> None:
     assert "doing" in enums["phase_status"]
     assert "done" in enums["phase_status"]
     assert "blocked" in enums["phase_status"]
+    # section_placement vocabulary is part of the machine-readable contract.
+    assert enums["section_placement"] == ["lead", "trail"]
     # Exit code values
     exit_codes = parsed["exit_codes"]
     assert exit_codes["not_found"] == 5
@@ -1242,3 +1244,172 @@ def test_project_set_name_foreign_uid_exits_forbidden(patched_cli: None) -> None
         cli.app, ["--uid", "evil", "project", "set-name", "demo", "Name"]
     )
     assert result.exit_code == ExitCode.FORBIDDEN
+
+
+def test_phase_set_prose_flags_persist(patched_cli: None) -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app,
+        [
+            "phase",
+            "set",
+            "demo",
+            "p1",
+            "a",
+            "--intro",
+            "Why this phase",
+            "--exit-criteria",
+            "All checks pass",
+            "--notes",
+            "A revision note",
+        ],
+    )
+    assert result.exit_code == 0
+    get_result = runner.invoke(cli.app, ["doc", "get", "demo", "p1"])
+    phase = json.loads(get_result.stdout)["data"]["phases"][0]
+    assert phase["intro"] == "Why this phase"
+    assert phase["exit_criteria"] == "All checks pass"
+    assert phase["notes"] == "A revision note"
+
+
+def test_section_add_placement_flag_persists(patched_cli: None) -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app,
+        ["section", "add", "demo", "p1", "ctx", "Context", "--placement", "trail"],
+    )
+    assert result.exit_code == 0
+    get_result = runner.invoke(cli.app, ["doc", "get", "demo", "p1"])
+    section = json.loads(get_result.stdout)["data"]["sections"][0]
+    assert section["placement"] == "trail"
+
+
+def test_phase_set_help_lists_prose_options(patched_cli: None) -> None:
+    import re
+
+    # Force a wide terminal so Typer doesn't truncate option names with an ellipsis
+    # (the default 80-col render is width-fragile).
+    result = runner.invoke(cli.app, ["phase", "set", "--help"], env={"COLUMNS": "200"})
+    assert result.exit_code == 0
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout)
+    assert "--intro" in plain
+    assert "--exit-criteria" in plain
+    assert "--notes" in plain
+
+
+def test_section_add_help_lists_placement_choices(patched_cli: None) -> None:
+    import re
+
+    result = runner.invoke(
+        cli.app, ["section", "add", "--help"], env={"COLUMNS": "200"}
+    )
+    assert result.exit_code == 0
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout)
+    assert "--placement" in plain
+    # The StrEnum choices render as a [lead|trail] metavar — assert the joined form
+    # so this proves the choices are discoverable, not just the word in the prose.
+    assert "lead|trail" in plain
+
+
+def test_section_add_invalid_placement_exits_usage(patched_cli: None) -> None:
+    # A bad enum CHOICE is a Typer parse-time usage error (exit 2), distinct from a
+    # parseable-but-invalid value that reaches the server as a 422 (exit 4).
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app,
+        ["section", "add", "demo", "p1", "ctx", "Context", "--placement", "sideways"],
+    )
+    assert result.exit_code == ExitCode.USAGE
+
+
+def test_phase_set_intro_empty_string_clears(patched_cli: None) -> None:
+    # '' is sent (not omitted), so it clears a previously-set field — the CLI-layer
+    # invariant the help advertises and that exclude_none must preserve.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    runner.invoke(cli.app, ["phase", "set", "demo", "p1", "a", "--intro", "seeded"])
+    result = runner.invoke(cli.app, ["phase", "set", "demo", "p1", "a", "--intro", ""])
+    assert result.exit_code == 0
+    get_result = runner.invoke(cli.app, ["doc", "get", "demo", "p1"])
+    assert json.loads(get_result.stdout)["data"]["phases"][0]["intro"] == ""
+
+
+def test_section_set_placement_flag_persists(patched_cli: None) -> None:
+    # The set path (vs add) drives --placement through runner.invoke end to end.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    runner.invoke(cli.app, ["section", "add", "demo", "p1", "ctx", "Context"])
+    result = runner.invoke(
+        cli.app, ["section", "set", "demo", "p1", "ctx", "--placement", "trail"]
+    )
+    assert result.exit_code == 0
+    get_result = runner.invoke(cli.app, ["doc", "get", "demo", "p1"])
+    assert json.loads(get_result.stdout)["data"]["sections"][0]["placement"] == "trail"
+
+
+# ---------------------------------------------------------------------------
+# Feature: phase set --<field>-file variants
+# ---------------------------------------------------------------------------
+
+
+def test_phase_set_intro_file_reads_from_file(
+    patched_cli: None, tmp_path: Path
+) -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    f = tmp_path / "intro.md"
+    f.write_text("Prose with an apostrophe: container's lifecycle.\n\nSecond para.")
+    result = runner.invoke(
+        cli.app, ["phase", "set", "demo", "p1", "a", "--intro-file", str(f)]
+    )
+    assert result.exit_code == 0
+    get_result = runner.invoke(cli.app, ["doc", "get", "demo", "p1"])
+    intro = json.loads(get_result.stdout)["data"]["phases"][0]["intro"]
+    assert "container's lifecycle" in intro
+    assert "Second para." in intro
+
+
+def test_phase_set_notes_file_stdin(patched_cli: None) -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app,
+        ["phase", "set", "demo", "p1", "a", "--notes-file", "-"],
+        input="!!! note\n    A card from stdin.",
+    )
+    assert result.exit_code == 0
+    get_result = runner.invoke(cli.app, ["doc", "get", "demo", "p1"])
+    notes = json.loads(get_result.stdout)["data"]["phases"][0]["notes"]
+    assert "A card from stdin." in notes
+
+
+def test_phase_set_inline_and_file_conflict_exits_validation(patched_cli: None) -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app,
+        ["phase", "set", "demo", "p1", "a", "--intro", "x", "--intro-file", "/tmp/x"],
+    )
+    assert result.exit_code == ExitCode.VALIDATION
+
+
+def test_phase_set_missing_file_exits_validation(patched_cli: None) -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app,
+        ["phase", "set", "demo", "p1", "a", "--notes-file", "/nonexistent/nope.md"],
+    )
+    assert result.exit_code == ExitCode.VALIDATION

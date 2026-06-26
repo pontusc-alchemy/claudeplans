@@ -162,3 +162,55 @@ def test_delete_document_with_rev(client: PlanClient) -> None:
     assert deleted.data is None
     with pytest.raises(NotFound):
         client.get_document("dev", "demo", "p1")
+
+
+def test_set_phase_prose_round_trips(client: PlanClient) -> None:
+    client.create_document("dev", "demo", _CREATE_BODY)
+    set_ = client.set_phase(
+        "dev",
+        "demo",
+        "p1",
+        "a",
+        None,
+        intro="The why",
+        exit_criteria="Done when green",
+        notes="!!! note\n    A card",
+    )
+    assert set_.data is not None
+    refetched = client.get_document("dev", "demo", "p1")
+    assert refetched.data is not None
+    phase = refetched.data["phases"][0]
+    assert phase["intro"] == "The why"
+    assert phase["exit_criteria"] == "Done when green"
+    assert phase["notes"] == "!!! note\n    A card"
+
+
+def test_section_placement_round_trips(client: PlanClient) -> None:
+    from claudeplans_contracts import SectionPlacement
+
+    client.create_document("dev", "demo", _CREATE_BODY)
+    added = client.add_section(
+        "dev",
+        "demo",
+        "p1",
+        "ctx",
+        "Context",
+        "body",
+        2,
+        placement=SectionPlacement.trail,
+    )
+    assert added.data is not None
+    assert added.data["sections"][0]["placement"] == "trail"
+    # set back to lead
+    set_ = client.set_section(
+        "dev",
+        "demo",
+        "p1",
+        "ctx",
+        None,
+        None,
+        None,
+        placement=SectionPlacement.lead,
+    )
+    assert set_.data is not None
+    assert set_.data["sections"][0]["placement"] == "lead"

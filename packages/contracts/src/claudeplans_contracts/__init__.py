@@ -39,6 +39,7 @@ from .dto import ToggleTaskRequest as ToggleTaskRequest
 from .enums import DocStatus as DocStatus
 from .enums import DocType as DocType
 from .enums import PhaseStatus as PhaseStatus
+from .enums import SectionPlacement as SectionPlacement
 from .errors import CorruptDocument as CorruptDocument
 from .errors import ExitCode as ExitCode
 from .errors import Forbidden as Forbidden

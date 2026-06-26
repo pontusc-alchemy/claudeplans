@@ -47,8 +47,9 @@ claudeplans project set-name <project> "<Display Name>"
 |-------|------|-------|
 | `anchor` | str | stable identity key for section ops; must be unique per doc |
 | `heading` | str | section heading text |
-| `body` | str | plain markdown — by convention no hand-written HTML spans, pills, or admonitions |
+| `body` | str | plain markdown — no hand-written HTML spans or pills |
 | `level` | int 1–6 | heading level; default 2 |
+| `placement` | `lead` \| `trail` | render bucket: `lead` renders before the phase group, `trail` after; default `lead` |
 
 ### Phase
 
@@ -57,7 +58,10 @@ claudeplans project set-name <project> "<Display Name>"
 | `slug` | str | stable identity key for phase ops; must be unique per doc |
 | `name` | str | human-readable phase name |
 | `status` | `todo` \| `doing` \| `done` \| `blocked` | phase lifecycle state |
+| `intro` | str | intro prose (markdown), rendered above the checklist; set via `phase set --intro` |
 | `tasks` | list[Task] | ordered task list |
+| `exit_criteria` | str | exit-criteria prose (markdown), rendered below the checklist; set via `phase set --exit-criteria` |
+| `notes` | str | phase notes / revision cards (markdown — `!!!`/`???` admonitions live here); set via `phase set --notes` |
 
 ### Task
 
@@ -113,7 +117,7 @@ Exit codes: `0` ok · `2` usage error (bad flag/arg — reserved, never a domain
 
 ## Rendering
 
-The service renders HTML from the model using nh3 (scripts, event handlers, and `javascript:` schemes are stripped). By convention, authors should not hand-write HTML spans, pills, or admonitions in section bodies — write plain markdown and let the service render it.
+The service renders HTML from the model using nh3 (scripts, event handlers, and `javascript:` schemes are stripped). By convention, authors should not hand-write HTML spans or status pills — write plain markdown and let the service render it. Revision/decision admonition cards (`!!!`/`???`) belong in a phase's `notes` field, not in section bodies.
 
 The browsable view URL for a document is obtained via `claudeplans doc view <project> <slug>`. The project lineage page URL is obtained via `claudeplans project view <project>`. Underlying API endpoints (for reference):
 

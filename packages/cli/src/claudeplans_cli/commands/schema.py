@@ -8,7 +8,13 @@ Typer descriptors are module-level singletons to satisfy ruff B008.
 
 import typer
 
-from claudeplans_contracts import DocStatus, DocType, ExitCode, PhaseStatus
+from claudeplans_contracts import (
+    DocStatus,
+    DocType,
+    ExitCode,
+    PhaseStatus,
+    SectionPlacement,
+)
 
 from ..errors import _ERROR_TO_KIND
 from ..output import emit_obj
@@ -45,6 +51,7 @@ def schema(ctx: typer.Context) -> None:
                 "doc_status": [s.value for s in DocStatus],
                 "doc_type": [t.value for t in DocType],
                 "phase_status": [p.value for p in PhaseStatus],
+                "section_placement": [p.value for p in SectionPlacement],
             },
             "env": {
                 "NO_COLOR": "set (any value) for ANSI-free --help / usage output",

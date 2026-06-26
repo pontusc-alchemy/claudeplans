@@ -19,7 +19,7 @@ from pydantic import (
     model_validator,
 )
 
-from .enums import DocStatus, DocType, PhaseStatus
+from .enums import DocStatus, DocType, PhaseStatus, SectionPlacement
 from .keys import validate_key_segment
 
 # Unicode categories that must never appear in single-line content: Cc (C0/C1
@@ -105,6 +105,9 @@ class Section(BaseModel):
     # Bounded to 1..6: it becomes an <h{level}> heading, and nh3 strips <h0>/<h7+>,
     # which would silently drop the heading. Reject out of range at the boundary.
     level: int = Field(2, ge=1, le=6)
+    # Render bucket, not an ordinal: lead sections render before the phase group,
+    # trail sections after. List order still governs ordering within a bucket.
+    placement: SectionPlacement = SectionPlacement.lead
 
     @field_validator("anchor")
     @classmethod
@@ -124,6 +127,11 @@ class Phase(BaseModel):
     name: str
     status: PhaseStatus = PhaseStatus.todo
     tasks: list[Task] = Field(default_factory=list)
+    # Phase prose, stored first-class (was reconstructed at render time). Plain raw
+    # markdown like Section.body — empty/multiline allowed, so no text validator.
+    intro: str = ""
+    exit_criteria: str = ""
+    notes: str = ""
 
     @field_validator("slug")
     @classmethod
@@ -142,6 +150,8 @@ class Document(BaseModel):
     List order is the canonical ordering: the order of `sections`, `phases`, and a
     phase's `tasks` IS the single source of truth. There is deliberately no separate
     ordinal field — it would duplicate the list order and become its own drift surface.
+    `Section.placement` is a render bucket (lead vs trail of the phase group), not an
+    ordinal — it does not reintroduce the rejected ordinal field.
     """
 
     model_config = ConfigDict(extra="forbid")

@@ -8,6 +8,7 @@ from claudeplans_contracts import (
     Document,
     Phase,
     Section,
+    SectionPlacement,
     Task,
     unlink_research_ref,
 )
@@ -256,3 +257,71 @@ def test_duplicate_phase_slugs_rejected() -> None:
             owner_id="u1",
             phases=[Phase(slug="x", name="X"), Phase(slug="x", name="X2")],
         )
+
+
+# --- Phase prose fields ---
+
+
+def test_phase_prose_defaults_are_empty() -> None:
+    # Bare Phase carries empty strings for all three prose fields.
+    p = Phase(slug="x", name="X")
+    assert p.intro == ""
+    assert p.exit_criteria == ""
+    assert p.notes == ""
+
+
+def test_phase_prose_accepts_multiline_and_empty() -> None:
+    # Unlike single-line fields (name, task text), prose fields are raw markdown:
+    # empty strings and embedded newlines are valid and round-trip unchanged.
+    p = Phase(
+        slug="x",
+        name="X",
+        intro="line one\n\nline two",
+        exit_criteria="",
+        notes="!!! note\n    body",
+    )
+    assert p.intro == "line one\n\nline two"
+    assert p.exit_criteria == ""
+    assert p.notes == "!!! note\n    body"
+
+
+# --- Section.placement ---
+
+
+def test_section_default_placement_is_lead() -> None:
+    s = Section(anchor="a", heading="H")
+    assert s.placement is SectionPlacement.lead
+
+
+def test_section_placement_trail_round_trips() -> None:
+    s = Section(anchor="a", heading="H", placement=SectionPlacement.trail)
+    assert s.placement is SectionPlacement.trail
+
+
+def test_section_placement_model_dump_serializes_to_string() -> None:
+    # model_dump() must produce the plain string "trail", not the enum member,
+    # so storage / wire serialisation doesn't leak enum repr.
+    s = Section(anchor="a", heading="H", placement=SectionPlacement.trail)
+    dumped = s.model_dump()
+    assert dumped["placement"] == "trail"
+
+
+def test_section_placement_model_validate_round_trips() -> None:
+    # A raw dict with placement="trail" must parse back to the enum member.
+    raw = {"anchor": "a", "heading": "H", "placement": "trail"}
+    s = Section.model_validate(raw)
+    assert s.placement is SectionPlacement.trail
+
+
+# --- SectionPlacement StrEnum ---
+
+
+def test_section_placement_str_equality() -> None:
+    # StrEnum: members compare equal to their string value.
+    assert SectionPlacement.lead == "lead"
+    assert SectionPlacement.trail == "trail"
+
+
+def test_section_placement_construct_from_string() -> None:
+    assert SectionPlacement("trail") is SectionPlacement.trail
+    assert SectionPlacement("lead") is SectionPlacement.lead

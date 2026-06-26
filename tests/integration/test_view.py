@@ -25,8 +25,8 @@ from claudeplans.config import AuthMode, FilesystemSettings, Settings
 from claudeplans.main import create_app
 from claudeplans.storage.filesystem import FilesystemRepository
 from claudeplans.storage.repository import CREATE
-from claudeplans_contracts import Document
-from claudeplans_contracts.enums import DocType
+from claudeplans_contracts import Document, Phase, Section, Task
+from claudeplans_contracts.enums import DocType, SectionPlacement
 
 DOCS = "/v1/users/dev/projects/demo/docs"
 VIEW = "/v1/users/dev/projects/demo/docs/p1/view"
@@ -538,3 +538,93 @@ async def test_lineage_json_unlinked_plan_carries_status_and_type(
         plan = next(p for p in data["unlinked_plans"] if p["slug"] == "p1")
         assert plan["type"] == "plan"
         assert plan["status"] == "draft"
+
+
+# --- templates: field-map rendering ------------------------------------------
+
+
+def test_phase_prose_rendered_from_fields() -> None:
+    # Prose now comes from first-class Phase fields, not a coupled section blob.
+    doc = Document(
+        type=DocType.plan,
+        project="demo",
+        slug="p1",
+        title="Plan One",
+        owner_id="dev",
+        phases=[
+            Phase(
+                slug="a",
+                name="Alpha",
+                intro="The intro prose.",
+                tasks=[Task(text="do the thing")],
+                exit_criteria="All green.",
+                notes="!!! note\n    A revision card.",
+            )
+        ],
+    )
+    body = templates.render_doc_body(doc)
+    assert "The intro prose." in body
+    assert "<h3>Exit criteria</h3>" in body
+    assert "All green." in body
+    assert "A revision card." in body
+    # Full intra-phase order: intro -> Checklist -> Exit criteria -> notes. Pin every
+    # boundary so a future template reorder can't pass this silently.
+    assert (
+        body.index("The intro prose.")
+        < body.index("<h3>Checklist</h3>")
+        < body.index("<h3>Exit criteria</h3>")
+        < body.index("A revision card.")
+    )
+
+
+def test_phase_prose_injection_is_sanitized() -> None:
+    # The new first-class prose fields are a separately-settable HTML sink; confirm
+    # they get the same nh3 treatment as section bodies — no executable script, and
+    # no attr_list-forged stable fragment id to corrupt idiomorph.
+    doc = Document(
+        type=DocType.plan,
+        project="demo",
+        slug="p1",
+        title="Plan One",
+        owner_id="dev",
+        phases=[
+            Phase(
+                slug="a",
+                name="Alpha",
+                intro="<script>alert(1)</script>",
+                notes="# Pwned {#doc-status .pill .done}",
+            )
+        ],
+    )
+    body = templates.render_doc_body(doc)
+    assert "<script>alert(1)</script>" not in body
+    # The attr_list-injected id is stripped, so the trusted #doc-status stays unique.
+    assert body.count('id="doc-status"') == 1
+
+
+def test_lead_and_trail_sections_bracket_the_phase_group() -> None:
+    # placement=lead renders before all phases; placement=trail after them.
+    doc = Document(
+        type=DocType.plan,
+        project="demo",
+        slug="p1",
+        title="Plan One",
+        owner_id="dev",
+        sections=[
+            Section(anchor="lead1", heading="Lead", placement=SectionPlacement.lead),
+            Section(anchor="trail1", heading="Trail", placement=SectionPlacement.trail),
+        ],
+        phases=[Phase(slug="a", name="Alpha")],
+    )
+    body = templates.render_doc_body(doc)
+    assert (
+        body.index('id="section-lead1"')
+        < body.index('id="phase-a"')
+        < body.index('id="section-trail1"')
+    )
+
+
+def test_no_render_time_split_helpers_remain() -> None:
+    # The string-matching split functions were deleted; render is a pure field map.
+    assert not hasattr(templates, "_split_admonitions")
+    assert not hasattr(templates, "_split_exit_criteria")

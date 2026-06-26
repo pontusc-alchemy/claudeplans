@@ -30,7 +30,7 @@ from claudeplans_contracts import (
     migrate_document,
     owner_of,
 )
-from claudeplans_contracts.enums import DocStatus, PhaseStatus
+from claudeplans_contracts.enums import DocStatus, PhaseStatus, SectionPlacement
 
 from . import deltas
 from .auth.authz import can_write
@@ -206,11 +206,17 @@ async def set_phase(
     key: str,
     slug: str,
     name: str | None,
+    intro: str | None = None,
+    exit_criteria: str | None = None,
+    notes: str | None = None,
     *,
     user: CurrentUser,
 ) -> tuple[str, Document]:
     return await read_modify_write(
-        repo, key, lambda doc: deltas.set_phase(doc, slug, name), user=user
+        repo,
+        key,
+        lambda doc: deltas.set_phase(doc, slug, name, intro, exit_criteria, notes),
+        user=user,
     )
 
 
@@ -251,6 +257,7 @@ async def add_section(
     heading: str,
     body: str,
     level: int,
+    placement: SectionPlacement,
     at: int | None,
     *,
     user: CurrentUser,
@@ -258,7 +265,9 @@ async def add_section(
     return await read_modify_write(
         repo,
         key,
-        lambda doc: deltas.add_section(doc, anchor, heading, body, level, at),
+        lambda doc: deltas.add_section(
+            doc, anchor, heading, body, level, placement, at
+        ),
         user=user,
     )
 
@@ -270,13 +279,14 @@ async def set_section(
     heading: str | None,
     body: str | None,
     level: int | None,
+    placement: SectionPlacement | None,
     *,
     user: CurrentUser,
 ) -> tuple[str, Document]:
     return await read_modify_write(
         repo,
         key,
-        lambda doc: deltas.set_section(doc, anchor, heading, body, level),
+        lambda doc: deltas.set_section(doc, anchor, heading, body, level, placement),
         user=user,
     )
 

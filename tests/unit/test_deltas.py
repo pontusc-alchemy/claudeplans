@@ -12,6 +12,7 @@ from claudeplans_contracts import (
     Phase,
     PhaseStatus,
     Section,
+    SectionPlacement,
     Task,
     ValidationError,
 )
@@ -262,6 +263,36 @@ def test_set_phase_missing_raises() -> None:
         deltas.set_phase(_doc(), "zzz", name="X")
 
 
+def test_set_phase_sets_prose_fields() -> None:
+    doc = _doc()
+    out = deltas.set_phase(
+        doc,
+        "a",
+        name=None,
+        intro="The why",
+        exit_criteria="Done when",
+        notes="!!! note",
+    )
+    phase = out.phases[0]
+    assert phase.intro == "The why"
+    assert phase.exit_criteria == "Done when"
+    assert phase.notes == "!!! note"
+    # name was None -> unchanged.
+    assert phase.name == doc.phases[0].name
+
+
+def test_set_phase_none_prose_leaves_unchanged() -> None:
+    seeded = deltas.set_phase(_doc(), "a", name=None, intro="keep")
+    out = deltas.set_phase(seeded, "a", name=None)
+    assert out.phases[0].intro == "keep"
+
+
+def test_set_phase_empty_string_clears_prose() -> None:
+    seeded = deltas.set_phase(_doc(), "a", name=None, intro="something")
+    out = deltas.set_phase(seeded, "a", name=None, intro="")
+    assert out.phases[0].intro == ""
+
+
 # --- move_section ------------------------------------------------------------
 
 
@@ -411,3 +442,45 @@ def test_merge_patch_dict_merges_recursively() -> None:
 
 def test_merge_patch_scalar_replaces() -> None:
     assert _merge_patch({"a": 1}, {"a": 2}) == {"a": 2}
+
+
+# --- section placement -------------------------------------------------------
+
+
+def test_add_section_defaults_placement_lead() -> None:
+    out = deltas.add_section(_doc(), "ctx", "Context", "body", 2)
+    added = next(s for s in out.sections if s.anchor == "ctx")
+    assert added.placement is SectionPlacement.lead
+
+
+def test_add_section_placement_trail() -> None:
+    out = deltas.add_section(
+        _doc(), "ctx", "Context", "body", 2, placement=SectionPlacement.trail
+    )
+    added = next(s for s in out.sections if s.anchor == "ctx")
+    assert added.placement is SectionPlacement.trail
+
+
+def test_set_section_updates_placement() -> None:
+    doc = deltas.add_section(_doc(), "ctx", "Context", "body", 2)
+    out = deltas.set_section(
+        doc,
+        "ctx",
+        heading=None,
+        body=None,
+        level=None,
+        placement=SectionPlacement.trail,
+    )
+    assert next(s for s in out.sections if s.anchor == "ctx").placement is (
+        SectionPlacement.trail
+    )
+
+
+def test_set_section_none_placement_leaves_unchanged() -> None:
+    doc = deltas.add_section(
+        _doc(), "ctx", "Context", "body", 2, placement=SectionPlacement.trail
+    )
+    out = deltas.set_section(doc, "ctx", heading="New", body=None, level=None)
+    assert next(s for s in out.sections if s.anchor == "ctx").placement is (
+        SectionPlacement.trail
+    )

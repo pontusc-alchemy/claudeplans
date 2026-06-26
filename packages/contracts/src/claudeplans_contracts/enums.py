@@ -26,3 +26,8 @@ class PhaseStatus(StrEnum):
     doing = "doing"
     done = "done"
     blocked = "blocked"
+
+
+class SectionPlacement(StrEnum):
+    lead = "lead"
+    trail = "trail"
