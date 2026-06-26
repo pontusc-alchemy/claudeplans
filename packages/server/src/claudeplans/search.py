@@ -45,9 +45,9 @@ from .storage.repository import Repository
 
 logger = logging.getLogger(__name__)
 
-# Hit-kind sort priority: a document's own title is its primary identity, so a title
-# match sorts ahead of its structural (phase) and prose (section) matches.
-_KIND_ORDER: dict[str, int] = {"title": 0, "phase": 1, "section": 2}
+# Hit-kind sort priority (a score tie-breaker only — ranking is by match score):
+# a project, then a document's own title, then its phases, then its sections.
+_KIND_ORDER: dict[str, int] = {"project": 0, "title": 1, "phase": 2, "section": 3}
 
 
 def _fold(text: str) -> str:
@@ -55,6 +55,54 @@ def _fold(text: str) -> str:
     heading (and vice versa) — `.casefold()` alone leaves canonical equivalents
     as distinct byte sequences, silently missing visually-identical non-ASCII text."""
     return unicodedata.normalize("NFC", text).casefold()
+
+
+def _score_term(term: str, s: str) -> float | None:
+    """Score one query `term` against an already-folded candidate `s` (higher is
+    better); None when `term` is not even an in-order subsequence of `s`. A contiguous
+    substring scores highest; a looser character scatter scores lower; an earlier,
+    word-boundary-aligned match scores higher. This is the fzf-style fuzzy primitive:
+    `term` need only appear as an in-order subsequence, so "hpx" matches "httpx"."""
+    m = len(term)
+    if m == 0:
+        return 0.0
+    sub = s.find(term)
+    if sub != -1:
+        first, span, contiguous = sub, m, True
+    else:
+        first = last = -1
+        ti = 0
+        for i, ch in enumerate(s):
+            if ch == term[ti]:
+                if first < 0:
+                    first = i
+                last = i
+                ti += 1
+                if ti == m:
+                    break
+        if ti < m:
+            return None
+        span, contiguous = last - first + 1, False
+    tightness = m / span  # (0, 1]; 1.0 when the matched chars are contiguous
+    boundary = 1.0 if first == 0 or not s[first - 1].isalnum() else 0.0
+    score = tightness * 3.0 + boundary + 0.5 / (first + 1)
+    if contiguous:
+        score += 1.0
+    return score
+
+
+def _match(terms: list[str], text: str) -> float | None:
+    """Total fuzzy score for `text` against every term (AND); None if any term misses.
+    Splitting the query into whitespace terms is what lets "httpx aio" match
+    "httpx vs aiohttp" even though that exact substring never occurs."""
+    s = _fold(text)
+    total = 0.0
+    for term in terms:
+        score = _score_term(term, s)
+        if score is None:
+            return None
+        total += score
+    return total
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,33 +211,84 @@ class SearchIndex:
         # key, whereas evicting would drop a good entry on a transient blip.
         self._docs[key] = _project(key, doc)
 
-    def query(self, q: str, *, prefix: str = "") -> SearchResults:
-        """Return hits whose title/heading/phase-name contains `q` (case-insensitive).
+    def query(
+        self,
+        q: str,
+        *,
+        prefix: str = "",
+        project_names: dict[str, str] | None = None,
+    ) -> SearchResults:
+        """Return fuzzy hits over titles, section/phase headings, and — when
+        `project_names` is supplied — project display names.
 
-        `prefix` scopes the search to a key prefix (e.g. `"alice/demo/"` for one
-        user+project); empty matches every document. Hits are ordered deterministically.
+        `prefix` scopes to a key prefix (`"alice/demo/"` for one user+project,
+        `"alice/"` for one user across projects). The query is split into whitespace
+        terms; an entry matches when every term is an in-order subsequence of it, and
+        results are ranked by summed match score (best first) with deterministic
+        tie-breakers. `project_names` (slug -> display name; missing slugs fall back to
+        the slug) enables `kind="project"` hits that navigate to the lineage page — it
+        is passed only by the user-scoped route, so per-project search is unchanged.
         """
-        needle = _fold(q.strip())
-        hits: list[SearchHit] = []
-        if not needle:
-            return SearchResults(query=q, hits=hits)
+        terms = _fold(q).split()
+        if not terms:
+            return SearchResults(query=q, hits=[])
+        # (score, key, kind-order, text) sort tuple paired with its hit; score is
+        # negated at sort time so the strongest match leads.
+        scored: list[tuple[float, str, int, str, SearchHit]] = []
+
+        def add(score: float, key: str, order: int, text: str, hit: SearchHit) -> None:
+            scored.append((score, key, order, text, hit))
+
+        projects_seen: set[str] = set()
         for doc in self._docs.values():
             if not doc.key.startswith(prefix):
                 continue
-            if needle in _fold(doc.title):
-                hits.append(self._hit(doc, kind="title", text=doc.title, anchor=None))
+            projects_seen.add(doc.project)
+            score = _match(terms, doc.title)
+            if score is not None:
+                add(
+                    score,
+                    doc.key,
+                    _KIND_ORDER["title"],
+                    doc.title,
+                    self._hit(doc, kind="title", text=doc.title, anchor=None),
+                )
             for heading, anchor in doc.sections:
-                if needle in _fold(heading):
-                    hits.append(
-                        self._hit(doc, kind="section", text=heading, anchor=anchor)
+                score = _match(terms, heading)
+                if score is not None:
+                    add(
+                        score,
+                        doc.key,
+                        _KIND_ORDER["section"],
+                        heading,
+                        self._hit(doc, kind="section", text=heading, anchor=anchor),
                     )
             for name, slug in doc.phases:
-                if needle in _fold(name):
-                    hits.append(self._hit(doc, kind="phase", text=name, anchor=slug))
-        # Group by document, then title-before-phase-before-section, then stable on
-        # text+anchor so duplicate headings (same text, distinct anchor) stay ordered.
-        hits.sort(key=lambda h: (h.key, _KIND_ORDER[h.kind], h.text, h.anchor or ""))
-        return SearchResults(query=q, hits=hits)
+                score = _match(terms, name)
+                if score is not None:
+                    add(
+                        score,
+                        doc.key,
+                        _KIND_ORDER["phase"],
+                        name,
+                        self._hit(doc, kind="phase", text=name, anchor=slug),
+                    )
+        if project_names is not None:
+            for project in projects_seen:
+                display = project_names.get(project, project)
+                score = _match(terms, display)
+                if score is None and display != project:
+                    score = _match(terms, project)  # also let the bare slug match
+                if score is not None:
+                    add(
+                        score,
+                        project,
+                        _KIND_ORDER["project"],
+                        display,
+                        self._project_hit(project, display),
+                    )
+        scored.sort(key=lambda r: (-r[0], r[1], r[2], r[3]))
+        return SearchResults(query=q, hits=[r[4] for r in scored])
 
     @staticmethod
     def _hit(
@@ -209,4 +308,20 @@ class SearchIndex:
             kind=kind,
             text=text,
             anchor=anchor,
+        )
+
+    @staticmethod
+    def _project_hit(project: str, display: str) -> SearchHit:
+        """A project-level hit: no document, navigates to the lineage page. `type`
+        and `status` are None — a project is not a document."""
+        return SearchHit(
+            key=project,
+            project=project,
+            slug="",
+            title=display,
+            type=None,
+            status=None,
+            kind="project",
+            text=display,
+            anchor=None,
         )

@@ -43,7 +43,9 @@ def live_server(tmp_path: Path) -> Iterator[str]:
     app = create_app(
         Settings(
             auth_mode=AuthMode.noop,
-            filesystem=FilesystemSettings(root=str(tmp_path)),
+            filesystem=FilesystemSettings(root=str(tmp_path / "data")),
+            registry_path=str(tmp_path / "users.json"),
+            project_registry_path=str(tmp_path / "projects.json"),
         )
     )
     port = _free_port()
@@ -176,3 +178,122 @@ async def test_user_search_spans_multiple_projects(live_server: str) -> None:
     # Endpoint also requires q.
     async with httpx.AsyncClient(base_url=live_server) as client:
         assert (await client.get(user_search)).status_code == 422
+
+
+async def test_user_search_is_fuzzy_multiterm(live_server: str) -> None:
+    """Whitespace terms each match as a subsequence: 'httpx aio' finds a heading
+    'HTTPX vs aiohttp', and 'hpx' finds the title 'HTTPX migration'."""
+    async with httpx.AsyncClient(base_url=live_server) as client:
+        await client.post(
+            DOCS,
+            json={
+                "type": "plan",
+                "slug": "h1",
+                "title": "HTTPX migration",
+                "sections": [
+                    {"anchor": "cmp", "heading": "HTTPX vs aiohttp", "level": 2}
+                ],
+            },
+        )
+        hits = await _poll_hits(client, "httpx aio")
+        assert any(h["kind"] == "section" and h["anchor"] == "cmp" for h in hits)
+        hits2 = await _poll_hits(client, "hpx")
+        assert any(h["kind"] == "title" and h["slug"] == "h1" for h in hits2)
+
+
+async def test_user_search_matches_project_display_name(live_server: str) -> None:
+    """Searching a project's display name yields a kind='project' hit that points at
+    that project (navigates to its lineage page), fuzzily and across projects."""
+    user_search = "/v1/users/dev/search"
+    async with httpx.AsyncClient(base_url=live_server) as client:
+        # A project exists only if it has a doc; then give it a display name.
+        await client.post(
+            "/v1/users/dev/projects/other/docs",
+            json={"type": "plan", "slug": "q1", "title": "Beta Plan"},
+        )
+        named = await client.put(
+            "/v1/users/dev/projects/other/name",
+            json={"name": "Onboarding Restructure"},
+        )
+        assert named.status_code == 200
+
+        async def _project_hit() -> dict[str, object] | None:
+            r = await client.get(user_search, params={"q": "onboarding restruct"})
+            if r.status_code != 200:
+                return None
+            for h in r.json()["hits"]:
+                if h["kind"] == "project" and h["project"] == "other":
+                    return h
+            return None
+
+        hit: dict[str, object] | None = None
+        for _ in range(100):
+            hit = await _project_hit()
+            if hit is not None:
+                break
+            await asyncio.sleep(0.02)
+        assert hit is not None, "project display-name search returned no project hit"
+        assert hit["project_name"] == "Onboarding Restructure"
+        assert hit["slug"] == ""
+
+
+async def test_user_search_ranks_substring_above_scatter(live_server: str) -> None:
+    """Scoring favors a contiguous substring over a scattered subsequence: 'beta'
+    matches both 'Beta plan' (substring) and 'Bears eat tasty apples' (scatter), and
+    the substring title must rank first."""
+    url = "/v1/users/dev/projects/demo/search"
+    async with httpx.AsyncClient(base_url=live_server) as client:
+        await client.post(
+            DOCS, json={"type": "plan", "slug": "r1", "title": "Beta plan"}
+        )
+        await client.post(
+            DOCS, json={"type": "plan", "slug": "r2", "title": "Bears eat tasty apples"}
+        )
+        order: list[str] = []
+        for _ in range(100):
+            r = await client.get(url, params={"q": "beta"})
+            assert r.status_code == 200
+            titles = [h["slug"] for h in r.json()["hits"] if h["kind"] == "title"]
+            if {"r1", "r2"} <= set(titles):
+                order = titles
+                break
+            await asyncio.sleep(0.02)
+        else:
+            raise AssertionError("both docs were not indexed")
+        assert order[0] == "r1"  # the contiguous-substring match leads
+        assert order.index("r1") < order.index("r2")
+
+
+async def test_user_search_matches_project_by_slug_when_name_differs(
+    live_server: str,
+) -> None:
+    """A project still matches on its slug even when it has a display name that does
+    not match the query — and the resulting hit still carries the display name."""
+    user_search = "/v1/users/dev/search"
+    async with httpx.AsyncClient(base_url=live_server) as client:
+        await client.post(
+            "/v1/users/dev/projects/redis/docs",
+            json={"type": "plan", "slug": "r1", "title": "Beta Plan"},
+        )
+        named = await client.put(
+            "/v1/users/dev/projects/redis/name", json={"name": "Cache Layer"}
+        )
+        assert named.status_code == 200
+
+        async def _slug_hit() -> dict[str, object] | None:
+            r = await client.get(user_search, params={"q": "redis"})
+            if r.status_code != 200:
+                return None
+            for h in r.json()["hits"]:
+                if h["kind"] == "project" and h["project"] == "redis":
+                    return h
+            return None
+
+        hit: dict[str, object] | None = None
+        for _ in range(100):
+            hit = await _slug_hit()
+            if hit is not None:
+                break
+            await asyncio.sleep(0.02)
+        assert hit is not None, "slug-fallback project match returned no project hit"
+        assert hit["project_name"] == "Cache Layer"

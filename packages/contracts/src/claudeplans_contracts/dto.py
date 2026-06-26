@@ -203,9 +203,9 @@ class SearchHit(BaseModel):
     project: str
     slug: str
     title: str
-    type: DocType
-    status: DocStatus
-    kind: Literal["title", "section", "phase"]
+    type: DocType | None = None
+    status: DocStatus | None = None
+    kind: Literal["title", "section", "phase", "project"]
     text: str
     anchor: str | None = None
     project_name: str | None = None
