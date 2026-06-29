@@ -20,7 +20,7 @@ Generate a URL-safe slug for the plan title (kebab-case, ≤40 chars). Create th
 claudeplans doc create "<project>" --type plan --slug "<slug>" --title "<plan title>"
 ```
 
-→ the slim create reply `{slug, type, rev, warnings}` (pass `--full`/`-v` for the whole `{rev, data, warnings}` envelope); non-zero exit → relay stderr and stop. The project is created implicitly on the first doc and there is no new-project warning — so if this is a NEW project (not in `claudeplans project list`), **confirm the project name with the user first**: both the URL-safe slug and the intended display name. Keep the plan `--title` short and navigable (a few words); the descriptive detail belongs in the doc's summary, not the title. After creating a new project's first doc, set its display name: `claudeplans project set-name "<project>" "<Display Name>"`.
+→ the slim create reply `{slug, type, rev, warnings}` (pass `--full`/`-v` for the whole `{rev, data, warnings}` envelope); non-zero exit → relay stderr and stop. The project is created implicitly on the first doc and there is no new-project warning — so if this is a NEW project (not in `claudeplans project list`), **confirm the project name with the user first**: both the URL-safe slug and the intended display name. Keep the plan `--title` short and navigable (a few words); the descriptive detail belongs in the doc's summary, not the title. After creating a new project's first doc, set its display name: `claudeplans project set-name "<project>" "<Display Name>"`. The shell form also accepts `--status`/`--description`/`--date` in the same call (e.g. reconstructing a completed plan with `--status done`), avoiding a follow-up `doc set`/`set-status`.
 
 ## Input — where the plan comes from
 
@@ -41,6 +41,8 @@ Add phases and tasks:
 claudeplans phase add "<project>" "<slug>" "<phase-slug>" "<Phase Name>"
 claudeplans task add "<project>" "<slug>" "<phase-slug>" "Task description"
 ```
+
+`task add --checked` creates a task already-checked in one rev-free call — use it when reconstructing an already-completed plan so you skip the per-task `toggle --rev` loop (read rev → toggle → repeat). The default is unchecked.
 
 Add prose sections:
 

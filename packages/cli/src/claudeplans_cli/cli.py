@@ -25,6 +25,7 @@ if os.environ.get("NO_COLOR"):
 from .client import PlanClient
 from .commands import config as config_cmd
 from .commands import doc, phase, section, task
+from .commands import doctor as doctor_cmd
 from .commands import project as project_cmd
 from .commands import schema as schema_cmd
 from .commands import search as search_cmd
@@ -40,6 +41,7 @@ app.add_typer(task.app, name="task")
 app.add_typer(section.app, name="section")
 app.add_typer(project_cmd.app, name="project")
 app.add_typer(config_cmd.app, name="config")
+app.command("doctor")(doctor_cmd.doctor)
 app.command("search")(search_cmd.search)
 app.command("schema")(schema_cmd.schema)
 

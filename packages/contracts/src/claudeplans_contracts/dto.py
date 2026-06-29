@@ -114,6 +114,7 @@ class AddTaskRequest(BaseModel):
 
     text: str
     at: int | None = None
+    checked: bool = False
 
 
 class ToggleTaskRequest(BaseModel):

@@ -7,6 +7,7 @@ escape hatch is Document.frontmatter, a free-form dict for metadata we don't mod
 
 from __future__ import annotations
 
+import datetime
 import re
 import unicodedata
 
@@ -193,6 +194,20 @@ class Document(BaseModel):
     @classmethod
     def _validate_description(cls, v: str | None) -> str | None:
         return v if v is None else validate_text_field(v, field="description")
+
+    @field_validator("date")
+    @classmethod
+    def _validate_date(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        v = validate_text_field(v, field="date")
+        try:
+            datetime.date.fromisoformat(v)
+        except ValueError as exc:
+            raise ValueError(
+                f"date must be an ISO date (YYYY-MM-DD), got {v!r}"
+            ) from exc
+        return v
 
     @field_validator("research_refs")
     @classmethod

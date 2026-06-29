@@ -38,10 +38,14 @@ def add(
     phase_slug: str,
     text: Annotated[str, _TEXT],
     at: Annotated[int | None, _AT] = None,
+    checked: Annotated[bool, _CHECKED] = False,
 ) -> None:
-    """Append a task to a phase, or insert at --at if given."""
+    """Append a task to a phase, or insert at --at if given.
+
+    Use --checked/--unchecked to set the initial state; defaults to unchecked.
+    """
     c: AppContext = ctx.obj
-    reply = c.client.add_task(c.uid, project, slug, phase_slug, text, at)
+    reply = c.client.add_task(c.uid, project, slug, phase_slug, text, at, checked)
     data = reply.data or {}
     phase = next(
         (p for p in data.get("phases", []) if p.get("slug") == phase_slug), None

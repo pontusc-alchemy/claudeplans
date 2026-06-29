@@ -139,17 +139,21 @@ def remove_phase(doc: Document, slug: str) -> Document:
 
 
 def add_task(
-    doc: Document, phase_slug: str, text: str, at: int | None = None
+    doc: Document,
+    phase_slug: str,
+    text: str,
+    at: int | None = None,
+    checked: bool = False,
 ) -> Document:
     """Append a task to phase `phase_slug`, or insert at `at` if given."""
     i = _find_phase(doc, phase_slug)
     tasks = list(doc.phases[i].tasks)
     if at is None:
-        tasks.append(Task(text=text))
+        tasks.append(Task(text=text, checked=checked))
     else:
         if not 0 <= at <= len(tasks):
             raise ValidationError(f"at {at} out of range")
-        tasks.insert(at, Task(text=text))
+        tasks.insert(at, Task(text=text, checked=checked))
     phases = list(doc.phases)
     phases[i] = phases[i].model_copy(update={"tasks": tasks})
     return doc.model_copy(update={"phases": phases})

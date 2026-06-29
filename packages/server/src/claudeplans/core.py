@@ -242,11 +242,15 @@ async def add_task(
     phase_slug: str,
     text: str,
     at: int | None,
+    checked: bool = False,
     *,
     user: CurrentUser,
 ) -> tuple[str, Document]:
     return await read_modify_write(
-        repo, key, lambda doc: deltas.add_task(doc, phase_slug, text, at), user=user
+        repo,
+        key,
+        lambda doc: deltas.add_task(doc, phase_slug, text, at, checked),
+        user=user,
     )
 
 

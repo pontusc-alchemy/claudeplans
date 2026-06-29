@@ -68,7 +68,7 @@ claudeplans project set-name <project> "<Display Name>"
 | Field | Type | Notes |
 |-------|------|-------|
 | `text` | str | task description |
-| `checked` | bool | completion state; default `false` |
+| `checked` | bool | completion state; default `false`; settable at creation via `task add --checked` |
 
 ## Status lifecycle
 
@@ -80,7 +80,7 @@ claudeplans project set-name <project> "<Display Name>"
 
 A doc is identified by `(uid, project, slug)`. The slug is the document's identity — renaming requires re-creating the doc. Inter-doc links use the slug (stored in `research_refs`).
 
-The service url and uid come from the CLI config, set once at setup via `claudeplans config set` and readable via `claudeplans config show`. The default fallback is `http://127.0.0.1:8000` with uid `dev`. All values are overridable per-call via `--url`/`--uid` flags or the `CLAUDEPLANS_URL`/`CLAUDEPLANS_UID` env vars — do not hardcode the URL in skills.
+The service url and uid come from the CLI config, set once at setup via `claudeplans config set` and readable via `claudeplans config show`. The default fallback is `http://127.0.0.1:8000` with uid `dev`. All values are overridable per-call via `--url`/`--uid` flags or the `CLAUDEPLANS_URL`/`CLAUDEPLANS_UID` env vars — do not hardcode the URL in skills. To confirm where the CLI is pointed and whether that server is reachable before issuing a write, run `claudeplans doctor` → JSON `{url, uid, reachable, version?, storage_backend?, auth_mode?, detail?}` (always exits 0; a transport failure or mis-targeted config surfaces as `reachable: false`).
 
 Discovery of what exists is done via the CLI:
 - `claudeplans project list` — lists all projects (JSON)
@@ -99,10 +99,10 @@ claudeplans doc create|get|delete|status|set-status|set|phases|link|unlink|list|
 claudeplans phase add|set|set-status|move|rm
 claudeplans task add|toggle|set-checked|edit|rm
 claudeplans section add|set|patch|move|rm
-claudeplans search|schema
+claudeplans search|schema|doctor
 ```
 
-`doc list` takes `--type research|plan`; `task add` / `section add` take `--at INDEX` for a positional insert (append if omitted). `claudeplans schema` dumps the authoritative machine-readable contract — enums, exit codes, envelope shapes, the `conditional_writes` (which ops need `--rev`), and the `NO_COLOR` env note.
+`doc list` takes `--type research|plan`; `task add` / `section add` take `--at INDEX` for a positional insert (append if omitted). `task add` also takes `--checked` to create a task already-checked in one rev-free call (handy when authoring an already-completed plan — skips the per-task `toggle --rev` loop). `doc create`'s shell form takes `--status`/`--description`/`--date` so a described/active/done doc lands in one call (or pass the whole body, including nested sections and phases-with-tasks, via `--from-json`). `claudeplans schema` dumps the authoritative machine-readable contract — enums, exit codes, envelope shapes, the `conditional_writes` (which ops need `--rev`), and the `NO_COLOR` env note.
 
 Position-sensitive ops (`task toggle`, `task set-checked`, `task edit`, `task rm`, `phase move`, `section move`, `doc delete`) require `--rev` (the `rev` field from a prior `doc phases`/`doc rev` or a write reply) — the optimistic-concurrency token. Exit 9 means stale rev; re-read and retry. Stable-key ops (`status`, `set`, `add`, rename) are rev-free.
 

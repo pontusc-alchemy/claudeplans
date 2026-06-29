@@ -55,6 +55,49 @@ def test_create_from_stdin_exits_ok_and_prints_slug(patched_cli: None) -> None:
     assert "data" not in parsed
 
 
+def test_doc_create_shell_flags_set_status_description_date(patched_cli: None) -> None:
+    # The shell create form lands status/description/date in ONE call (no follow-up
+    # doc set / set-status).
+    result = runner.invoke(
+        cli.app,
+        [
+            "doc",
+            "create",
+            "demo",
+            "--type",
+            "plan",
+            "--slug",
+            "sc",
+            "--title",
+            "SC",
+            "--status",
+            "active",
+            "--description",
+            "a desc",
+            "--date",
+            "2026-06-26",
+        ],
+    )
+    assert result.exit_code == 0
+    doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "sc"]).stdout)
+    data = doc["data"]
+    assert data["status"] == "active"
+    assert data["description"] == "a desc"
+    assert data["date"] == "2026-06-26"
+
+
+def test_doc_create_shell_status_omitted_defaults_draft(patched_cli: None) -> None:
+    # Omitting --status falls back to the DTO's draft default (status is only added
+    # to the create body when explicitly given).
+    result = runner.invoke(
+        cli.app,
+        ["doc", "create", "demo", "--type", "plan", "--slug", "sc2", "--title", "SC2"],
+    )
+    assert result.exit_code == 0
+    doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "sc2"]).stdout)
+    assert doc["data"]["status"] == "draft"
+
+
 def test_get_missing_doc_exits_not_found(patched_cli: None) -> None:
     result = runner.invoke(cli.app, ["doc", "get", "demo", "ghost"])
     assert result.exit_code == ExitCode.NOT_FOUND
@@ -937,6 +980,36 @@ def test_task_add_at_emits_index(patched_cli: None) -> None:
     assert "data" not in parsed
 
 
+# Task 3 (new): task add --checked creates a pre-checked task.
+def test_task_add_checked_flag_creates_checked_task(patched_cli: None) -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app, ["task", "add", "demo", "p1", "a", "pre-done", "--checked"]
+    )
+    assert result.exit_code == 0
+    doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "p1"]).stdout)
+    tasks = doc["data"]["phases"][0]["tasks"]
+    added = tasks[-1]
+    assert added["text"] == "pre-done"
+    assert added["checked"] is True
+
+
+# Task 3 (new): task add without --checked defaults to unchecked.
+def test_task_add_default_is_unchecked(patched_cli: None) -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(cli.app, ["task", "add", "demo", "p1", "a", "plain-task"])
+    assert result.exit_code == 0
+    doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "p1"]).stdout)
+    tasks = doc["data"]["phases"][0]["tasks"]
+    added = tasks[-1]
+    assert added["text"] == "plain-task"
+    assert added["checked"] is False
+
+
 # Task 4: NO_COLOR=1 produces zero ANSI escape sequences.
 def test_no_color_help_has_no_ansi() -> None:
     import subprocess
@@ -1411,5 +1484,119 @@ def test_phase_set_missing_file_exits_validation(patched_cli: None) -> None:
     result = runner.invoke(
         cli.app,
         ["phase", "set", "demo", "p1", "a", "--notes-file", "/nonexistent/nope.md"],
+    )
+    assert result.exit_code == ExitCode.VALIDATION
+
+
+# ---------------------------------------------------------------------------
+# Feature: doctor flat command
+# ---------------------------------------------------------------------------
+
+
+def test_doctor_reports_reachable(patched_cli: None) -> None:
+    result = runner.invoke(cli.app, ["doctor"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    assert parsed["reachable"] is True
+    # `url` reflects the env/config-resolved value — assert it's a non-empty string.
+    assert isinstance(parsed["url"], str) and parsed["url"]
+    assert parsed["uid"] == "dev"
+    # /status returns identity fields; the in-process app surfaces auth_mode.
+    assert "auth_mode" in parsed
+
+
+def test_doctor_reports_unreachable_exit_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A down server: every request refused. doctor exercises the real
+    # health() -> get() -> raise_for_status() path and reports reachable:false,
+    # exit 0, with a detail string — never a traceback (house MockTransport style).
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    down_client = PlanClient(
+        http_client=httpx.Client(
+            base_url="http://t", transport=httpx.MockTransport(refuse)
+        )
+    )
+    monkeypatch.setattr(cli, "build_client", lambda url: down_client)
+    result = runner.invoke(cli.app, ["doctor"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    assert parsed["reachable"] is False
+    assert parsed["detail"]
+
+
+def test_doctor_non_2xx_reports_unreachable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A server that responds with 503 — HTTPStatusError branch. doctor must still
+    # exit 0 and report reachable:false with a truthy detail string.
+    def always_503(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503)
+
+    down_client = PlanClient(
+        http_client=httpx.Client(
+            base_url="http://t", transport=httpx.MockTransport(always_503)
+        )
+    )
+    monkeypatch.setattr(cli, "build_client", lambda url: down_client)
+    result = runner.invoke(cli.app, ["doctor"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    assert parsed["reachable"] is False
+    assert parsed["detail"]
+
+
+def test_doctor_bad_url_no_traceback() -> None:
+    # A malformed URL whose host fails IDNA resolution at request-build time.
+    # Uses the REAL build_client (no patched_cli) so httpx.InvalidURL is raised
+    # inside health() and caught by the broad except in doctor. Regression guard
+    # for the IDNA-at-request-build crash — no network needed.
+    result = runner.invoke(cli.app, ["--url", "http://xn--/x", "doctor"])
+    assert result.exit_code == 0
+    assert "Traceback" not in result.stdout
+    assert "Traceback" not in (result.stderr or "")
+    assert json.loads(result.stdout)["reachable"] is False
+
+
+def test_doc_create_date_rejects_control_chars(patched_cli: None) -> None:
+    # A newline embedded in --date must be rejected as a control character (exit 4).
+    result = runner.invoke(
+        cli.app,
+        [
+            "doc",
+            "create",
+            "demo",
+            "--type",
+            "plan",
+            "--slug",
+            "dd1",
+            "--title",
+            "T",
+            "--date",
+            "2026\nINJECT",
+        ],
+    )
+    assert result.exit_code == ExitCode.VALIDATION
+
+
+def test_doc_create_date_rejects_non_iso(patched_cli: None) -> None:
+    # A syntactically invalid date string must be rejected (exit 4).
+    result = runner.invoke(
+        cli.app,
+        [
+            "doc",
+            "create",
+            "demo",
+            "--type",
+            "plan",
+            "--slug",
+            "dd2",
+            "--title",
+            "T",
+            "--date",
+            "not-a-date",
+        ],
     )
     assert result.exit_code == ExitCode.VALIDATION

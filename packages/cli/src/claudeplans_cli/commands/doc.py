@@ -64,6 +64,11 @@ _SET_FRONTMATTER = typer.Option(
     "--frontmatter",
     help="JSON object; REPLACES the entire frontmatter dict (omitted keys are lost).",
 )
+_CREATE_STATUS = typer.Option(
+    "--status", help="initial status (default draft); ignored with --from-json"
+)
+_CREATE_DESCRIPTION = typer.Option("--description", help="ignored with --from-json")
+_CREATE_DATE = typer.Option("--date", help="ISO date; ignored with --from-json")
 
 
 @app.command()
@@ -75,18 +80,35 @@ def create(
     from_json: Annotated[str | None, _FROM_JSON] = None,
     slug: Annotated[str | None, _SLUG] = None,
     title: Annotated[str | None, _TITLE] = None,
+    status: Annotated[DocStatus | None, _CREATE_STATUS] = None,
+    description: Annotated[str | None, _CREATE_DESCRIPTION] = None,
+    date: Annotated[str | None, _CREATE_DATE] = None,
 ) -> None:
-    """Create a document from a full JSON body or from --type/--slug/--title."""
+    """Create a document from a full JSON body or from the shell flags.
+
+    Shell form: --type/--slug/--title plus optional --status/--description/--date,
+    so a described/active doc lands in one call. The shell flags are ignored when
+    --from-json is given (it carries the whole body, including its own status).
+    """
     c: AppContext = ctx.obj
     if from_json is not None:
         raw = sys.stdin.read() if from_json == "-" else from_json
         payload = DocumentCreate.model_validate_json(raw)
     else:
         # Validate from a dict so missing flags surface as pydantic ValidationError
-        # (-> exit 4) rather than a static type error on the constructor.
-        payload = DocumentCreate.model_validate(
-            {"type": type_, "slug": slug, "title": title}
-        )
+        # (-> exit 4) rather than a static type error on the constructor. status is
+        # included only when given so the DTO's draft default applies otherwise
+        # (status: DocStatus does not accept None); date/description accept None.
+        fields: dict[str, object] = {
+            "type": type_,
+            "slug": slug,
+            "title": title,
+            "description": description,
+            "date": date,
+        }
+        if status is not None:
+            fields["status"] = status
+        payload = DocumentCreate.model_validate(fields)
     reply = c.client.create_document(c.uid, project, payload.model_dump(mode="json"))
     emit_write(reply, full=c.full, slice_="create")
 

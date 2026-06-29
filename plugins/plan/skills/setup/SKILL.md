@@ -30,7 +30,7 @@ From a separate shell (while `make up` is running):
 curl -fs http://127.0.0.1:8000/healthz
 ```
 
-A 200 response means the stack is ready. If the curl fails, check the `make up` terminal for errors or run `docker compose logs`.
+A 200 response means the stack is ready. If the curl fails, check the `make up` terminal for errors or run `docker compose logs`. Once the CLI config points at the stack, `claudeplans doctor` is the CLI-native check — it reports reachability plus the server's version/auth mode as JSON (always exit 0).
 
 ## 3 — Store the service address
 

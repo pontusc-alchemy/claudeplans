@@ -68,6 +68,10 @@ def schema(ctx: typer.Context) -> None:
                 "write_phases_ordering": "{rev, warnings, phases:[{slug,status}]}",
                 "list": "{data, warnings}  (data: items-list|lineage-tree|search-hits)",
                 "view": "{url}",
+                "doctor": (
+                    "{url, uid, reachable, version?, storage_backend?, "
+                    "auth_mode?, detail?}"
+                ),
                 "error_stderr": ("{error, detail}  (stale_rev: {error, current_rev})"),
                 "full_flag": "--full/-v restores {rev, data, warnings} on writes",
             },

@@ -146,6 +146,19 @@ class PlanClient:
         self._raise_for_status(resp)
         return resp.json()
 
+    def health(self) -> dict[str, str]:
+        """GET /status — a liveness + identity probe for `doctor`.
+
+        Hits /status rather than /healthz so the probe also returns the server's
+        version, storage backend, and auth mode — enough to tell a mis-targeted
+        but live server from the intended one, not merely that *something*
+        answered. Raises the raw httpx/parse error (it does NOT route through
+        `_raise_for_status` into the PlanError hierarchy) so `doctor` can report
+        it as `reachable: false`."""
+        resp = self._http.get("/status")
+        resp.raise_for_status()
+        return resp.json()
+
     def list_projects(self, uid: str) -> object:
         """GET /v1/users/{uid}/projects → ProjectList plain JSON."""
         return self._get_json(f"/v1/users/{_seg(uid)}/projects")
@@ -290,8 +303,9 @@ class PlanClient:
         phase_slug: str,
         text: str,
         at: int | None = None,
+        checked: bool = False,
     ) -> Reply:
-        body = AddTaskRequest(text=text, at=at)
+        body = AddTaskRequest(text=text, at=at, checked=checked)
         resp = self._http.post(
             f"{self._doc_base(uid, project, slug)}/phases/{_seg(phase_slug)}/tasks",
             json=body.model_dump(mode="json", exclude_none=True),

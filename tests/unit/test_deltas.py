@@ -347,6 +347,18 @@ def test_add_task_at_len_appends() -> None:
     assert [t.text for t in out.phases[0].tasks] == ["t1", "t2", "t3"]
 
 
+def test_add_task_checked_true_sets_checked() -> None:
+    # Passing checked=True should create the task with checked=True.
+    out = deltas.add_task(_doc(), "a", "t", checked=True)
+    assert out.phases[0].tasks[-1].checked is True
+
+
+def test_add_task_checked_default_is_false() -> None:
+    # Omitting checked (the default) should create the task with checked=False.
+    out = deltas.add_task(_doc(), "a", "t")
+    assert out.phases[0].tasks[-1].checked is False
+
+
 def test_add_section_at_inserts_at_index() -> None:
     doc = _doc()
     doc2 = deltas.add_section(doc, "ctx", "Context", "body", 2)
