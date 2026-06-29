@@ -58,10 +58,10 @@ claudeplans project set-name <project> "<Display Name>"
 | `slug` | str | stable identity key for phase ops; must be unique per doc |
 | `name` | str | human-readable phase name |
 | `status` | `todo` \| `doing` \| `done` \| `blocked` | phase lifecycle state |
-| `intro` | str | intro prose (markdown), rendered above the checklist; set via `phase set --intro` |
+| `intro` | str | intro prose (markdown), rendered above the checklist; set at creation via `phase add --intro` or later via `phase set --intro` |
 | `tasks` | list[Task] | ordered task list |
-| `exit_criteria` | str | exit-criteria prose (markdown), rendered below the checklist; set via `phase set --exit-criteria` |
-| `notes` | str | phase notes / revision cards (markdown — `!!!`/`???` admonitions live here); set via `phase set --notes` |
+| `exit_criteria` | str | exit-criteria prose (markdown), rendered below the checklist; set at creation via `phase add --exit-criteria` or later via `phase set --exit-criteria` |
+| `notes` | str | phase notes / revision cards (markdown — `!!!`/`???` admonitions live here); set at creation via `phase add --notes` or later via `phase set --notes` |
 
 ### Task
 
@@ -102,7 +102,7 @@ claudeplans section add|set|patch|move|rm
 claudeplans search|schema|doctor
 ```
 
-`doc list` takes `--type research|plan`; `task add` / `section add` take `--at INDEX` for a positional insert (append if omitted). `task add` also takes `--checked` to create a task already-checked in one rev-free call (handy when authoring an already-completed plan — skips the per-task `toggle --rev` loop). `doc create`'s shell form takes `--status`/`--description`/`--date` so a described/active/done doc lands in one call (or pass the whole body, including nested sections and phases-with-tasks, via `--from-json`). `claudeplans schema` dumps the authoritative machine-readable contract — enums, exit codes, envelope shapes, the `conditional_writes` (which ops need `--rev`), and the `NO_COLOR` env note.
+`doc list` takes `--type research|plan`; `task add` / `section add` take `--at INDEX` for a positional insert (append if omitted). `task add` also takes `--checked` to create a task already-checked in one rev-free call (handy when authoring an already-completed plan — skips the per-task `toggle --rev` loop). `doc create`'s shell form takes `--status`/`--description`/`--date` so a described/active/done doc lands in one call (or pass the whole body, including nested sections and phases-with-tasks, via `--from-json` — this is the bulk authoring path; there is no per-task or per-phase bulk-add verb, so to add many tasks at once scaffold them through `--from-json`). `claudeplans schema` dumps the authoritative machine-readable contract — enums, exit codes, envelope shapes, the `conditional_writes` (which ops need `--rev`), the `NO_COLOR` env note, and a per-command flag map. `command_flags` is keyed by fully-qualified command name (`"task add"`, or the bare name for flat commands) → each flag's `{opts, kind: argument|option, required, type}` (plus `secondary_opts` for toggles like `--checked/--unchecked`); `global_flags` lists the root options (`--url`/`--uid`/`--full`), which are passed *before* the subcommand. So an agent can read flag spellings and value types straight from `schema` without consulting this file.
 
 Position-sensitive ops (`task toggle`, `task set-checked`, `task edit`, `task rm`, `phase move`, `section move`, `doc delete`) require `--rev` (the `rev` field from a prior `doc phases`/`doc rev` or a write reply) — the optimistic-concurrency token. Exit 9 means stale rev; re-read and retry. Stable-key ops (`status`, `set`, `add`, rename) are rev-free.
 

@@ -42,6 +42,8 @@ claudeplans phase add "<project>" "<slug>" "<phase-slug>" "<Phase Name>"
 claudeplans task add "<project>" "<slug>" "<phase-slug>" "Task description"
 ```
 
+`phase add` accepts the same prose flag spellings `phase set` does — `--intro`/`--exit-criteria`/`--notes` (inline) and `--intro-file`/`--exit-criteria-file`/`--notes-file` (a file path, or `-` for stdin) — so a phase and its intro / exit-criteria / notes land in one call instead of an `add` then a follow-up `set`. Note the omit-semantics differ: on `add` (a create) omitted prose defaults to **empty**, whereas on `set` omitted leaves the field unchanged and `''` clears it.
+
 `task add --checked` creates a task already-checked in one rev-free call — use it when reconstructing an already-completed plan so you skip the per-task `toggle --rev` loop (read rev → toggle → repeat). The default is unchecked.
 
 Add prose sections:

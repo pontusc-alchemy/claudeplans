@@ -77,6 +77,10 @@ class AddPhaseRequest(BaseModel):
     slug: str
     name: str
     status: PhaseStatus = PhaseStatus.todo
+    # Prose fields; default "" matches the Phase model (set at creation).
+    intro: str = ""
+    exit_criteria: str = ""
+    notes: str = ""
 
 
 class PhaseStatusRequest(BaseModel):

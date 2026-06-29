@@ -73,7 +73,15 @@ def set_document_status(doc: Document, status: DocStatus) -> Document:
     return doc.model_copy(update={"status": status})
 
 
-def add_phase(doc: Document, slug: str, name: str, status: PhaseStatus) -> Document:
+def add_phase(
+    doc: Document,
+    slug: str,
+    name: str,
+    status: PhaseStatus,
+    intro: str = "",
+    exit_criteria: str = "",
+    notes: str = "",
+) -> Document:
     """Append a phase (the plan surface is append-only; reposition is move_phase).
 
     Pre-checks slug uniqueness for a clean domain error; the Document validator would
@@ -81,7 +89,14 @@ def add_phase(doc: Document, slug: str, name: str, status: PhaseStatus) -> Docum
     """
     if any(p.slug == slug for p in doc.phases):
         raise ValidationError(f"phase {slug!r} already exists")
-    phase = Phase(slug=slug, name=name, status=status)
+    phase = Phase(
+        slug=slug,
+        name=name,
+        status=status,
+        intro=intro,
+        exit_criteria=exit_criteria,
+        notes=notes,
+    )
     return doc.model_copy(update={"phases": [*doc.phases, phase]})
 
 

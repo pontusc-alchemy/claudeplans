@@ -880,6 +880,42 @@ def test_schema_conditional_writes_and_list_envelope(patched_cli: None) -> None:
     assert "list" in parsed["envelopes"]
 
 
+# schema exposes a per-command flag map + global flags an agent can author from.
+def test_schema_command_flags_and_global_flags(patched_cli: None) -> None:
+    result = runner.invoke(cli.app, ["schema"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    cf = parsed["command_flags"]
+    assert "task add" in cf
+    # Only leaf commands are keyed — the bare group is not.
+    assert "task" not in cf
+    add_flags = cf["task add"]
+    # Bool toggle shows BOTH forms (proves secondary_opts is merged) + its type.
+    checked = next(f for f in add_flags if f["opts"] == ["--checked"])
+    assert checked["secondary_opts"] == ["--unchecked"]
+    assert checked["kind"] == "option"
+    assert checked["type"] == "boolean"
+    # A plain (non-required) option carries its value type so an agent can author it.
+    at = next(f for f in add_flags if f["opts"] == ["--at"])
+    assert at["kind"] == "option"
+    assert at["required"] is False
+    assert at["type"] == "integer"
+    # Arguments are tagged argument-vs-option, marked required, and typed.
+    project = next(f for f in add_flags if f["opts"] == ["project"])
+    assert project["kind"] == "argument"
+    assert project["required"] is True
+    assert project["type"] == "text"
+    # Root global flags live in their own key, excluding Typer completion boilerplate.
+    gf_opts = {tuple(f["opts"]) for f in parsed["global_flags"]}
+    assert ("--url",) in gf_opts
+    assert ("--uid",) in gf_opts
+    assert ("--full", "-v") in gf_opts
+    assert ("--install-completion",) not in gf_opts
+    assert ("--show-completion",) not in gf_opts
+    # The task-add reply envelope is now advertised.
+    assert "write_task_add" in parsed["envelopes"]
+
+
 # Task 6: linking a non-existent research ref exits 4 (validation)
 def test_doc_link_nonexistent_ref_exits_validation(patched_cli: None) -> None:
     runner.invoke(
@@ -977,6 +1013,10 @@ def test_task_add_at_emits_index(patched_cli: None) -> None:
     parsed = json.loads(result.stdout)
     assert parsed["task"]["phase"] == "a"
     assert parsed["task"]["index"] == 0
+    # Insert derives index from --at (not len-1); confirm the echo reads the
+    # inserted task at slot 0, not the neighbour shifted out of it.
+    assert parsed["task"]["text"] == "inserted"
+    assert parsed["task"]["checked"] is False
     assert "data" not in parsed
 
 
@@ -989,6 +1029,12 @@ def test_task_add_checked_flag_creates_checked_task(patched_cli: None) -> None:
         cli.app, ["task", "add", "demo", "p1", "a", "pre-done", "--checked"]
     )
     assert result.exit_code == 0
+    # Self-verifying: the add reply itself echoes the created task's text+checked,
+    # so no follow-up `doc get` is needed to confirm the checked-at-creation state.
+    parsed = json.loads(result.stdout)
+    assert parsed["task"]["text"] == "pre-done"
+    assert parsed["task"]["checked"] is True
+    assert "data" not in parsed
     doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "p1"]).stdout)
     tasks = doc["data"]["phases"][0]["tasks"]
     added = tasks[-1]
@@ -1003,6 +1049,10 @@ def test_task_add_default_is_unchecked(patched_cli: None) -> None:
     )
     result = runner.invoke(cli.app, ["task", "add", "demo", "p1", "a", "plain-task"])
     assert result.exit_code == 0
+    # The slim add reply echoes text + checked=False without a follow-up read.
+    parsed = json.loads(result.stdout)
+    assert parsed["task"]["text"] == "plain-task"
+    assert parsed["task"]["checked"] is False
     doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "p1"]).stdout)
     tasks = doc["data"]["phases"][0]["tasks"]
     added = tasks[-1]
@@ -1488,6 +1538,25 @@ def test_phase_set_missing_file_exits_validation(patched_cli: None) -> None:
     assert result.exit_code == ExitCode.VALIDATION
 
 
+def test_phase_add_non_utf8_file_exits_validation(
+    patched_cli: None, tmp_path: Path
+) -> None:
+    # A non-UTF-8 --*-file must surface as a clean validation error (exit 4),
+    # never an uncaught UnicodeDecodeError traceback (the "never a traceback"
+    # contract). UnicodeDecodeError is a ValueError, not an OSError.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    bad = tmp_path / "bad.bin"
+    bad.write_bytes(b"\xff\xfe\x00binary")
+    result = runner.invoke(
+        cli.app,
+        ["phase", "add", "demo", "p1", "ph9", "Name", "--intro-file", str(bad)],
+    )
+    assert result.exit_code == ExitCode.VALIDATION
+    assert result.exception is None or isinstance(result.exception, SystemExit)
+
+
 # ---------------------------------------------------------------------------
 # Feature: doctor flat command
 # ---------------------------------------------------------------------------
@@ -1558,6 +1627,58 @@ def test_doctor_bad_url_no_traceback() -> None:
     assert "Traceback" not in result.stdout
     assert "Traceback" not in (result.stderr or "")
     assert json.loads(result.stdout)["reachable"] is False
+
+
+# ---------------------------------------------------------------------------
+# Feature: phase add prose flags
+# ---------------------------------------------------------------------------
+
+
+def test_phase_add_prose_flags_persist(patched_cli: None) -> None:
+    # Create a doc, then add a phase with all three prose flags in one call.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app,
+        [
+            "phase",
+            "add",
+            "demo",
+            "p1",
+            "ph2",
+            "Phase Two",
+            "--intro",
+            "X",
+            "--exit-criteria",
+            "Y",
+            "--notes",
+            "Z",
+        ],
+    )
+    assert result.exit_code == 0
+    doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "p1"]).stdout)
+    phases = {p["slug"]: p for p in doc["data"]["phases"]}
+    assert "ph2" in phases
+    assert phases["ph2"]["intro"] == "X"
+    assert phases["ph2"]["exit_criteria"] == "Y"
+    assert phases["ph2"]["notes"] == "Z"
+
+
+def test_phase_add_without_prose_defaults_to_empty(patched_cli: None) -> None:
+    # A phase add without prose flags must store intro/exit_criteria/notes as "".
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app, ["phase", "add", "demo", "p1", "ph3", "Phase Three"]
+    )
+    assert result.exit_code == 0
+    doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "p1"]).stdout)
+    phases = {p["slug"]: p for p in doc["data"]["phases"]}
+    assert phases["ph3"]["intro"] == ""
+    assert phases["ph3"]["exit_criteria"] == ""
+    assert phases["ph3"]["notes"] == ""
 
 
 def test_doc_create_date_rejects_control_chars(patched_cli: None) -> None:

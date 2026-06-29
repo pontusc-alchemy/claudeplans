@@ -63,6 +63,33 @@ def test_add_phase_duplicate_slug_raises() -> None:
         deltas.add_phase(_doc(), "a", "Dup", PhaseStatus.todo)
 
 
+def test_add_phase_with_prose_fields() -> None:
+    doc = _doc()
+    before = _snapshot(doc)
+    out = deltas.add_phase(
+        doc,
+        "p2",
+        "Name",
+        PhaseStatus.todo,
+        intro="I",
+        exit_criteria="E",
+        notes="N",
+    )
+    phase = next(p for p in out.phases if p.slug == "p2")
+    assert phase.intro == "I"
+    assert phase.exit_criteria == "E"
+    assert phase.notes == "N"
+    assert _snapshot(doc) == before
+
+
+def test_add_phase_default_prose_is_empty() -> None:
+    out = deltas.add_phase(_doc(), "p2", "Name", PhaseStatus.todo)
+    phase = next(p for p in out.phases if p.slug == "p2")
+    assert phase.intro == ""
+    assert phase.exit_criteria == ""
+    assert phase.notes == ""
+
+
 def test_set_phase_status() -> None:
     doc = _doc()
     before = _snapshot(doc)

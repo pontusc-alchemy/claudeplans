@@ -231,8 +231,18 @@ class PlanClient:
         phase_slug: str,
         name: str,
         status: str,
+        intro: str = "",
+        exit_criteria: str = "",
+        notes: str = "",
     ) -> Reply:
-        body = AddPhaseRequest(slug=phase_slug, name=name, status=PhaseStatus(status))
+        body = AddPhaseRequest(
+            slug=phase_slug,
+            name=name,
+            status=PhaseStatus(status),
+            intro=intro,
+            exit_criteria=exit_criteria,
+            notes=notes,
+        )
         resp = self._http.post(
             f"{self._doc_base(uid, project, slug)}/phases",
             json=body.model_dump(mode="json"),

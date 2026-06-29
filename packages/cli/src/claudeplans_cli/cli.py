@@ -17,6 +17,8 @@ import typer.rich_utils
 # Honour the NO_COLOR standard (https://no-color.org): any non-empty value means
 # the caller has opted out of ANSI colour. Typer/rich do not check NO_COLOR
 # themselves, so we zero out the colour system before any help is rendered.
+# (Non-TTY output is already ANSI-free: rich auto-strips colour on a pipe, and
+# we deliberately do NOT override that — it would defeat FORCE_COLOR/CI signals.)
 # This does not affect interactive use where NO_COLOR is absent.
 # Agents: set NO_COLOR=1 for ANSI-free help, or use `schema` for structured output.
 if os.environ.get("NO_COLOR"):

@@ -14,7 +14,8 @@ Slice directives narrow the output further without a second request:
   - "phases-ordering" → {rev, warnings, phases:[{slug, status}]}
   - None (default)    → {rev, warnings}
 task-add shape (emit_task_added, full=False):
-  - {rev, warnings, task:{phase:<slug>, index:<int>}}
+  - {rev, warnings, task:{phase:<slug>, index:<int>, text:<str>, checked:<bool>}}
+    (text/checked echo the created task so the add is self-verifying)
 """
 
 import json
@@ -134,12 +135,21 @@ def emit_write(
 
 
 def emit_task_added(
-    reply: Reply, *, phase_slug: str, index: int, full: bool = False
+    reply: Reply,
+    *,
+    phase_slug: str,
+    index: int,
+    text: str | None = None,
+    checked: bool | None = None,
+    full: bool = False,
 ) -> None:
     """Print a task-add reply as compact JSON.
 
     full=True: full {rev, data, warnings} envelope.
-    full=False: {rev, warnings, task:{phase:<slug>, index:<int>}}.
+    full=False: {rev, warnings, task:{phase:<slug>, index:<int>, text, checked}}.
+    Echoing the created task's text/checked makes the add self-verifying — a
+    checked-at-creation task needs no follow-up `doc phases` read to confirm.
+    text/checked are null when the just-added task can't be located in the reply.
     """
     if full:
         _compact({"rev": reply.rev, "data": reply.data, "warnings": reply.warnings})
@@ -148,7 +158,12 @@ def emit_task_added(
         {
             "rev": reply.rev,
             "warnings": reply.warnings,
-            "task": {"phase": phase_slug, "index": index},
+            "task": {
+                "phase": phase_slug,
+                "index": index,
+                "text": text,
+                "checked": checked,
+            },
         }
     )
 

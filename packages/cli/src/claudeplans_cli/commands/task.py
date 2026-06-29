@@ -43,6 +43,8 @@ def add(
     """Append a task to a phase, or insert at --at if given.
 
     Use --checked/--unchecked to set the initial state; defaults to unchecked.
+    For bulk authoring (many tasks, or whole phases-with-tasks at once) there is
+    no per-task bulk verb — pass the full body via `doc create --from-json`.
     """
     c: AppContext = ctx.obj
     reply = c.client.add_task(c.uid, project, slug, phase_slug, text, at, checked)
@@ -52,7 +54,18 @@ def add(
     )
     tasks = phase.get("tasks", []) if phase else []
     index = at if at is not None else len(tasks) - 1
-    emit_task_added(reply, phase_slug=phase_slug, index=index, full=c.full)
+    # Echo the just-added task's text/checked so the reply is self-verifying.
+    added = tasks[index] if 0 <= index < len(tasks) else None
+    task_text = added.get("text") if isinstance(added, dict) else None
+    task_checked = added.get("checked") if isinstance(added, dict) else None
+    emit_task_added(
+        reply,
+        phase_slug=phase_slug,
+        index=index,
+        text=task_text,
+        checked=task_checked,
+        full=c.full,
+    )
 
 
 @app.command()

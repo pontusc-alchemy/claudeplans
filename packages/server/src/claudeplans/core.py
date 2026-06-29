@@ -193,11 +193,19 @@ async def add_phase(
     slug: str,
     name: str,
     status: PhaseStatus,
+    intro: str = "",
+    exit_criteria: str = "",
+    notes: str = "",
     *,
     user: CurrentUser,
 ) -> tuple[str, Document]:
     return await read_modify_write(
-        repo, key, lambda doc: deltas.add_phase(doc, slug, name, status), user=user
+        repo,
+        key,
+        lambda doc: deltas.add_phase(
+            doc, slug, name, status, intro, exit_criteria, notes
+        ),
+        user=user,
     )
 
 

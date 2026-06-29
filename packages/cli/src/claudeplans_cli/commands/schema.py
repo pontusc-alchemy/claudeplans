@@ -19,10 +19,46 @@ from claudeplans_contracts import (
 from ..errors import _ERROR_TO_KIND
 from ..output import emit_obj
 
+# Typer auto-adds these to the root callback; they are boilerplate, not part of
+# the service contract, so they are excluded from the advertised global flags.
+_ROOT_SKIP = frozenset({"install_completion", "show_completion"})
+
 
 def _has_rev(cmd: object) -> bool:
     """Return True if `cmd` has a --rev option among its params."""
     return any("--rev" in getattr(p, "opts", []) for p in getattr(cmd, "params", []))
+
+
+def _flags(
+    cmd: object, *, skip_names: frozenset[str] = frozenset()
+) -> list[dict[str, object]]:
+    """Describe a command's parameters as flag descriptors for the schema.
+
+    Each entry: {opts, kind: "argument"|"option", required, type}, plus
+    secondary_opts when the param has a secondary form (e.g. --checked/--unchecked).
+    `type` is the click value type ("text"/"integer"/"boolean"/"choice"), so an
+    agent knows --at takes an int and --checked is a no-value boolean toggle. Params
+    named in skip_names, or carrying no opts (the Typer-injected context), are
+    skipped.
+    """
+    out: list[dict[str, object]] = []
+    for p in getattr(cmd, "params", []):
+        if getattr(p, "name", None) in skip_names:
+            continue
+        opts = list(getattr(p, "opts", []) or [])
+        if not opts:
+            continue
+        entry: dict[str, object] = {
+            "opts": opts,
+            "kind": getattr(p, "param_type_name", "option"),
+            "required": bool(getattr(p, "required", False)),
+            "type": getattr(getattr(p, "type", None), "name", None),
+        }
+        secondary = list(getattr(p, "secondary_opts", []) or [])
+        if secondary:
+            entry["secondary_opts"] = secondary
+        out.append(entry)
+    return out
 
 
 def schema(ctx: typer.Context) -> None:
@@ -31,19 +67,25 @@ def schema(ctx: typer.Context) -> None:
     tree: dict[str, list[str]] = {}
     top: list[str] = []
     conditional: list[str] = []
+    command_flags: dict[str, list[dict[str, object]]] = {}
     for name, cmd in sorted(root_cmd.commands.items()):  # ty: ignore[unresolved-attribute]
         subcmds = getattr(cmd, "commands", None)
         if subcmds:  # group
             tree[name] = sorted(subcmds.keys())
-            for sub, leaf in subcmds.items():
+            for sub, leaf in sorted(subcmds.items()):
                 if _has_rev(leaf):
                     conditional.append(f"{name} {sub}")
+                command_flags[f"{name} {sub}"] = _flags(leaf)
         else:
             top.append(name)
             if _has_rev(cmd):
                 conditional.append(name)
+            command_flags[name] = _flags(cmd)
     if top:
         tree["top"] = sorted(top)
+    # Root global flags (--url/--uid/--full) are passed before the subcommand, so
+    # they live in their own key rather than under any per-command entry.
+    global_flags = _flags(root_cmd, skip_names=_ROOT_SKIP)
 
     emit_obj(
         {
@@ -64,6 +106,9 @@ def schema(ctx: typer.Context) -> None:
                 "read_rev": "{rev}",
                 "write_default": "{rev, warnings}",
                 "write_create": "{slug, type, rev, warnings}",
+                "write_task_add": (
+                    "{rev, warnings, task:{phase, index, text, checked}}"
+                ),
                 "write_phase_slice": "{rev, warnings, phase:{slug, tasks}}",
                 "write_phases_ordering": "{rev, warnings, phases:[{slug,status}]}",
                 "list": "{data, warnings}  (data: items-list|lineage-tree|search-hits)",
@@ -76,6 +121,12 @@ def schema(ctx: typer.Context) -> None:
                 "full_flag": "--full/-v restores {rev, data, warnings} on writes",
             },
             "commands": tree,
+            "command_flags": dict(sorted(command_flags.items())),
+            "global_flags": global_flags,
+            "global_flags_usage": (
+                "global_flags are passed before the subcommand: "
+                "claudeplans <global_flags> <command> [args/command_flags]"
+            ),
             "conditional_writes": sorted(conditional),
         }
     )
