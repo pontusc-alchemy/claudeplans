@@ -2,7 +2,7 @@
 name: research
 description: Research a topic and create a structured findings document in the claudeplans service (CLI + browsable view). Use to investigate a question, compare options, or gather and cite sources into a browsable deliverable.
 user-invocable: true
-model-invocable: false
+model-invocable: true
 allowed-tools: Bash, Agent
 ---
 

@@ -2,7 +2,7 @@
 name: write
 description: Author an actionable implementation plan as a structured document in the claudeplans service (CLI + live HTML view). Turns a discussion — or an existing research document — into ordered, phased implementation steps with decisions and learnings.
 user-invocable: true
-model-invocable: false
+model-invocable: true
 allowed-tools: Bash, Agent
 ---
 

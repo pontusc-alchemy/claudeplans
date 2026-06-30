@@ -2,7 +2,7 @@
 name: review
 description: Reconcile a saved plan in the claudeplans service against reality — verify which gaps, decisions, and phase tasks were actually implemented, report the drift, and on approval revise the document in place via the CLI. Can also deep-verify a chosen part of a plan on request. Takes a plan project and slug. Closes the loop after implementation.
 user-invocable: true
-model-invocable: false
+model-invocable: true
 allowed-tools: Bash, Agent
 ---
 

@@ -2,7 +2,7 @@
 name: iterate
 description: Execute a plan document phase by phase — work the next unfinished phase with the user task by task, checking off boxes, advancing phase status, and recording learnings in the document as work happens. Takes a plan slug or project. The forward loop of the lifecycle.
 user-invocable: true
-model-invocable: false
+model-invocable: true
 allowed-tools: Bash, Agent
 ---
 

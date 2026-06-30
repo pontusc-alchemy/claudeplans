@@ -2,7 +2,7 @@
 name: update
 description: Make a targeted revision to a saved plan or research document in the claudeplans service — edit a section, phase status, task state, or doc status on request via the CLI. Takes the project and doc slug plus the change to make. The direct-edit loop of the lifecycle.
 user-invocable: true
-model-invocable: false
+model-invocable: true
 allowed-tools: Bash, Agent
 ---
 
