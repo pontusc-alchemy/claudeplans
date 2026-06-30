@@ -24,6 +24,8 @@ claudeplans doc create "<project>" --type research --slug "<slug>" --title "<top
 
 Map the domain before going deep. Spawn `general-purpose` agents (`sonnet` minimum — never haiku) to gather breadth: what exists, what's adjacent, links, hard facts from documentation.
 
+**Delegated agents return findings only** — instruct each one not to call the `claudeplans` CLI or create/modify any doc (the CLI is on PATH, so an unbriefed agent may author its own doc); all writes happen in the main thread.
+
 - **Find the official docs / primary source first.** Verify any blog/third-party against official sources; if none cover the point, third-party is acceptable but MUST be flagged unverified.
 - Return verbatim specifics (versions, flags, exact config, URLs) — not paraphrase. Capture each claim's source.
 

@@ -31,7 +31,7 @@ claudeplans doc create "<project>" --type plan --slug "<slug>" --title "<plan ti
 - **From the conversation:** structure the plan we've worked out.
 - **From the repo:** any codebase context-gathering goes to `general-purpose` agents — never read large files in the main thread.
 
-Expect to iterate: the user reviews and discusses while the plan is constructed. Lead with an "executive-summary" section answering the user's explicit questions, each referencing its phase.
+Build the complete doc — all phases, tasks, and prose sections — via the CLI, then point the user to the rendered view (`claudeplans doc view`) to review; do not preview the structure in chat (it is easier to read in the browser). Lead with an "executive-summary" section answering the user's explicit questions, each referencing its phase. Pause for explicit user approval only at the status flip (see "On approval" below).
 
 ## Build the structure
 
