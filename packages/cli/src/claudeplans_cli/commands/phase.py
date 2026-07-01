@@ -5,17 +5,16 @@ gates with If-Match; the other phase mutations are stable-key and retry-safe.
 Typer descriptors are module-level singletons to satisfy ruff B008.
 """
 
-import sys
-from pathlib import Path
 from typing import Annotated
 
 import typer
 
-from claudeplans_contracts import PhaseStatus, ValidationError
+from claudeplans_contracts import PhaseStatus
 
 from ..context import AppContext
 from ..errors import handle_errors
 from ..output import emit_write
+from ..prose import resolve_prose
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -62,26 +61,6 @@ _ADD_NOTES = typer.Option(
 )
 
 
-def _resolve_prose(inline: str | None, path: str | None, flag: str) -> str | None:
-    """Resolve a prose field from its inline value or a file/stdin path.
-
-    Returns the inline value when no file path is given (None = leave unchanged).
-    `-` reads stdin. Passing both the inline flag and its --<flag>-file is a usage
-    error. A missing/unreadable/non-UTF-8 file (or stdin) surfaces as a domain
-    ValidationError (exit 4) via the handle_errors boundary, never a traceback.
-    """
-    if path is None:
-        return inline
-    if inline is not None:
-        raise ValidationError(f"pass either --{flag} or --{flag}-file, not both")
-    try:
-        if path == "-":
-            return sys.stdin.read()
-        return Path(path).read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
-        raise ValidationError(f"--{flag}-file: {exc}") from exc
-
-
 @app.command()
 @handle_errors
 def add(
@@ -104,11 +83,11 @@ def add(
     omitted prose defaults to empty.
     """
     c: AppContext = ctx.obj
-    intro = _resolve_prose(intro, intro_file, "intro") or ""
+    intro = resolve_prose(intro, intro_file, "intro") or ""
     exit_criteria = (
-        _resolve_prose(exit_criteria, exit_criteria_file, "exit-criteria") or ""
+        resolve_prose(exit_criteria, exit_criteria_file, "exit-criteria") or ""
     )
-    notes = _resolve_prose(notes, notes_file, "notes") or ""
+    notes = resolve_prose(notes, notes_file, "notes") or ""
     reply = c.client.add_phase(
         c.uid,
         project,
@@ -144,9 +123,9 @@ def set_phase(
     multi-line markdown without shell-quoting pain.
     """
     c: AppContext = ctx.obj
-    intro = _resolve_prose(intro, intro_file, "intro")
-    exit_criteria = _resolve_prose(exit_criteria, exit_criteria_file, "exit-criteria")
-    notes = _resolve_prose(notes, notes_file, "notes")
+    intro = resolve_prose(intro, intro_file, "intro")
+    exit_criteria = resolve_prose(exit_criteria, exit_criteria_file, "exit-criteria")
+    notes = resolve_prose(notes, notes_file, "notes")
     reply = c.client.set_phase(
         c.uid, project, slug, phase_slug, name, intro, exit_criteria, notes
     )

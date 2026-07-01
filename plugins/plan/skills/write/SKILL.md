@@ -54,6 +54,8 @@ Add prose sections:
 claudeplans section add "<project>" "<slug>" "<anchor>" "<Heading>" --body "<markdown>" --level 2
 ```
 
+`--body` takes inline text or `--body-file <path>` (`-` for stdin), mirroring the phase prose flags — reach for the file form for multi-line markdown to sidestep shell-quoting pain. `section set` accepts the same pair.
+
 Section bodies are **plain markdown** — do not write HTML spans, pills, or admonitions; the service renders and sanitizes.
 
 ## On approval

@@ -46,6 +46,8 @@ Build the document section by section with `section add` — in the normal flow 
 claudeplans section add "<project>" "<slug>" "<anchor>" "<Heading>" --body "<markdown text>" --level 2
 ```
 
+`--body` takes inline text or `--body-file <path>` (`-` for stdin), mirroring the phase prose flags — reach for the file form for multi-line markdown to sidestep shell-quoting pain. `section set` accepts the same pair.
+
 Section bodies are **plain markdown** — cite sources inline as `[official docs](url)`. Mark every unverified / third-party claim in the body text (e.g. `[unverified — third-party source]`). Do not write HTML spans, pills, or admonitions — the service renders and sanitizes the markdown.
 
 When the findings are substantive, flip status:

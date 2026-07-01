@@ -1558,6 +1558,139 @@ def test_phase_add_non_utf8_file_exits_validation(
 
 
 # ---------------------------------------------------------------------------
+# Feature: section add/set --body-file variants
+# ---------------------------------------------------------------------------
+
+
+def test_section_set_body_file_reads_from_file(
+    patched_cli: None, tmp_path: Path
+) -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    runner.invoke(cli.app, ["section", "add", "demo", "p1", "ctx", "Context"])
+    f = tmp_path / "body.md"
+    f.write_text("Prose with an apostrophe: container's lifecycle.\n\nSecond para.")
+    result = runner.invoke(
+        cli.app, ["section", "set", "demo", "p1", "ctx", "--body-file", str(f)]
+    )
+    assert result.exit_code == 0
+    get_result = runner.invoke(cli.app, ["doc", "get", "demo", "p1"])
+    body = json.loads(get_result.stdout)["data"]["sections"][0]["body"]
+    assert "container's lifecycle" in body
+    assert "Second para." in body
+
+
+def test_section_add_body_file_stdin(patched_cli: None) -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app,
+        [
+            "section",
+            "add",
+            "demo",
+            "p1",
+            "stdin-anchor",
+            "Stdin Heading",
+            "--body-file",
+            "-",
+        ],
+        input="!!! note\n    A card from stdin.",
+    )
+    assert result.exit_code == 0
+    get_result = runner.invoke(cli.app, ["doc", "get", "demo", "p1"])
+    sections = json.loads(get_result.stdout)["data"]["sections"]
+    bodies = [s["body"] for s in sections if s["anchor"] == "stdin-anchor"]
+    assert bodies and "A card from stdin." in bodies[0]
+
+
+def test_section_set_body_inline_and_file_conflict_exits_validation(
+    patched_cli: None,
+) -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    runner.invoke(cli.app, ["section", "add", "demo", "p1", "ctx", "Context"])
+    result = runner.invoke(
+        cli.app,
+        ["section", "set", "demo", "p1", "ctx", "--body", "x", "--body-file", "/tmp/x"],
+    )
+    assert result.exit_code == ExitCode.VALIDATION
+
+
+def test_section_set_missing_body_file_exits_validation(patched_cli: None) -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    runner.invoke(cli.app, ["section", "add", "demo", "p1", "ctx", "Context"])
+    result = runner.invoke(
+        cli.app,
+        ["section", "set", "demo", "p1", "ctx", "--body-file", "/nonexistent/nope.md"],
+    )
+    assert result.exit_code == ExitCode.VALIDATION
+
+
+def test_section_add_no_body_defaults_empty(patched_cli: None) -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app, ["section", "add", "demo", "p1", "empty-body", "Empty Heading"]
+    )
+    assert result.exit_code == 0
+    get_result = runner.invoke(cli.app, ["doc", "get", "demo", "p1"])
+    sections = json.loads(get_result.stdout)["data"]["sections"]
+    bodies = [s["body"] for s in sections if s["anchor"] == "empty-body"]
+    assert bodies and bodies[0] == ""
+
+
+def test_section_add_body_inline_and_file_conflict_exits_validation(
+    patched_cli: None,
+) -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app,
+        [
+            "section",
+            "add",
+            "demo",
+            "p1",
+            "conflict-anchor",
+            "Conflict Heading",
+            "--body",
+            "x",
+            "--body-file",
+            "/tmp/x",
+        ],
+    )
+    assert result.exit_code == ExitCode.VALIDATION
+
+
+def test_section_add_missing_body_file_exits_validation(patched_cli: None) -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app,
+        [
+            "section",
+            "add",
+            "demo",
+            "p1",
+            "missing-file-anchor",
+            "Missing File Heading",
+            "--body-file",
+            "/nonexistent/nope.md",
+        ],
+    )
+    assert result.exit_code == ExitCode.VALIDATION
+
+
+# ---------------------------------------------------------------------------
 # Feature: doctor flat command
 # ---------------------------------------------------------------------------
 

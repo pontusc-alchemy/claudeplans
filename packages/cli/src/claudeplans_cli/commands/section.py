@@ -16,11 +16,15 @@ from claudeplans_contracts import SectionPlacement, ValidationError
 from ..context import AppContext
 from ..errors import handle_errors
 from ..output import emit_write
+from ..prose import resolve_prose
 
 app = typer.Typer(no_args_is_help=True)
 
 _ADD_HEADING = typer.Argument()
-_ADD_BODY = typer.Option("--body")
+_ADD_BODY = typer.Option("--body", help="section body (markdown); omitted = empty")
+_BODY_FILE = typer.Option(
+    "--body-file", help="read --body from a file ('-' = stdin); excludes --body"
+)
 _ADD_LEVEL = typer.Option("--level")
 _AT = typer.Option(
     "--at",
@@ -30,7 +34,7 @@ _ADD_PLACEMENT = typer.Option(
     "--placement", help="lead (renders before phases) or trail (after); default lead"
 )
 _SET_HEADING = typer.Option()
-_SET_BODY = typer.Option()
+_SET_BODY = typer.Option(help="section body; '' clears, omit to leave unchanged")
 _SET_LEVEL = typer.Option()
 _SET_PLACEMENT = typer.Option(
     "--placement",
@@ -52,13 +56,18 @@ def add(
     slug: str,
     anchor: str,
     heading: Annotated[str, _ADD_HEADING],
-    body: Annotated[str, _ADD_BODY] = "",
+    body: Annotated[str | None, _ADD_BODY] = None,
+    body_file: Annotated[str | None, _BODY_FILE] = None,
     level: Annotated[int, _ADD_LEVEL] = 2,
     at: Annotated[int | None, _AT] = None,
     placement: Annotated[SectionPlacement, _ADD_PLACEMENT] = SectionPlacement.lead,
 ) -> None:
-    """Append a section, or insert at --at if given."""
+    """Append a section, or insert at --at if given.
+
+    --body accepts inline text or --body-file PATH ('-' = stdin).
+    """
     c: AppContext = ctx.obj
+    body = resolve_prose(body, body_file, "body") or ""
     reply = c.client.add_section(
         c.uid, project, slug, anchor, heading, body, level, at, placement=placement
     )
@@ -90,11 +99,16 @@ def set_section(
     anchor: str,
     heading: Annotated[str | None, _SET_HEADING] = None,
     body: Annotated[str | None, _SET_BODY] = None,
+    body_file: Annotated[str | None, _BODY_FILE] = None,
     level: Annotated[int | None, _SET_LEVEL] = None,
     placement: Annotated[SectionPlacement | None, _SET_PLACEMENT] = None,
 ) -> None:
-    """Absolute-set a section's fields (omitted flags are left unchanged)."""
+    """Absolute-set a section's fields (omitted flags are left unchanged).
+
+    --body accepts inline text or --body-file PATH ('-' = stdin).
+    """
     c: AppContext = ctx.obj
+    body = resolve_prose(body, body_file, "body")
     reply = c.client.set_section(
         c.uid, project, slug, anchor, heading, body, level, placement
     )
