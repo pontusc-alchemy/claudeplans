@@ -12,8 +12,8 @@
     <script src="/assets/js/search.js" defer></script>
   </head>
   <body class="md-typeset"{% if sidebar %} data-uid="{{ sidebar.current_uid }}"{% endif %}>
-    <div class="layout">
-      {% if sidebar %}<aside class="sidebar"><button type="button" class="sidebar-toggle" aria-label="Collapse sidebar" aria-expanded="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg></button><div class="sidebar-scroll">{% include "_sidebar.html" %}</div></aside>{% endif %}
+    <div class="layout"{% if events_url is defined %} hx-ext="sse,morph" sse-connect="{{ events_url }}"{% endif %}>
+      {% if sidebar %}<aside class="sidebar"><button type="button" class="sidebar-toggle" aria-label="Collapse sidebar" aria-expanded="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"></polyline></svg></button><div class="sidebar-scroll" id="sidebar-content"{% if events_url is defined %} sse-swap="sidebar" hx-swap="morph:innerHTML"{% endif %}>{% include "_sidebar.html" %}</div></aside>{% endif %}
       <div class="content">{% block content %}{% endblock %}</div>
     </div>
   </body>

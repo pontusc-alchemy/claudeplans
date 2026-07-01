@@ -100,6 +100,11 @@ def render_doc_body(doc: Document) -> str:
     return env.get_template("_doc_body.html").render(**_doc_context(doc))
 
 
+def render_sidebar(sidebar: dict[str, object]) -> str:
+    """Render the sidebar partial to an HTML string (SSE sidebar frames)."""
+    return env.get_template("_sidebar.html").render(sidebar=sidebar)
+
+
 def render_page(
     doc: Document, events_url: str, sidebar: dict[str, object] | None = None
 ) -> str:

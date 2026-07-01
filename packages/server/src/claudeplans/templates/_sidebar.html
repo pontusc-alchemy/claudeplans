@@ -11,8 +11,8 @@
   <ul class="sidebar-projects">
     {% for proj in sidebar.projects %}
     <li class="sidebar-project{% if proj.current %} current{% endif %}">
-      <details{% if proj.current %} open{% endif %}>
-        <summary class="project-title"><a href="{{ proj.lineage_url }}"{% if proj.is_current_page %} aria-current="page"{% endif %}>{{ proj.name }}</a></summary>
+      <details data-project="{{ proj.project }}" open>
+        <summary class="project-title">{{ proj.name }}</summary>
         <ul class="research-roots">
           {% for r in proj.research %}
           <li class="research-node">

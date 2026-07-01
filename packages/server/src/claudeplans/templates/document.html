@@ -1,8 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
 <main class="doc" id="doc"
-      hx-ext="sse,morph"
-      sse-connect="{{ events_url }}"
       sse-swap="message"
       hx-swap="morph:innerHTML">
   {% include "_doc_body.html" %}

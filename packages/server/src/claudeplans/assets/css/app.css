@@ -188,10 +188,6 @@ body.md-typeset {
   list-style-position: inside;
 }
 
-.sidebar details > summary.project-title a {
-  font-weight: inherit;
-}
-
 .status-dot {
   display: inline-block;
   width: 0.5em;

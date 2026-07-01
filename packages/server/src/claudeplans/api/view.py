@@ -77,15 +77,15 @@ async def _build_sidebar(
     )
 
 
-def _sse_frame(html: str) -> str:
-    """Format `html` as one SSE `message` event.
+def _sse_frame(html: str, event: str = "message") -> str:
+    """Format `html` as one SSE event.
 
     Each HTML line gets its own `data:` field (SSE concatenates them with newlines)
-    and the frame ends with a blank line. The explicit `event: message` matches the
-    template's `sse-swap="message"`.
+    and the frame ends with a blank line. The event name is the `event` arg, which
+    defaults to `message` to match the template's `sse-swap="message"`.
     """
     data = "\n".join(f"data: {line}" for line in html.splitlines())
-    return f"event: message\n{data}\n\n"
+    return f"event: {event}\n{data}\n\n"
 
 
 _DELETED_FRAME: Final = _sse_frame(
@@ -124,7 +124,20 @@ async def document_events(
     repo = request.app.state.repo
     feed: EventFeed = request.app.state.feed
     cache: FragmentCache = request.app.state.render_cache
+    registry = request.app.state.registry
+    project_registry = request.app.state.project_registry
     key = document_key(uid, project, slug)
+
+    async def sidebar_frame() -> str | None:
+        try:
+            sidebar = await _build_sidebar(
+                repo, registry, project_registry, uid, project, slug
+            )
+        except PlanError, ValidationError:
+            # A corrupt doc in the tree must not tear the live stream — skip
+            # this sidebar frame; the next event will retry.
+            return None
+        return _sse_frame(templates.render_sidebar(sidebar), event="sidebar")
 
     async def stream() -> AsyncIterator[str]:
         # Register the subscription BEFORE the snapshot so an Event published in the
@@ -149,11 +162,19 @@ async def document_events(
             yield _sse_frame(
                 cache.get_or_render(key, rev, lambda: templates.render_doc_body(doc))
             )
+            frame = await sidebar_frame()
+            if frame is not None:
+                yield frame
             # Then live updates. The subscription ends on the shutdown sentinel: the
             # __main__ Server subclass closes the feed at shutdown START, so this
             # generator (and the response) completes before the bounded graceful
             # timeout instead of being force-cancelled at the deadline.
             async for event in sub:
+                # Any change anywhere (create/delete/rename/status) can alter the
+                # sidebar tree, so refresh it on every event, not just this doc's.
+                frame = await sidebar_frame()
+                if frame is not None:
+                    yield frame
                 if event.key != key:
                     continue
                 try:
