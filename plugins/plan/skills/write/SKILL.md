@@ -20,7 +20,7 @@ Generate a URL-safe slug for the plan title (kebab-case, ≤40 chars). Create th
 claudeplans doc create "<project>" --type plan --slug "<slug>" --title "<plan title>"
 ```
 
-→ the slim create reply `{slug, type, rev, warnings}` (pass `--full`/`-v` for the whole `{rev, data, warnings}` envelope); non-zero exit → relay stderr and stop. The project is created implicitly on the first doc and there is no new-project warning — so if this is a NEW project (not in `claudeplans project list`), **confirm the project name with the user first**: both the URL-safe slug and the intended display name. Keep the plan `--title` short and navigable (a few words); the descriptive detail belongs in the doc's summary, not the title. After creating a new project's first doc, set its display name: `claudeplans project set-name "<project>" "<Display Name>"`. The shell form also accepts `--status`/`--description`/`--date` in the same call (e.g. reconstructing a completed plan with `--status done`), avoiding a follow-up `doc set`/`set-status`.
+→ the slim create reply `{slug, type, rev, warnings}` (pass `--full`/`-v` for the whole `{rev, data, warnings}` envelope); non-zero exit → relay stderr and stop. The project is created implicitly on the first doc and there is no new-project warning — so if this is a NEW project (not in `claudeplans project list`), **confirm the project name with the user first**: both the URL-safe slug and the intended display name. Keep the plan `--title` short and navigable (a few words); the descriptive detail belongs in the doc's summary, not the title. After creating a new project's first doc, set its display name: `claudeplans project set-name "<project>" "<Display Name>"`. The shell form also accepts `--status`/`--description`/`--date` in the same call (e.g. reconstructing a completed plan with `--status done`), avoiding a follow-up `doc set`/`set-status`. Run `claudeplans schema` for the authoritative flag map, enums, and exit codes; `claudeplans doc create --help` documents the `--from-json` body shape.
 
 ## Input — where the plan comes from
 
@@ -29,11 +29,13 @@ claudeplans doc create "<project>" --type plan --slug "<slug>" --title "<plan ti
   claudeplans doc link "<project>" "<plan-slug>" "<research-slug>" --primary
   ```
 - **From the conversation:** structure the plan we've worked out.
-- **From the repo:** any codebase context-gathering goes to `general-purpose` agents — never read large files in the main thread.
+- **From the repo:** any codebase context-gathering goes to `general-purpose` agents — never read large files in the main thread. Instruct these agents to return findings only and never call the `claudeplans` CLI for any write — create, modify, or delete (the CLI is on PATH — an unbriefed agent may author its own); all writes happen in the main thread.
 
 Build the complete doc — all phases, tasks, and prose sections — via the CLI, then point the user to the rendered view (`claudeplans doc view`) to review; do not preview the structure in chat (it is easier to read in the browser). Lead with an "executive-summary" section answering the user's explicit questions, each referencing its phase. Pause for explicit user approval only at the status flip (see "On approval" below).
 
 ## Build the structure
+
+For the initial build you have two paths. If the full plan structure is already settled, **skip the plain `doc create` above** and issue that create as a single `--from-json -` call carrying the entire body — sections plus phases-with-tasks (there is no per-phase or per-task bulk verb, so this is the one-call scaffold path; `claudeplans doc create --help` shows the body shape, and validate the JSON before piping since one bad field rejects the whole scaffold). Otherwise — building interactively, or the structure still emerging — run the plain create above and extend it with the per-item `add` verbs below.
 
 Add phases and tasks:
 

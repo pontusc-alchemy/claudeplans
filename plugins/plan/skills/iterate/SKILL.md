@@ -22,7 +22,8 @@ Arguments must carry both `<project>` and `<slug>` — there is no fuzzy resolve
 
 - Restate the `current` phase's open tasks to the user.
 - Work them **task by task, in conversation** — confirm before each edit, surface commands and output, keep the user in the loop.
-- As tasks complete, mutate the document via the CLI (re-read `doc phases` to refresh `rev` before each position-sensitive call):
+- If you delegate implementation work to sub-agents, instruct them never to call the `claudeplans` CLI for writes — the plan doc is mutated only from the main thread.
+- As tasks complete, mutate the document via the CLI (re-read `doc phases` to refresh `rev` before each position-sensitive call; if one still races and exits `9`, reuse the `current_rev` it prints and retry):
 
   Check off a task (TASK_INDEX is 0-based position from `doc phases` output):
   ```shell

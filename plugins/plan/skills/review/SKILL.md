@@ -30,6 +30,8 @@ Non-zero exit on any call → relay stderr and stop.
 
 Spawn one `Agent` (`general-purpose`, `haiku`) to process the full structure output and return: the in-prose status claims with their surrounding context, the open gaps/decisions item by item, and every version pin with its stated target.
 
+Instruct every delegated agent (here and in step 2) to return findings only and never call the `claudeplans` CLI for any write — create, modify, or delete — the CLI is on PATH, so an unbriefed agent may author its own; all revisions happen in the main thread on approval.
+
 ## 2 — Verify against reality (delegate, sonnet)
 
 For each claim, spawn read-only `general-purpose` (`sonnet`) agents to check what is actually true:
@@ -48,7 +50,7 @@ Present the drift as a pipe table (claim · plan said · reality · verdict) and
 
 On approval, revise the doc **in place** — never create a new slug or version:
 
-- For **done** items, advance the phase (re-read `doc phases` to refresh `rev` first):
+- For **done** items, advance the phase (re-read `doc phases` to refresh `rev` first; if a write exits `9`, reuse the `current_rev` it prints and retry):
   ```shell
   claudeplans phase set-status "<project>" "<slug>" "<phase-slug>" done
   claudeplans task toggle "<project>" "<slug>" "<phase-slug>" <index> --rev <rev>

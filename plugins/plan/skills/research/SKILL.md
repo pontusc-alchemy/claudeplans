@@ -18,7 +18,7 @@ Generate a URL-safe slug from the topic (kebab-case, ≤40 chars). Create the do
 claudeplans doc create "<project>" --type research --slug "<slug>" --title "<topic title>"
 ```
 
-→ the slim create reply `{slug, type, rev, warnings}` (pass `--full`/`-v` for the whole `{rev, data, warnings}` envelope); non-zero exit → relay stderr and stop. The project is created implicitly on the first doc and there is no new-project warning — so if this is a NEW project (not in `claudeplans project list`), **confirm the project name with the user first**: both the URL-safe slug and the intended display name. Keep the `--title` short and navigable (a few words); the descriptive detail belongs in the doc's summary, not the title. After creating a new project's first doc, set its display name: `claudeplans project set-name "<project>" "<Display Name>"`. The shell create form also accepts `--status`/`--description`/`--date` in the same call. Sections are added via `claudeplans section add` — the section contract is in `${CLAUDE_PLUGIN_ROOT}/AUTHORING.md`.
+→ the slim create reply `{slug, type, rev, warnings}` (pass `--full`/`-v` for the whole `{rev, data, warnings}` envelope); non-zero exit → relay stderr and stop. The project is created implicitly on the first doc and there is no new-project warning — so if this is a NEW project (not in `claudeplans project list`), **confirm the project name with the user first**: both the URL-safe slug and the intended display name. Keep the `--title` short and navigable (a few words); the descriptive detail belongs in the doc's summary, not the title. After creating a new project's first doc, set its display name: `claudeplans project set-name "<project>" "<Display Name>"`. The shell create form also accepts `--status`/`--description`/`--date` in the same call. Sections are added via `claudeplans section add` — the section contract is in `${CLAUDE_PLUGIN_ROOT}/AUTHORING.md`. Run `claudeplans schema` for the authoritative flag map, enums, and exit codes; `claudeplans doc create --help` documents the `--from-json` body shape.
 
 ## 1 — Survey (delegate, sonnet)
 
@@ -40,11 +40,10 @@ Run as many deepening passes as a subject warrants — judgment call. A narrow t
 
 ## 3 — Construct the findings
 
-Build the document section by section using the CLI:
+Build the document section by section with `section add` — in the normal flow the doc was created empty in step 0 before the survey, so there is no bulk section-add and sections go in one at a time. (Only when the full section set is known before creation — e.g. rebuilding a findings doc from scratch — carry the whole body in the step-0 `doc create --from-json` instead.) To revise a section already added, use `section set` / `section patch`:
 
 ```shell
 claudeplans section add "<project>" "<slug>" "<anchor>" "<Heading>" --body "<markdown text>" --level 2
-claudeplans section set "<project>" "<slug>" "<anchor>" --body "<updated markdown>"
 ```
 
 Section bodies are **plain markdown** — cite sources inline as `[official docs](url)`. Mark every unverified / third-party claim in the body text (e.g. `[unverified — third-party source]`). Do not write HTML spans, pills, or admonitions — the service renders and sanitizes the markdown.
