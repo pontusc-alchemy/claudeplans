@@ -65,7 +65,8 @@ echo '127.0.0.3 claude.plans' | sudo tee -a /etc/hosts
 
 On Linux the whole `127.0.0.0/8` range is loopback with no extra setup. On macOS only `127.0.0.1` exists by default — an additional loopback address needs an explicit alias (`sudo ifconfig lo0 alias 127.0.0.3 up`), and that alias does not persist across reboots without extra setup (flag this to the user; verify current macOS behavior if it matters).
 
-Persist the bind in a repo-root `.env` so plain `make up` reuses it:
+Persist the bind in a `.env` at the root of the checkout you serve from (it is
+per-checkout and gitignored) so plain `make serve` reuses it:
 
 ```text
 CLAUDEPLANS_HOST_IP=127.0.0.3
@@ -76,13 +77,29 @@ Keep the bind on `127.0.0.0/8` — the no-op auth provider has no authentication
 
 ### 2 — Start the stack
 
-From the repo root:
+Serve from a checkout pinned to a release tag (the user creates it):
+
+- **Server-only machine** — clone fresh at the tag:
+
+  ```shell
+  git clone --branch vX.Y.Z git@github.com:pontusc-alchemy/claudeplans.git claudeplans-serve
+  ```
+
+- **Machine that also develops claudeplans** — add a [git worktree](https://git-scm.com/docs/git-worktree) beside the dev tree instead, so the served version stays pinned while development continues:
+
+  ```shell
+  git worktree add ../claudeplans.worktrees/serve vX.Y.Z
+  ```
+
+From that checkout's root (with the `.env` from step 1 in place):
 
 ```shell
-make up
+make serve
 ```
 
-This runs `docker compose up --build -d` (detached). The service carries `restart: unless-stopped`, so it survives reboots as long as the Docker daemon itself starts at boot/login — systemd socket/service on Linux, or Docker Desktop's "start at login" on macOS. No extra service unit is needed on either platform. Stop with `make down` (named volumes are kept; to also wipe data run `docker compose down -v` directly).
+This runs `docker compose -p claudeplans up --build -d` (detached) — the `claudeplans` compose project owns the long-lived data volumes. The service carries `restart: unless-stopped`, so it survives reboots as long as the Docker daemon itself starts at boot/login — systemd socket/service on Linux, or Docker Desktop's "start at login" on macOS. No extra service unit is needed on either platform. Stop with `docker compose -p claudeplans down` (named volumes are kept).
+
+Do **not** use `make up`/`make down` for the server — those run the disposable dev stack (compose project `claudeplans-dev`, bind `127.0.0.1:9394`, own volumes), meant for working on claudeplans itself.
 
 ### 3 — Verify health
 
@@ -94,4 +111,4 @@ A 200 response means the stack is ready. On failure, check `docker compose logs`
 
 ### 4 — Upgrades & data
 
-After pulling new commits, re-run `make up` — compose rebuilds only changed layers. Document state lives in the named volumes (`claudeplans_data`, `claudeplans_state`) and survives rebuilds, `make down`, and plugin/CLI reinstalls — it is only lost to an explicit `docker compose down -v`.
+To upgrade the served version, advance the serve checkout to the next release tag and re-run `make serve` — compose rebuilds only changed layers. Document state lives in the named volumes (`claudeplans_data`, `claudeplans_state`) and survives rebuilds, restarts, and plugin/CLI reinstalls — it is only lost to an explicit `docker compose -p claudeplans down -v`.

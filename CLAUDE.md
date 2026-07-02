@@ -22,6 +22,20 @@
   `plugins/plan/.claude-plugin/plugin.json` → commit → the user tags that
   commit on master and pushes branch + tag.
 
+## Local stacks
+
+- **`make serve` = the stable stack** — compose project `claudeplans`, which keys
+  the long-lived `claudeplans_data`/`claudeplans_state` volumes and takes its bind
+  from the checkout's env file. Run it only from the pinned release worktree
+  (user-created; e.g. `../claudeplans.worktrees/serve`), never from the dev tree —
+  that would rebuild the stable stack from dev source.
+- **`make up` / `make down` = the dev stack** — default compose project
+  `claudeplans-dev`, own disposable volumes, bind hard-coded to `127.0.0.1:9394`
+  in the recipe. Safe to cycle freely, including a volume wipe of that project.
+- Running these local stacks (`make serve`/`make up`/`make down` and compose
+  commands against them) **is the agreed exemption** to the global "never run
+  state-changing commands" rule. Everything else that rule covers stays barred.
+
 ## Interactions
 
 - This project uses a Makefile for all interactions. To run tests, formatting, linting, builds or anything similar check what exists in the Makefile. If something is missing, add it.

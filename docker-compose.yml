@@ -1,10 +1,14 @@
 # Local stack — runs the Bake `serve` target on the filesystem backend with the
 # dev no-op auth provider. `docker compose up --build` serves the API + live view.
-# The host bind defaults to 127.0.0.1:8000; set CLAUDEPLANS_HOST_IP / _HOST_PORT (an
-# .env or the shell) to give a stack its own loopback address — e.g. 127.0.0.3:80 +
-# an /etc/hosts alias for a friendly portless URL (see ## Local run in the README).
+# The host bind defaults to 127.0.0.1:8000; the stable stack overrides it via
+# CLAUDEPLANS_HOST_IP / _HOST_PORT from its checkout's .env — e.g. 127.0.0.3:80 + an
+# /etc/hosts alias for a friendly portless URL — while `make up` forces the dev bind
+# 127.0.0.1:9394 in the recipe (see ## Local run in the README).
 # State lives in the named `data` volume, not the host tree.
-name: claudeplans  # stable project name -> stable `claudeplans_data` volume, even if the repo dir moves
+# Default project = the dev stack (own claudeplans-dev_* volumes). The stable stack
+# overrides with `-p claudeplans` (make serve) — that project name keys the long-lived
+# `claudeplans_data`/`claudeplans_state` volumes holding the real documents.
+name: claudeplans-dev
 services:
   app:
     build:
@@ -15,7 +19,7 @@ services:
     ports:
       # Loopback-only by default: the noop auth provider trusts a single fixed `dev`
       # user with no authentication, so the port must not leave this host. A dedicated
-      # loopback IP (127.0.0.0/8 is all local on Linux) lets many stacks share :8000 —
+      # loopback IP (127.0.0.0/8 is all local on Linux) lets many stacks share a port —
       # or take :80 for a portless friendly host — without colliding.
       - "${CLAUDEPLANS_HOST_IP:-127.0.0.1}:${CLAUDEPLANS_HOST_PORT:-8000}:8000"
     environment:

@@ -33,11 +33,11 @@ ci: bake-ci  ## Run the gate in the ci image against mounted source.
 serve-build: ## Build the bare serve image.
 	docker buildx bake serve
 
-serve: ## Bring up the stable stack (compose; run from the pinned release worktree).
-	docker compose up --build -d
+serve: ## Bring up the stable stack (project claudeplans; run from the pinned release worktree).
+	docker compose -p claudeplans up --build -d
 
-up: ## Build + run the local stack (compose, filesystem + noop auth) on :8000.
-	docker compose up --build -d
+up: ## Build + run the dev stack (default project claudeplans-dev) on 127.0.0.1:9394.
+	CLAUDEPLANS_HOST_IP=127.0.0.1 CLAUDEPLANS_HOST_PORT=9394 docker compose up --build -d
 
-down: ## Stop the local stack (the data volume is kept; add -v to wipe).
+down: ## Stop the dev stack (volumes kept; wipe: docker compose down -v).
 	docker compose down

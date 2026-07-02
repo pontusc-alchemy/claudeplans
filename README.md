@@ -62,11 +62,13 @@ Individual targets: `make lint`, `make fmt`, `make typecheck`, `make test`.
 ## Local run (Docker Compose)
 
 [`docker-compose.yml`](docker-compose.yml) builds the `serve` stage and runs it on the filesystem
-backend with the dev no-op auth provider — a single fixed `dev` user, no IAP:
+backend with the dev no-op auth provider — a single fixed `dev` user, no IAP. Two make
+targets run it as two separate compose projects that never share state:
 
 ```shell
-make up        # docker compose up --build — API + live view on :8000
-make down      # docker compose down (the data volume is kept; add -v to wipe)
+make serve     # stable stack — project `claudeplans`, bind from the checkout's .env; run from the release worktree
+make up        # dev stack — default project `claudeplans-dev`, 127.0.0.1:9394, disposable volumes
+make down      # stop the dev stack (volumes kept; wipe: docker compose down -v)
 ```
 
 It sets the `CLAUDEPLANS_`-prefixed env (`CLAUDEPLANS_AUTH_MODE=noop`,
@@ -78,33 +80,64 @@ root-owned volume, you must make the target writable by uid 10001 yourself. Port
 publish on loopback only (`127.0.0.1`) — the no-op auth provider has no
 authentication, so the stack must not be reachable beyond this host.
 
-**Friendly host & multiple stacks.** The host bind is configurable via
-`CLAUDEPLANS_HOST_IP` / `CLAUDEPLANS_HOST_PORT` (shell env or a local `.env`),
-defaulting to `127.0.0.1:8000`. On Linux the whole `127.0.0.0/8` is loopback with no
-setup, so give a stack its own address and pair it with an `/etc/hosts` alias:
+**Friendly host for the stable stack.** The stable stack's host bind is configurable
+via `CLAUDEPLANS_HOST_IP` / `CLAUDEPLANS_HOST_PORT` (a `.env` in the checkout you
+serve from, or shell env), defaulting to `127.0.0.1:8000`. On Linux the whole
+`127.0.0.0/8` is loopback with no setup, so give the stack its own address and pair
+it with an `/etc/hosts` alias:
 
 ```shell
 echo '127.0.0.3 myplans.local' | sudo tee -a /etc/hosts
-CLAUDEPLANS_HOST_IP=127.0.0.3 CLAUDEPLANS_HOST_PORT=80 make up
+printf 'CLAUDEPLANS_HOST_IP=127.0.0.3\nCLAUDEPLANS_HOST_PORT=80\n' > .env
+make serve
 ```
 
 → `http://myplans.local` — a portless friendly URL with no reverse proxy, and
-distinct loopback IPs let several stacks run at once without port collisions.
+distinct loopback IPs let several stacks run at once without port collisions. (The
+dev stack ignores `.env`: `make up` forces its bind in the recipe so it can never
+grab the stable address.)
 
 > **Note:** keep the bind on `127.0.0.0/8`. The no-op auth provider has no
 > authentication, so `CLAUDEPLANS_HOST_IP=0.0.0.0` would expose read/write to anyone
 > on your network.
 
-**End-to-end.** With the stack up and the local venv (`make venv`) on PATH, create a
-document with the CLI and read its rendered view in a browser:
+**End-to-end.** With the dev stack up and the local venv (`make venv`) on PATH,
+create a document with the CLI and read its rendered view in a browser:
 
 ```shell
-.venv/bin/claudeplans doc create demo --type plan --slug hello --title "Hello Plan"
-# → http://localhost:8000/v1/users/dev/projects/demo/docs/hello/view
+CLAUDEPLANS_URL=http://127.0.0.1:9394 .venv/bin/claudeplans doc create demo --type plan --slug hello --title "Hello Plan"
+# → http://127.0.0.1:9394/v1/users/dev/projects/demo/docs/hello/view
 ```
 
 The CLI defaults to `http://127.0.0.1:8000` and uid `dev`; override with
 `--url` / `CLAUDEPLANS_URL` and `--uid` / `CLAUDEPLANS_UID`.
+
+## Serving a release while developing
+
+The stable stack and the dev inner loop share this repo but never a checkout: serve
+from a [git worktree](https://git-scm.com/docs/git-worktree) pinned to the release
+tag, develop in the main tree.
+
+```shell
+git worktree add ../claudeplans.worktrees/serve vX.Y.Z
+printf 'CLAUDEPLANS_HOST_IP=127.0.0.3\nCLAUDEPLANS_HOST_PORT=80\n' > ../claudeplans.worktrees/serve/.env
+make -C ../claudeplans.worktrees/serve serve
+```
+
+- `make serve` (worktree) → compose project `claudeplans`: owns the long-lived
+  `claudeplans_data` / `claudeplans_state` volumes and the friendly bind from the
+  worktree's `.env` (per-checkout and gitignored — each tree carries its own).
+- `make up` / `make down` (dev tree) → default compose project `claudeplans-dev`:
+  its own disposable volumes, hard-coded `127.0.0.1:9394` bind. Cycle it freely —
+  even `docker compose down -v` only wipes dev state.
+
+**Upgrading the served version:** advance the worktree to the next tag and re-run —
+document state lives in the named volumes and survives the rebuild:
+
+```shell
+git -C ../claudeplans.worktrees/serve checkout vX.Y.Z   # the new tag
+make -C ../claudeplans.worktrees/serve serve
+```
 
 ## Docker
 
@@ -119,6 +152,6 @@ into one image (`claudeplans`) tagged by stage:
 
 ```shell
 make serve-build      # docker buildx bake serve
-make serve            # run claudeplans:serve on :8000
+make serve            # bring up the stable stack (compose project `claudeplans`)
 make ci               # build claudeplans:ci and run the gate against the working tree
 ```
