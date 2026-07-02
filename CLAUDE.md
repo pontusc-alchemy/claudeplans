@@ -9,6 +9,10 @@
 - Pushing, deploys, and remote/prod changes remain the user's action — do **not**
   `git push` or modify remotes.
 
+## Interactions
+
+- This project uses a Makefile for all interactions. To run tests, formatting, linting, builds or anything similar check what exists in the Makefile. If something is missing, add it.
+
 ## Code intelligence
 
 - `ty` LSP is wired up for Python via the project-local `lsp-workspace@skills-dir`
