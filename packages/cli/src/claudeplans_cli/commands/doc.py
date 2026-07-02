@@ -69,6 +69,9 @@ _CREATE_STATUS = typer.Option(
 )
 _CREATE_DESCRIPTION = typer.Option("--description", help="ignored with --from-json")
 _CREATE_DATE = typer.Option("--date", help="ISO date; ignored with --from-json")
+_REV_JSON = typer.Option(
+    "--json", help="emit the {rev} envelope instead of the bare token"
+)
 
 
 @app.command()
@@ -274,10 +277,25 @@ def list_(
 
 @app.command()
 @handle_errors
-def rev(ctx: typer.Context, project: str, slug: str) -> None:
-    """Print the current rev (ETag) for a document without fetching its body."""
+def rev(
+    ctx: typer.Context,
+    project: str,
+    slug: str,
+    as_json: Annotated[bool, _REV_JSON] = False,
+) -> None:
+    """Print the current rev (ETag) for a document without fetching its body.
+
+    Default output is the bare rev token followed by a newline, so
+    `--rev "$(claudeplans doc rev <project> <slug>)"` composes directly into a
+    position-sensitive write. Pass --json (or the global --full) to emit the
+    {rev} envelope instead.
+    """
     c: AppContext = ctx.obj
-    emit_obj({"rev": c.client.get_rev(c.uid, project, slug)})
+    token = c.client.get_rev(c.uid, project, slug)
+    if as_json or c.full:
+        emit_obj({"rev": token})
+    else:
+        typer.echo(token)
 
 
 @app.command()

@@ -64,7 +64,7 @@ def test_cross_namespace_write_raises_forbidden(client: PlanClient) -> None:
 def test_stale_rev_toggle_raises_stale_revision(client: PlanClient) -> None:
     client.create_document("dev", "demo", _CREATE_BODY)
     with pytest.raises(StaleRevision) as excinfo:
-        client.toggle_task("dev", "demo", "p1", "a", 0, True, rev="does-not-match")
+        client.toggle_task("dev", "demo", "p1", "a", 0, True, rev="999999999")
     assert exit_code_for(excinfo.value) == 9
 
 

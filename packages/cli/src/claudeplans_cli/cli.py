@@ -53,7 +53,14 @@ app.command("schema")(schema_cmd.schema)
 # the resolution chain in _root stays explicit and testable.
 _URL = typer.Option("--url")
 _UID = typer.Option("--uid")
-_FULL = typer.Option("--full", "-v", help="Print the full document on write replies.")
+_FULL = typer.Option(
+    "--full",
+    "-v",
+    help=(
+        "Print the full document on write replies; also switches `doc rev` "
+        "to the {rev} envelope."
+    ),
+)
 
 
 def build_client(url: str) -> PlanClient:

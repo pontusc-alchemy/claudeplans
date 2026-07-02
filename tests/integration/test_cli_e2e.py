@@ -140,7 +140,7 @@ def test_stale_rev_toggle_exits_stale(patched_cli: None) -> None:
     )
     result = runner.invoke(
         cli.app,
-        ["task", "toggle", "demo", "p1", "a", "0", "--rev", "does-not-match"],
+        ["task", "toggle", "demo", "p1", "a", "0", "--rev", "999999999"],
     )
     assert result.exit_code == 9
 
@@ -194,7 +194,7 @@ def test_stale_rev_toggle_stderr_carries_current_rev(patched_cli: None) -> None:
     )
     result = runner.invoke(
         cli.app,
-        ["task", "toggle", "demo", "p1", "a", "0", "--rev", "does-not-match"],
+        ["task", "toggle", "demo", "p1", "a", "0", "--rev", "999999999"],
     )
     assert result.exit_code == 9
     err = json.loads(result.stderr)
@@ -467,7 +467,7 @@ def test_section_move_stale_rev_exits_stale(patched_cli: None) -> None:
     runner.invoke(cli.app, ["section", "add", "demo", "p1", "second", "Second"])
     result = runner.invoke(
         cli.app,
-        ["section", "move", "demo", "p1", "second", "0", "--rev", "does-not-match"],
+        ["section", "move", "demo", "p1", "second", "0", "--rev", "999999999"],
     )
     assert result.exit_code == ExitCode.STALE_REV
 
@@ -654,17 +654,96 @@ def test_project_lineage_linked_plan_appears_under_research_node(
 
 
 def test_doc_rev_returns_non_empty_rev(patched_cli: None) -> None:
+    # Default output is the bare rev token (no JSON envelope), so it composes
+    # directly as --rev "$(claudeplans doc rev ...)".
     create_result = runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
     create_rev = json.loads(create_result.stdout)["rev"]
     result = runner.invoke(cli.app, ["doc", "rev", "demo", "p1"])
     assert result.exit_code == 0
+    token = result.stdout.strip()
+    assert token  # non-empty
+    assert token.isdigit()
+    assert "{" not in token
+    assert token == create_rev
+
+
+def test_doc_rev_json_flag_emits_envelope(patched_cli: None) -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(cli.app, ["doc", "rev", "demo", "p1", "--json"])
+    assert result.exit_code == 0
     parsed = json.loads(result.stdout)
-    assert "rev" in parsed
-    assert parsed["rev"]  # non-empty string
-    # The rev must match what the create reply reported.
-    assert parsed["rev"] == create_rev
+    assert parsed["rev"].isdigit()
+
+
+def test_doc_rev_full_flag_emits_envelope(patched_cli: None) -> None:
+    # The global --full flag is passed BEFORE the subcommand.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(cli.app, ["--full", "doc", "rev", "demo", "p1"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    assert parsed["rev"].isdigit()
+
+
+def test_doc_rev_json_and_full_flags_together_emit_one_envelope(
+    patched_cli: None,
+) -> None:
+    # --json and global --full both request the envelope; combined they still
+    # print exactly one {rev} envelope, not a conflict/duplication.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(cli.app, ["--full", "doc", "rev", "demo", "p1", "--json"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    assert parsed["rev"].isdigit()
+
+
+def test_doc_rev_bare_token_composes_as_rev(patched_cli: None) -> None:
+    # The ergonomic win this phase exists for: no jq/json.loads needed to extract
+    # the rev before using it in a position-sensitive write.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    rev_token = runner.invoke(cli.app, ["doc", "rev", "demo", "p1"]).stdout.strip()
+    result = runner.invoke(
+        cli.app,
+        ["task", "toggle", "demo", "p1", "a", "0", "--rev", rev_token],
+    )
+    assert result.exit_code == 0
+
+
+def test_malformed_rev_exits_validation_with_invalid_rev_kind(
+    patched_cli: None,
+) -> None:
+    # A malformed --rev is a client input error (exit 4), distinct from a genuine
+    # concurrency conflict (exit 9) — it fails before any StaleRevision check.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app, ["task", "toggle", "demo", "p1", "a", "0", "--rev", "abc"]
+    )
+    assert result.exit_code == ExitCode.VALIDATION
+    err = json.loads(result.stderr)
+    assert err["error"] == "invalid_rev"
+
+
+def test_empty_rev_exits_validation_with_invalid_rev_kind(patched_cli: None) -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app, ["task", "toggle", "demo", "p1", "a", "0", "--rev", ""]
+    )
+    assert result.exit_code == ExitCode.VALIDATION
+    err = json.loads(result.stderr)
+    assert err["error"] == "invalid_rev"
 
 
 def test_doc_rev_missing_doc_exits_not_found(patched_cli: None) -> None:
@@ -672,6 +751,77 @@ def test_doc_rev_missing_doc_exits_not_found(patched_cli: None) -> None:
     assert result.exit_code == ExitCode.NOT_FOUND
     err = json.loads(result.stderr)
     assert err["error"] == "not_found"
+
+
+async def test_server_if_match_validation_400_vs_409(tmp_path: Path) -> None:
+    # Direct-ASGI check of deps.py's require_if_match validation: the CLI's
+    # client-side preflight fires before any HTTP call, so this exercises the
+    # server-side validate_rev call inside the dependency itself. A malformed
+    # If-Match is 400 (InvalidRev), never carrying current_rev/ETag; a
+    # well-formed-but-wrong numeric If-Match is still 409 (StaleRevision) with
+    # current_rev/ETag — proving FastAPI's exception handlers catch an error
+    # raised inside a Depends().
+    app = create_app(
+        Settings(
+            auth_mode=AuthMode.noop,
+            filesystem=FilesystemSettings(root=str(tmp_path / "data")),
+            registry_path=str(tmp_path / "users.json"),
+            project_registry_path=str(tmp_path / "projects.json"),
+        )
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as async_client:
+        create_resp = await async_client.post(
+            "/v1/users/dev/projects/demo/docs", json=json.loads(_VALID_CREATE)
+        )
+        assert create_resp.status_code == 201
+        toggle_url = "/v1/users/dev/projects/demo/docs/p1/phases/a/tasks/0/toggle"
+
+        bad_resp = await async_client.put(
+            toggle_url, json={"checked": True}, headers={"If-Match": "abc"}
+        )
+        assert bad_resp.status_code == 400
+        bad_body = bad_resp.json()
+        assert "current_rev" not in bad_body
+        assert bad_body["error"] == "invalid_rev"
+
+        stale_resp = await async_client.put(
+            toggle_url, json={"checked": True}, headers={"If-Match": "999999999"}
+        )
+        assert stale_resp.status_code == 409
+        body = stale_resp.json()
+        assert "current_rev" in body
+        assert stale_resp.headers.get("ETag") == body["current_rev"]
+
+
+async def test_server_optional_if_match_rejects_malformed_rev(tmp_path: Path) -> None:
+    # require_optional_if_match's validate_rev branch is unreachable through the
+    # CLI (client-side preflight fires first), so it needs this direct-ASGI case:
+    # PUT .../tasks/checked (the OptionalIfMatchDep route) with a malformed
+    # If-Match must still 400 with the invalid_rev discriminator.
+    app = create_app(
+        Settings(
+            auth_mode=AuthMode.noop,
+            filesystem=FilesystemSettings(root=str(tmp_path / "data")),
+            registry_path=str(tmp_path / "users.json"),
+            project_registry_path=str(tmp_path / "projects.json"),
+        )
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as async_client:
+        create_resp = await async_client.post(
+            "/v1/users/dev/projects/demo/docs", json=json.loads(_VALID_CREATE)
+        )
+        assert create_resp.status_code == 201
+        resp = await async_client.put(
+            "/v1/users/dev/projects/demo/docs/p1/phases/a/tasks/checked",
+            json={"checked": True},
+            headers={"If-Match": "abc"},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "invalid_rev"
 
 
 # ---------------------------------------------------------------------------
@@ -731,6 +881,7 @@ def test_schema_command_shape(patched_cli: None) -> None:
     assert "enums" in parsed
     assert "exit_codes" in parsed
     assert "error_kinds" in parsed
+    assert "invalid_rev" in parsed["error_kinds"]
     assert "envelopes" in parsed
     assert "commands" in parsed
     enums = parsed["enums"]
@@ -1963,7 +2114,7 @@ def test_set_checked_multi_index_stale_rev_exits_stale(patched_cli: None) -> Non
     )
     result = runner.invoke(
         cli.app,
-        ["task", "set-checked", "demo", "p1", "a", "0", "--rev", "does-not-match"],
+        ["task", "set-checked", "demo", "p1", "a", "0", "--rev", "999999999"],
     )
     assert result.exit_code == ExitCode.STALE_REV
 

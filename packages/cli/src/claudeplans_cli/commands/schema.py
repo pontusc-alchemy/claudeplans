@@ -112,7 +112,9 @@ def schema(ctx: typer.Context) -> None:
             "envelopes": {
                 "read": "{rev, data, warnings}",
                 "read_phases": "{rev, phases, warnings}",
-                "read_rev": "{rev}",
+                "read_rev": (
+                    "bare rev token by default; {rev} envelope behind --json/--full"
+                ),
                 "write_default": "{rev, warnings}",
                 "write_create": "{slug, type, rev, warnings}",
                 "write_task_add": (
@@ -127,7 +129,10 @@ def schema(ctx: typer.Context) -> None:
                     "auth_mode?, detail?}"
                 ),
                 "error_stderr": ("{error, detail}  (stale_rev: {error, current_rev})"),
-                "full_flag": "--full/-v restores {rev, data, warnings} on writes",
+                "full_flag": (
+                    "--full/-v restores {rev, data, warnings} on writes; "
+                    "also switches `doc rev` to the {rev} envelope"
+                ),
             },
             "commands": tree,
             "command_flags": dict(sorted(command_flags.items())),

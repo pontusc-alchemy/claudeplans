@@ -17,6 +17,7 @@ from pydantic import ValidationError as PydanticValidationError
 from claudeplans_contracts import (
     ExitCode,
     Forbidden,
+    InvalidRev,
     NotFound,
     PlanError,
     StaleRevision,
@@ -28,6 +29,7 @@ _ERROR_TO_EXIT: dict[type[PlanError], ExitCode] = {
     Forbidden: ExitCode.FORBIDDEN,
     ValidationError: ExitCode.VALIDATION,
     StaleRevision: ExitCode.STALE_REV,
+    InvalidRev: ExitCode.VALIDATION,
 }
 
 # The machine-readable `error` kind printed on stderr for each domain error, paired
@@ -38,6 +40,7 @@ _ERROR_TO_KIND: dict[type[PlanError], str] = {
     Forbidden: "forbidden",
     ValidationError: "validation",
     StaleRevision: "stale_rev",
+    InvalidRev: "invalid_rev",
 }
 
 

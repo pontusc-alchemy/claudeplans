@@ -50,6 +50,30 @@ class Forbidden(PlanError):
     """A write outside the caller's namespace (write-own violation)."""
 
 
+class InvalidRev(PlanError):
+    """A client-supplied rev token is malformed (not a decimal integer string).
+
+    A standalone subclass of PlanError (NOT ValidationError) so the CLI's
+    isinstance-iteration mapping can't accidentally shadow it under the generic
+    validation kind. A client input error, distinct from StaleRevision: a bad rev
+    must never masquerade as a concurrency conflict. Maps to HTTP 400 and CLI exit
+    code VALIDATION (4) with stderr kind "invalid_rev".
+    """
+
+
+def validate_rev(value: str) -> str:
+    """Validate a rev token is well-formed: non-empty, ASCII decimal digits only.
+
+    Revs are monotonic integer-as-string counters; anything else (empty, non-ASCII
+    digits, or a stray JSON/text blob) is a malformed client input, not a
+    concurrency conflict, so it is rejected here rather than falling through to a
+    StaleRevision comparison.
+    """
+    if not value.isascii() or not value.isdigit():
+        raise InvalidRev(f"malformed rev {value!r}: expected ASCII decimal digits")
+    return value
+
+
 class ExitCode(IntEnum):
     """claudeplans-cli process exit codes (agent-client phase wires these to errors).
 

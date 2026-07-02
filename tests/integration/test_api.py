@@ -179,7 +179,7 @@ async def test_toggle_with_stale_if_match_returns_409(tmp_path: Path) -> None:
         resp = await client.put(
             f"{BASE}/p1/phases/a/tasks/0/toggle",
             json={"checked": True},
-            headers={"If-Match": "does-not-match"},
+            headers={"If-Match": "999999999"},
         )
         assert resp.status_code == 409
 
@@ -190,7 +190,7 @@ async def test_delete_with_wrong_if_match_returns_409(tmp_path: Path) -> None:
         resp = await client.request(
             "DELETE",
             f"{BASE}/p1",
-            headers={"If-Match": "does-not-match"},
+            headers={"If-Match": "999999999"},
         )
         assert resp.status_code == 409
 
@@ -439,7 +439,7 @@ async def test_move_phase_if_match_semantics(tmp_path: Path) -> None:
         resp_stale = await client.post(
             f"{BASE}/p1/phases/b/move",
             json={"to_index": 0},
-            headers={"If-Match": "does-not-match"},
+            headers={"If-Match": "999999999"},
         )
         assert resp_stale.status_code == 409
         # Correct If-Match -> 200 and the order changes.

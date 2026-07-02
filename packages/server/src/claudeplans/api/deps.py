@@ -8,6 +8,8 @@ from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request
 
+from claudeplans_contracts import validate_rev
+
 from ..auth.provider import CurrentUser, UserProvider
 from ..auth.registry import UserRegistry
 from ..config import Settings
@@ -60,19 +62,25 @@ def require_if_match(
 
     Index-addressed and destructive ops use optimistic concurrency, so the caller
     MUST pass the rev it last saw. HTTP ETags are quoted, so strip the surrounding
-    double-quotes before handing the bare rev to core.
+    double-quotes before handing the bare rev to core. Validated via `validate_rev`
+    so a malformed rev raises InvalidRev (-> 400) instead of falling through to a
+    StaleRevision comparison.
     """
     if if_match is None:
         raise HTTPException(status_code=428, detail="If-Match header required")
-    return if_match.strip('"')
+    return validate_rev(if_match.strip('"'))
 
 
 def require_optional_if_match(
     if_match: str | None = Header(default=None, alias="If-Match"),
 ) -> str | None:
     """Return the rev from If-Match, or None if absent — for routes where the
-    conditional applies only to some code paths (core enforces it there)."""
-    return if_match.strip('"') if if_match is not None else None
+    conditional applies only to some code paths (core enforces it there).
+
+    Validated via `validate_rev` when present, for the same reason as
+    `require_if_match`.
+    """
+    return validate_rev(if_match.strip('"')) if if_match is not None else None
 
 
 # Annotated aliases so routes inject via a parameter annotation (the modern FastAPI

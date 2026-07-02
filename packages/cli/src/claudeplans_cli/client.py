@@ -21,6 +21,7 @@ from claudeplans_contracts import (
     DocStatusRequest,
     EditTaskRequest,
     Forbidden,
+    InvalidRev,
     MovePhaseRequest,
     MoveSectionRequest,
     NotFound,
@@ -38,6 +39,7 @@ from claudeplans_contracts import (
     ToggleTaskRequest,
     ValidationError,
     validate_key_segment,
+    validate_rev,
 )
 
 
@@ -50,9 +52,20 @@ def _seg(value: str) -> str:
         raise ValidationError(str(exc)) from exc
 
 
-# HTTP status -> domain error. 428 (missing If-Match precondition) is a client
-# misuse of the conditional-write contract, surfaced as a domain ValidationError.
-# 500 is the server's CorruptDocument path; both unmapped-and-mapped errors stay
+def _rev(value: str) -> str:
+    """Validate a rev client-side, before it ever reaches an If-Match header, so a
+    malformed --rev fails fast as InvalidRev rather than round-tripping to the
+    server first."""
+    return validate_rev(value)
+
+
+# HTTP status -> domain error. 400 is deliberately NOT mapped here: it is
+# Starlette's generic bad-request bucket, shared by the InvalidRev path and other
+# mid-request rewraps (e.g. limits.py's body-size middleware), so a status alone
+# can't tell them apart — _raise_for_status discriminates a 400 inline via the
+# server's "error" body field instead. 428 (missing If-Match precondition) is a
+# client misuse of the conditional-write contract, surfaced as a domain
+# ValidationError. 500 is the server's CorruptDocument path; all of these stay
 # inside the PlanError hierarchy so the CLI's error boundary catches every one.
 _STATUS_TO_ERROR: dict[int, type[PlanError]] = {
     403: Forbidden,
@@ -109,6 +122,20 @@ class PlanClient:
         """Raise the matching domain error for any non-2xx response."""
         if resp.status_code >= 400:
             detail = _detail_message(resp)
+            if resp.status_code == 400:
+                # Discriminate the InvalidRev path from any other 400 origin via
+                # the server's "error" body field (see the comment above
+                # _STATUS_TO_ERROR); anything else falls through to the generic
+                # unmapped-status path below.
+                try:
+                    discriminator_body = resp.json()
+                except ValueError:
+                    discriminator_body = None
+                if (
+                    isinstance(discriminator_body, dict)
+                    and discriminator_body.get("error") == "invalid_rev"
+                ):
+                    raise InvalidRev(detail)
             error_cls = _STATUS_TO_ERROR.get(resp.status_code)
             if error_cls is not None:
                 if resp.status_code == 409:
@@ -127,9 +154,9 @@ class PlanClient:
                             current_rev = ""
                     raise StaleRevision(detail, current_rev=current_rev)
                 raise error_cls(detail)
-            # Any unmapped error status stays inside PlanError so the CLI's error
-            # boundary catches it (-> generic exit code) rather than leaking an
-            # httpx.HTTPStatusError traceback.
+            # Any unmapped error status (including a non-InvalidRev 400) stays
+            # inside PlanError so the CLI's error boundary catches it (-> generic
+            # exit code) rather than leaking an httpx.HTTPStatusError traceback.
             raise PlanError(f"unexpected HTTP {resp.status_code}: {detail}")
 
     def _reply(self, resp: httpx.Response) -> Reply:
@@ -193,7 +220,7 @@ class PlanClient:
         resp = self._http.request(
             "DELETE",
             self._doc_base(uid, project, slug),
-            headers={"If-Match": rev},
+            headers={"If-Match": _rev(rev)},
         )
         return self._reply(resp)
 
@@ -295,7 +322,7 @@ class PlanClient:
         resp = self._http.post(
             f"{self._doc_base(uid, project, slug)}/phases/{_seg(phase_slug)}/move",
             json=body.model_dump(mode="json"),
-            headers={"If-Match": rev},
+            headers={"If-Match": _rev(rev)},
         )
         return self._reply(resp)
 
@@ -339,7 +366,7 @@ class PlanClient:
         resp = self._http.put(
             f"{base}/toggle",
             json=body.model_dump(mode="json"),
-            headers={"If-Match": rev},
+            headers={"If-Match": _rev(rev)},
         )
         return self._reply(resp)
 
@@ -355,7 +382,7 @@ class PlanClient:
         rev: str | None = None,
     ) -> Reply:
         body = SetTasksCheckedRequest(checked=checked, indices=indices)
-        headers = {"If-Match": rev} if rev is not None else {}
+        headers = {"If-Match": _rev(rev)} if rev is not None else {}
         resp = self._http.put(
             f"{self._doc_base(uid, project, slug)}"
             f"/phases/{_seg(phase_slug)}/tasks/checked",
@@ -388,7 +415,7 @@ class PlanClient:
         resp = self._http.put(
             base,
             json=body.model_dump(mode="json"),
-            headers={"If-Match": rev},
+            headers={"If-Match": _rev(rev)},
         )
         return self._reply(resp)
 
@@ -406,7 +433,7 @@ class PlanClient:
         resp = self._http.request(
             "DELETE",
             base,
-            headers={"If-Match": rev},
+            headers={"If-Match": _rev(rev)},
         )
         return self._reply(resp)
 
@@ -450,7 +477,7 @@ class PlanClient:
         resp = self._http.post(
             f"{self._doc_base(uid, project, slug)}/sections/{_seg(anchor)}/move",
             json=body.model_dump(mode="json"),
-            headers={"If-Match": rev},
+            headers={"If-Match": _rev(rev)},
         )
         return self._reply(resp)
 

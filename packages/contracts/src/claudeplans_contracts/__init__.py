@@ -44,10 +44,12 @@ from .enums import SectionPlacement as SectionPlacement
 from .errors import CorruptDocument as CorruptDocument
 from .errors import ExitCode as ExitCode
 from .errors import Forbidden as Forbidden
+from .errors import InvalidRev as InvalidRev
 from .errors import NotFound as NotFound
 from .errors import PlanError as PlanError
 from .errors import StaleRevision as StaleRevision
 from .errors import ValidationError as ValidationError
+from .errors import validate_rev as validate_rev
 from .keys import document_key as document_key
 from .keys import key_for_document as key_for_document
 from .keys import owner_of as owner_of

@@ -26,6 +26,7 @@ from pydantic import ValidationError as PydanticValidationError
 from claudeplans_contracts import (
     CorruptDocument,
     Forbidden,
+    InvalidRev,
     NotFound,
     StaleRevision,
 )
@@ -51,6 +52,14 @@ async def _handle_stale_revision(request: Request, exc: Exception) -> JSONRespon
 
 async def _handle_validation_error(request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse({"detail": str(exc)}, status_code=422)
+
+
+async def _handle_invalid_rev(request: Request, exc: Exception) -> JSONResponse:
+    # A malformed If-Match token: a client input error, distinct from the 409
+    # StaleRevision path, so it never carries a current_rev/ETag. 400 is also
+    # Starlette's generic bad-request bucket (e.g. limits.py's body-size rewrap),
+    # so the "error" field discriminates this path for the CLI's status mapping.
+    return JSONResponse({"detail": str(exc), "error": "invalid_rev"}, status_code=400)
 
 
 async def _handle_pydantic_validation_error(
@@ -98,6 +107,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     """Register the domain-error -> HTTP-status handlers on `app`."""
     app.add_exception_handler(NotFound, _handle_not_found)
     app.add_exception_handler(StaleRevision, _handle_stale_revision)
+    app.add_exception_handler(InvalidRev, _handle_invalid_rev)
     app.add_exception_handler(Forbidden, _handle_forbidden)
     app.add_exception_handler(DomainValidationError, _handle_validation_error)
     app.add_exception_handler(
