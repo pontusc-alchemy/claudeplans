@@ -64,6 +64,9 @@ def test_schema_conditional_writes_and_list_envelope() -> None:
     assert "list" in parsed["envelopes"]
     # Move index semantics documented in the agent-facing contract.
     assert "move_index" in parsed
+    # Command aliases/equivalences documented in the agent-facing contract.
+    assert parsed["aliases"]["doc set-status"] == "doc status"
+    assert "task toggle <i>" in parsed["equivalences"]
 
 
 @pytest.mark.usefixtures("patched_cli")
@@ -102,6 +105,7 @@ def test_schema_command_flags_and_global_flags() -> None:
     assert ("--full", "-v") in gf_opts
     assert ("--install-completion",) not in gf_opts
     assert ("--show-completion",) not in gf_opts
+    assert not any("--version" in f["opts"] for f in parsed["global_flags"])
     # The task-add reply envelope is now advertised.
     assert "write_task_add" in parsed["envelopes"]
 
@@ -127,6 +131,15 @@ def test_no_color_help_has_no_ansi() -> None:
     assert "\x1b[" not in result.stdout, (
         "ANSI escape sequences found in --help output with NO_COLOR=1"
     )
+
+
+def test_version_flag_exits_zero_and_prints_version() -> None:
+    result = runner.invoke(cli.app, ["--version"])
+    assert result.exit_code == 0
+    assert result.stdout.startswith("claudeplans ")
+    tokens = result.stdout.split()
+    assert len(tokens) >= 2
+    assert tokens[1]
 
 
 @pytest.mark.usefixtures("patched_cli")

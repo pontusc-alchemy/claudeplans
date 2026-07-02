@@ -334,6 +334,8 @@ async def set_document_meta(
     description: str | None,
     date: str | None,
     frontmatter: dict[str, JsonValue] | None,
+    clear_description: bool = False,
+    clear_date: bool = False,
     user: CurrentUser,
 ) -> tuple[str, Document]:
     return await read_modify_write(
@@ -345,6 +347,8 @@ async def set_document_meta(
             description=description,
             date=date,
             frontmatter=frontmatter,
+            clear_description=clear_description,
+            clear_date=clear_date,
         ),
         user=user,
     )

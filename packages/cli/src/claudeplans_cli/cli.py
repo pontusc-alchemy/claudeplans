@@ -7,6 +7,7 @@ so the whole command tree can run against the app object without a socket.
 Typer descriptors are module-level singletons to satisfy ruff B008.
 """
 
+import importlib.metadata
 import os
 from typing import Annotated
 
@@ -63,6 +64,20 @@ _FULL = typer.Option(
 )
 
 
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(f"claudeplans {importlib.metadata.version('claudeplans-cli')}")
+        raise typer.Exit()
+
+
+_VERSION = typer.Option(
+    "--version",
+    callback=_version_callback,
+    is_eager=True,
+    help="Show the CLI version and exit.",
+)
+
+
 def build_client(url: str) -> PlanClient:
     """Build the client for a service URL (a seam tests monkeypatch)."""
     return PlanClient(url)
@@ -74,6 +89,7 @@ def _root(
     url: Annotated[str | None, _URL] = None,
     uid: Annotated[str | None, _UID] = None,
     full: Annotated[bool, _FULL] = False,
+    version: Annotated[bool, _VERSION] = False,
 ) -> None:
     """Agent client for the claudeplans service."""
     cfg = read_config()

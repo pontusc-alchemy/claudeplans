@@ -558,6 +558,8 @@ class PlanClient:
         description: str | None,
         date: str | None,
         frontmatter: dict | None,
+        clear_description: bool = False,
+        clear_date: bool = False,
     ) -> Reply:
         # exclude_none: omitted fields are left unchanged server-side.
         body = SetDocumentMetaRequest(
@@ -565,6 +567,8 @@ class PlanClient:
             description=description,
             date=date,
             frontmatter=frontmatter,
+            clear_description=clear_description,
+            clear_date=clear_date,
         )
         resp = self._http.put(
             self._doc_base(uid, project, slug),

@@ -361,14 +361,23 @@ def set_document_meta(
     description: str | None,
     date: str | None,
     frontmatter: dict[str, JsonValue] | None,
+    clear_description: bool = False,
+    clear_date: bool = False,
 ) -> Document:
-    """Absolute set of provided document metadata fields; None leaves unchanged."""
+    """Absolute set of provided document metadata fields; None leaves unchanged.
+
+    clear_* forces the field to null, overriding any provided value for that field.
+    """
     update: dict[str, JsonValue] = {}
     if title is not None:
         update["title"] = title
-    if description is not None:
+    if clear_description:
+        update["description"] = None
+    elif description is not None:
         update["description"] = description
-    if date is not None:
+    if clear_date:
+        update["date"] = None
+    elif date is not None:
         update["date"] = date
     if frontmatter is not None:
         update["frontmatter"] = frontmatter

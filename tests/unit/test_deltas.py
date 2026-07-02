@@ -494,6 +494,75 @@ def test_set_document_meta_frontmatter_replaces_whole_dict() -> None:
     assert out.frontmatter == {"b": 2}
 
 
+def test_set_document_meta_clear_description_sets_none() -> None:
+    doc = _doc().model_copy(update={"description": "was set"})
+    out = deltas.set_document_meta(
+        doc,
+        title=None,
+        description=None,
+        date=None,
+        frontmatter=None,
+        clear_description=True,
+    )
+    assert out.description is None
+
+
+def test_set_document_meta_clear_date_sets_none() -> None:
+    doc = _doc().model_copy(update={"date": "2024-01-01"})
+    out = deltas.set_document_meta(
+        doc,
+        title=None,
+        description=None,
+        date=None,
+        frontmatter=None,
+        clear_date=True,
+    )
+    assert out.date is None
+
+
+def test_set_document_meta_clear_wins_over_provided_value() -> None:
+    doc = _doc()
+    out = deltas.set_document_meta(
+        doc,
+        title=None,
+        description="ignored",
+        date="2024-01-01",
+        frontmatter=None,
+        clear_description=True,
+        clear_date=True,
+    )
+    assert out.description is None
+    assert out.date is None
+
+
+def test_set_document_meta_omitting_clear_leaves_fields_unchanged() -> None:
+    doc = _doc().model_copy(update={"description": "kept", "date": "2024-01-01"})
+    out = deltas.set_document_meta(
+        doc,
+        title=None,
+        description=None,
+        date=None,
+        frontmatter=None,
+    )
+    assert out.description == "kept"
+    assert out.date == "2024-01-01"
+
+
+def test_set_document_meta_clear_one_field_while_setting_another() -> None:
+    # Clearing date must not disturb description being set in the same call.
+    doc = _doc().model_copy(update={"description": "was set", "date": "2024-01-01"})
+    out = deltas.set_document_meta(
+        doc,
+        title=None,
+        description="new desc",
+        date=None,
+        frontmatter=None,
+        clear_date=True,
+    )
+    assert out.description == "new desc"
+    assert out.date is None
+
+
 def test_merge_patch_null_deletes() -> None:
     assert _merge_patch({"a": 1, "b": 2}, {"b": None}) == {"a": 1}
 

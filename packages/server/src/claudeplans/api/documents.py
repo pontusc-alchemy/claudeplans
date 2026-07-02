@@ -106,6 +106,8 @@ async def set_document_meta(
         description=body.description,
         date=body.date,
         frontmatter=body.frontmatter,
+        clear_description=body.clear_description,
+        clear_date=body.clear_date,
         user=user,
     )
     response.headers["ETag"] = rev

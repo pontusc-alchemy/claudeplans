@@ -219,6 +219,66 @@ def test_doc_set_frontmatter_invalid_json_exits_validation() -> None:
 
 
 @pytest.mark.usefixtures("patched_cli")
+def test_doc_set_clear_description_nulls_it() -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=VALID_CREATE
+    )
+    runner.invoke(cli.app, ["doc", "set", "demo", "p1", "--description", "D1"])
+    result = runner.invoke(cli.app, ["doc", "set", "demo", "p1", "--clear-description"])
+    assert result.exit_code == 0
+    doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "p1"]).stdout)
+    assert doc["data"]["description"] is None
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_set_description_and_clear_description_exits_validation() -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app,
+        [
+            "doc",
+            "set",
+            "demo",
+            "p1",
+            "--description",
+            "D1",
+            "--clear-description",
+        ],
+    )
+    assert_validation_exit(result)
+    err = json.loads(result.stderr)
+    assert "mutually exclusive" in err["detail"]
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_set_clear_date_nulls_it() -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=VALID_CREATE
+    )
+    runner.invoke(cli.app, ["doc", "set", "demo", "p1", "--date", "2024-01-01"])
+    result = runner.invoke(cli.app, ["doc", "set", "demo", "p1", "--clear-date"])
+    assert result.exit_code == 0
+    doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "p1"]).stdout)
+    assert doc["data"]["date"] is None
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_set_date_and_clear_date_exits_validation() -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app,
+        ["doc", "set", "demo", "p1", "--date", "2024-01-01", "--clear-date"],
+    )
+    assert_validation_exit(result)
+    err = json.loads(result.stderr)
+    assert "mutually exclusive" in err["detail"]
+
+
+@pytest.mark.usefixtures("patched_cli")
 def test_doc_set_empty_title_exits_validation() -> None:
     # `doc set --title ""` must reject via the phase-2 validator (re-validation on
     # persist), not silently blank the title.

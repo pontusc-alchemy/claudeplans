@@ -212,6 +212,8 @@ class SetDocumentMetaRequest(BaseModel):
     description: str | None = None
     date: str | None = None
     frontmatter: dict[str, JsonValue] | None = None
+    clear_description: bool = False
+    clear_date: bool = False
 
 
 class SearchHit(BaseModel):

@@ -21,7 +21,7 @@ from ..output import emit_obj
 
 # Typer auto-adds these to the root callback; they are boilerplate, not part of
 # the service contract, so they are excluded from the advertised global flags.
-_ROOT_SKIP = frozenset({"install_completion", "show_completion"})
+_ROOT_SKIP = frozenset({"install_completion", "show_completion", "version"})
 
 
 def _has_rev(cmd: object) -> bool:
@@ -145,6 +145,15 @@ def schema(ctx: typer.Context) -> None:
                 "phase/section move to_index is the absolute position AFTER the "
                 "item is removed from its current slot: valid range [0, count-1]"
             ),
+            "aliases": {
+                "doc set-status": "doc status",
+            },
+            "equivalences": {
+                "task toggle <i>": (
+                    "task set-checked <i> (set-checked also accepts "
+                    "--all / multi-index)"
+                ),
+            },
             "conditional_writes": sorted(conditional),
         }
     )

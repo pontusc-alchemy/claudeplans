@@ -70,8 +70,11 @@ async def _handle_pydantic_validation_error(
     # request-body 422 shape. Use exc.json() (not exc.errors()) because an invariant
     # raised in a model_validator carries the raw ValueError in ctx, which the default
     # JSONResponse encoder can't serialize; exc.json() renders that context safely.
+    # include_url=False drops the errors.pydantic.dev URL pydantic otherwise embeds.
     assert isinstance(exc, PydanticValidationError)
-    return JSONResponse({"detail": json.loads(exc.json())}, status_code=422)
+    return JSONResponse(
+        {"detail": json.loads(exc.json(include_url=False))}, status_code=422
+    )
 
 
 async def _handle_forbidden(request: Request, exc: Exception) -> JSONResponse:
@@ -91,7 +94,9 @@ async def _handle_request_validation(request: Request, exc: Exception) -> JSONRe
     # deeply-nested body is then a clean 422, never an uncaught 500.
     assert isinstance(exc, RequestValidationError)
     try:
-        detail: object = jsonable_encoder(exc.errors())
+        detail: object = jsonable_encoder(
+            [{k: v for k, v in e.items() if k != "url"} for e in exc.errors()]
+        )
     except RecursionError:
         detail = [
             {

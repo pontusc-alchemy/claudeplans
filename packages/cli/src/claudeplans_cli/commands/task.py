@@ -18,7 +18,7 @@ from ..output import emit_task_added, emit_write
 app = typer.Typer(no_args_is_help=True)
 
 _TEXT = typer.Argument()
-_TASK_INDEX = typer.Argument()
+_TASK_INDEX = typer.Argument(help="0-based task index (see 'doc phases' for positions)")
 _REV = typer.Option(
     "--rev",
     help="current rev; this write is position-sensitive (see 'doc rev')",

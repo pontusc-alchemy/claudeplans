@@ -60,6 +60,13 @@ _PRIMARY = typer.Option("--primary")
 _SET_TITLE = typer.Option("--title")
 _SET_DESCRIPTION = typer.Option("--description")
 _SET_DATE = typer.Option("--date")
+_CLEAR_DESCRIPTION = typer.Option(
+    "--clear-description",
+    help="clear description back to null; mutually exclusive with --description",
+)
+_CLEAR_DATE = typer.Option(
+    "--clear-date", help="clear date back to null; mutually exclusive with --date"
+)
 _SET_FRONTMATTER = typer.Option(
     "--frontmatter",
     help="JSON object; REPLACES the entire frontmatter dict (omitted keys are lost).",
@@ -157,7 +164,7 @@ def status(
     slug: str,
     value: Annotated[DocStatus, _STATUS_VALUE],
 ) -> None:
-    """Set a document's status."""
+    """Set a document's status (canonical; `set-status` is an alias)."""
     c: AppContext = ctx.obj
     reply = c.client.set_document_status(c.uid, project, slug, value.value)
     emit_write(reply, full=c.full)
@@ -229,6 +236,8 @@ def set_meta(
     description: Annotated[str | None, _SET_DESCRIPTION] = None,
     date: Annotated[str | None, _SET_DATE] = None,
     frontmatter: Annotated[str | None, _SET_FRONTMATTER] = None,
+    clear_description: Annotated[bool, _CLEAR_DESCRIPTION] = False,
+    clear_date: Annotated[bool, _CLEAR_DATE] = False,
 ) -> None:
     """Set document metadata fields (omitted flags are left unchanged)."""
     c: AppContext = ctx.obj
@@ -240,6 +249,12 @@ def set_meta(
             fm = json.loads(frontmatter)
         except json.JSONDecodeError as exc:
             raise ValidationError(f"--frontmatter is not valid JSON: {exc}") from exc
+    if description is not None and clear_description:
+        raise ValidationError(
+            "--description and --clear-description are mutually exclusive"
+        )
+    if date is not None and clear_date:
+        raise ValidationError("--date and --clear-date are mutually exclusive")
     reply = c.client.set_document_meta(
         c.uid,
         project,
@@ -248,6 +263,8 @@ def set_meta(
         description=description,
         date=date,
         frontmatter=fm,
+        clear_description=clear_description,
+        clear_date=clear_date,
     )
     emit_write(reply, full=c.full)
 

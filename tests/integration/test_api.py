@@ -213,6 +213,10 @@ async def test_malformed_create_body_returns_422(tmp_path: Path) -> None:
             json={"type": "plan", "slug": "p1"},
         )
         assert resp.status_code == 422
+        # RequestValidationError path: no errors.pydantic.dev URL leaks into the body.
+        assert "errors.pydantic.dev" not in resp.text
+        for entry in resp.json()["detail"]:
+            assert "url" not in entry
 
 
 async def test_delta_referencing_missing_phase_returns_422(tmp_path: Path) -> None:
@@ -401,6 +405,10 @@ async def test_patch_section_invalid_type_returns_422(tmp_path: Path) -> None:
             f"{BASE}/p1/sections/ctx", json={"patch": {"level": "notanint"}}
         )
         assert resp.status_code == 422
+        # PydanticValidationError path: no errors.pydantic.dev URL leaks into the body.
+        assert "errors.pydantic.dev" not in resp.text
+        for entry in resp.json()["detail"]:
+            assert "url" not in entry
 
 
 async def test_research_refs_invariant_422_and_valid_set_200(tmp_path: Path) -> None:
