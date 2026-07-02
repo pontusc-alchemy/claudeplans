@@ -17,13 +17,14 @@ from fastapi import APIRouter, Response
 from claudeplans_contracts import (
     AddTaskRequest,
     EditTaskRequest,
+    SetTasksCheckedRequest,
     ToggleTaskRequest,
     document_key,
 )
 
 from .. import core
 from ..events import Event
-from .deps import CurrentUserDep, FeedDep, IfMatchDep, RepoDep
+from .deps import CurrentUserDep, FeedDep, IfMatchDep, OptionalIfMatchDep, RepoDep
 from .envelope import ResponseEnvelope, envelope
 
 router = APIRouter(
@@ -47,6 +48,28 @@ async def add_task(
     key = document_key(uid, project, slug)
     rev, doc = await core.add_task(
         repo, key, phase_slug, body.text, body.at, body.checked, user=user
+    )
+    response.headers["ETag"] = rev
+    feed.publish(Event(key=key, rev=rev))
+    return envelope(doc, scope=f"phases.{phase_slug}")
+
+
+@router.put("/checked")
+async def set_tasks_checked(
+    uid: str,
+    project: str,
+    slug: str,
+    phase_slug: str,
+    body: SetTasksCheckedRequest,
+    response: Response,
+    expected_rev: OptionalIfMatchDep,
+    repo: RepoDep,
+    user: CurrentUserDep,
+    feed: FeedDep,
+) -> ResponseEnvelope:
+    key = document_key(uid, project, slug)
+    rev, doc = await core.set_tasks_checked(
+        repo, key, phase_slug, body.indices, body.checked, expected_rev, user=user
     )
     response.headers["ETag"] = rev
     feed.publish(Event(key=key, rev=rev))

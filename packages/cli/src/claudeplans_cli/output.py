@@ -10,7 +10,7 @@ Write replies have a slimmer default shape that omits the full document body.
 Pass `full=True` (--full/-v) to restore the full `{rev, data, warnings}` envelope.
 Slice directives narrow the output further without a second request:
   - "create"          → {slug, type, rev, warnings}
-  - "phase:<slug>"    → {rev, warnings, phase:{slug, tasks}}
+  - "phase:<slug>"    → {rev, warnings, phase:{slug, status, tasks}}
   - "phases-ordering" → {rev, warnings, phases:[{slug, status}]}
   - None (default)    → {rev, warnings}
 task-add shape (emit_task_added, full=False):
@@ -82,7 +82,7 @@ def emit_write(
     Default (full=False): slim shape; `slice_` controls what is included:
       - None            → {rev, warnings}
       - "create"        → {slug, type, rev, warnings}
-      - "phase:<slug>"  → {rev, warnings, phase:{slug, tasks}}
+      - "phase:<slug>"  → {rev, warnings, phase:{slug, status, tasks}}
       - "phases-ordering" → {rev, warnings, phases:[{slug, status}]}
 
     full=True: always prints the full {rev, data, warnings} envelope, matching the
@@ -105,17 +105,22 @@ def emit_write(
     if slice_ is not None and slice_.startswith("phase:"):
         phase_slug = slice_[len("phase:") :]
         tasks: object = None
+        status: object = None
         if isinstance(data, dict):
             matched = next(
                 (p for p in data.get("phases", []) if p.get("slug") == phase_slug),
                 None,
             )
-            tasks = matched.get("tasks", []) if isinstance(matched, dict) else []
+            if isinstance(matched, dict):
+                tasks = matched.get("tasks", [])
+                status = matched.get("status")
+            else:
+                tasks = []
         _compact(
             {
                 "rev": reply.rev,
                 "warnings": reply.warnings,
-                "phase": {"slug": phase_slug, "tasks": tasks},
+                "phase": {"slug": phase_slug, "status": status, "tasks": tasks},
             }
         )
         return

@@ -67,6 +67,14 @@ def require_if_match(
     return if_match.strip('"')
 
 
+def require_optional_if_match(
+    if_match: str | None = Header(default=None, alias="If-Match"),
+) -> str | None:
+    """Return the rev from If-Match, or None if absent — for routes where the
+    conditional applies only to some code paths (core enforces it there)."""
+    return if_match.strip('"') if if_match is not None else None
+
+
 # Annotated aliases so routes inject via a parameter annotation (the modern FastAPI
 # form) rather than a Depends() call in a default — the latter trips ruff B008.
 RepoDep = Annotated[Repository, Depends(get_repo)]
@@ -74,6 +82,7 @@ FeedDep = Annotated[EventFeed, Depends(get_feed)]
 SearchIndexDep = Annotated[SearchIndex, Depends(get_search_index)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 IfMatchDep = Annotated[str, Depends(require_if_match)]
+OptionalIfMatchDep = Annotated[str | None, Depends(require_optional_if_match)]
 CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]
 RegistryDep = Annotated[UserRegistry, Depends(get_registry)]
 ProjectRegistryDep = Annotated[ProjectRegistry, Depends(get_project_registry)]

@@ -30,6 +30,17 @@ Arguments must carry both `<project>` and `<slug>` — there is no fuzzy resolve
   claudeplans task toggle "<project>" "<slug>" "<phase-slug>" <index> --rev <rev>
   ```
 
+  Finishing a phase? Skip the per-task loop. `phase complete` checks every task AND
+  sets the phase done in one rev-free call (it checks before the flip, so it never
+  trips the done-with-open-tasks warning); or bulk-check without advancing status via
+  `task set-checked` — `--all` (rev-free) or an explicit index list (rev-gated once,
+  not once per task):
+  ```shell
+  claudeplans phase complete "<project>" "<slug>" "<phase-slug>"
+  claudeplans task set-checked "<project>" "<slug>" "<phase-slug>" --all
+  claudeplans task set-checked "<project>" "<slug>" "<phase-slug>" 0 2 4 --rev <rev>
+  ```
+
   Advance the phase:
   ```shell
   claudeplans phase set-status "<project>" "<slug>" "<phase-slug>" doing   # when phase starts

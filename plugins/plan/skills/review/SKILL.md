@@ -50,9 +50,11 @@ Present the drift as a pipe table (claim · plan said · reality · verdict) and
 
 On approval, revise the doc **in place** — never create a new slug or version:
 
-- For **done** items, advance the phase (re-read `doc phases` to refresh `rev` first; if a write exits `9`, reuse the `current_rev` it prints and retry):
+- For **done** items, advance the phase (re-read `doc phases` to refresh `rev` first; if a write exits `9`, reuse the `current_rev` it prints and retry). When an entire phase reconciles as complete, `phase complete` checks every task and sets it done in one rev-free call; otherwise advance granularly:
   ```shell
+  claudeplans phase complete "<project>" "<slug>" "<phase-slug>"       # whole phase, rev-free
   claudeplans phase set-status "<project>" "<slug>" "<phase-slug>" done
+  claudeplans task set-checked "<project>" "<slug>" "<phase-slug>" --all   # rev-free
   claudeplans task toggle "<project>" "<slug>" "<phase-slug>" <index> --rev <rev>
   ```
 - **Drifted** / **still open** items keep their status.

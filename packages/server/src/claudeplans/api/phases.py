@@ -102,6 +102,24 @@ async def set_phase_status(
     return envelope(doc, scope=f"phases.{phase_slug}")
 
 
+@router.post("/{phase_slug}/complete")
+async def complete_phase(
+    uid: str,
+    project: str,
+    slug: str,
+    phase_slug: str,
+    response: Response,
+    repo: RepoDep,
+    user: CurrentUserDep,
+    feed: FeedDep,
+) -> ResponseEnvelope:
+    key = document_key(uid, project, slug)
+    rev, doc = await core.complete_phase(repo, key, phase_slug, user=user)
+    response.headers["ETag"] = rev
+    feed.publish(Event(key=key, rev=rev))
+    return envelope(doc, scope=f"phases.{phase_slug}")
+
+
 @router.post("/{phase_slug}/move")
 async def move_phase(
     uid: str,

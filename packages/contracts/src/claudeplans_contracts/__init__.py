@@ -35,6 +35,7 @@ from .dto import SearchResults as SearchResults
 from .dto import SetDocumentMetaRequest as SetDocumentMetaRequest
 from .dto import SetPhaseRequest as SetPhaseRequest
 from .dto import SetSectionRequest as SetSectionRequest
+from .dto import SetTasksCheckedRequest as SetTasksCheckedRequest
 from .dto import ToggleTaskRequest as ToggleTaskRequest
 from .enums import DocStatus as DocStatus
 from .enums import DocType as DocType

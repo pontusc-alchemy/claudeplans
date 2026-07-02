@@ -25,8 +25,17 @@ _ROOT_SKIP = frozenset({"install_completion", "show_completion"})
 
 
 def _has_rev(cmd: object) -> bool:
-    """Return True if `cmd` has a --rev option among its params."""
-    return any("--rev" in getattr(p, "opts", []) for p in getattr(cmd, "params", []))
+    """Return True if `cmd` has a REQUIRED --rev option among its params.
+
+    An optional --rev (e.g. `task set-checked`, where --rev is needed only for the
+    explicit-index path, not `--all`) does NOT make the command unconditionally
+    rev-gated, so it stays out of conditional_writes; that flag's `required:false`
+    entry in command_flags conveys the path-dependent requirement instead.
+    """
+    return any(
+        "--rev" in getattr(p, "opts", []) and getattr(p, "required", False)
+        for p in getattr(cmd, "params", [])
+    )
 
 
 def _flags(
@@ -109,7 +118,7 @@ def schema(ctx: typer.Context) -> None:
                 "write_task_add": (
                     "{rev, warnings, task:{phase, index, text, checked}}"
                 ),
-                "write_phase_slice": "{rev, warnings, phase:{slug, tasks}}",
+                "write_phase_slice": "{rev, warnings, phase:{slug, status, tasks}}",
                 "write_phases_ordering": "{rev, warnings, phases:[{slug,status}]}",
                 "list": "{data, warnings}  (data: items-list|lineage-tree|search-hits)",
                 "view": "{url}",

@@ -26,6 +26,7 @@ from claudeplans_contracts import (
     DocumentCreate,
     Forbidden,
     StaleRevision,
+    ValidationError,
     key_for_document,
     migrate_document,
     owner_of,
@@ -360,8 +361,6 @@ async def put_research_refs(
     _require_write(user, owner_of(key))
     # Validate that every ref resolves to a research-type doc in the same project.
     # key = "{owner}/{project}/{slug}"; project prefix = "{owner}/{project}/".
-    from claudeplans_contracts import ValidationError
-
     prefix = key.rsplit("/", 1)[0] + "/"
     entries = await repo.list(prefix)
     research_slugs = {
@@ -442,6 +441,34 @@ async def toggle_task(
         expected_rev,
         lambda doc: deltas.toggle_task(doc, phase_slug, task_index, checked),
         user=user,
+    )
+
+
+async def set_tasks_checked(
+    repo: Repository,
+    key: str,
+    phase_slug: str,
+    indices: list[int] | None,
+    checked: bool,
+    expected_rev: str | None,
+    *,
+    user: CurrentUser,
+) -> tuple[str, Document]:
+    def mutate(doc: Document) -> Document:
+        return deltas.set_tasks_checked(doc, phase_slug, indices, checked)
+
+    if indices is None:
+        return await read_modify_write(repo, key, mutate, user=user)
+    if expected_rev is None:
+        raise ValidationError("rev required when targeting explicit task indices")
+    return await _write_at_rev(repo, key, expected_rev, mutate, user=user)
+
+
+async def complete_phase(
+    repo: Repository, key: str, phase_slug: str, *, user: CurrentUser
+) -> tuple[str, Document]:
+    return await read_modify_write(
+        repo, key, lambda doc: deltas.complete_phase(doc, phase_slug), user=user
     )
 
 

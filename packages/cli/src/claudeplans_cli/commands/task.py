@@ -9,6 +9,8 @@ from typing import Annotated
 
 import typer
 
+from claudeplans_contracts import ValidationError
+
 from ..context import AppContext
 from ..errors import handle_errors
 from ..output import emit_task_added, emit_write
@@ -22,7 +24,17 @@ _REV = typer.Option(
     help="current rev; this write is position-sensitive (see 'doc rev')",
 )
 _CHECKED = typer.Option("--checked/--unchecked")
-_CHECKED_ARG = typer.Argument()
+_INDICES = typer.Argument(
+    help="0-based task indices to set; omit and pass --all for the whole phase"
+)
+_ALL = typer.Option(
+    "--all",
+    help="target every task in the phase (rev-free; excludes explicit indices)",
+)
+_SET_CHECKED_REV = typer.Option(
+    "--rev",
+    help="current rev; required only when targeting explicit indices (see 'doc rev')",
+)
 _AT = typer.Option(
     "--at",
     help="0-based insert position; appends if omitted. Unconditional (no --rev).",
@@ -81,8 +93,8 @@ def toggle(
 ) -> None:
     """Set a task checked/unchecked via --checked/--unchecked (conditional on --rev).
 
-    Despite the name this is an absolute set, not a flip — identical effect to
-    `set-checked`, which takes a positional <true|false> instead of the flag.
+    Despite the name this is an absolute set, not a flip — identical single-index
+    effect to `set-checked`, which additionally offers `--all` and multi-index forms.
     """
     c: AppContext = ctx.obj
     reply = c.client.toggle_task(
@@ -98,18 +110,38 @@ def set_checked(
     project: str,
     slug: str,
     phase_slug: str,
-    task_index: Annotated[int, _TASK_INDEX],
-    checked: Annotated[bool, _CHECKED_ARG],
-    rev: Annotated[str, _REV],
+    indices: Annotated[list[int] | None, _INDICES] = None,
+    all_: Annotated[bool, _ALL] = False,
+    checked: Annotated[bool, _CHECKED] = True,
+    rev: Annotated[str | None, _SET_CHECKED_REV] = None,
 ) -> None:
-    """Set a task's checked state to an absolute <true|false> (conditional on --rev).
+    """Set the checked state of some or all tasks in a phase to an absolute value.
 
-    Idempotent (asserting a known state needs no prior read). Same effect and endpoint
-    as `toggle`, which spells the boolean as --checked/--unchecked instead.
+    Target either explicit 0-based indices (position-sensitive, so --rev is required
+    and paid once for the batch) or --all (rev-free whole-phase set). Value is
+    --checked (default) / --unchecked. Idempotent — asserting a known state needs no
+    prior read.
     """
     c: AppContext = ctx.obj
-    reply = c.client.toggle_task(
-        c.uid, project, slug, phase_slug, task_index, checked, rev=rev
+    idx = list(indices) if indices else []
+    if all_ and idx:
+        raise ValidationError("pass either --all or explicit task indices, not both")
+    if not all_ and not idx:
+        raise ValidationError(
+            "give one or more task indices, or --all for the whole phase"
+        )
+    if idx and rev is None:
+        raise ValidationError(
+            "--rev is required when targeting explicit task indices (see 'doc rev')"
+        )
+    reply = c.client.set_tasks_checked(
+        c.uid,
+        project,
+        slug,
+        phase_slug,
+        checked,
+        indices=None if all_ else idx,
+        rev=rev,
     )
     emit_write(reply, full=c.full, slice_=f"phase:{phase_slug}")
 

@@ -376,7 +376,7 @@ def test_task_set_checked_sets_state(patched_cli: None) -> None:
     )
     rev = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "p1"]).stdout)["rev"]
     result = runner.invoke(
-        cli.app, ["task", "set-checked", "demo", "p1", "a", "0", "true", "--rev", rev]
+        cli.app, ["task", "set-checked", "demo", "p1", "a", "0", "--rev", rev]
     )
     assert result.exit_code == 0
     doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "p1"]).stdout)
@@ -445,12 +445,12 @@ def test_task_set_checked_is_idempotent(patched_cli: None) -> None:
     )
     rev = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "p1"]).stdout)["rev"]
     first = runner.invoke(
-        cli.app, ["task", "set-checked", "demo", "p1", "a", "0", "true", "--rev", rev]
+        cli.app, ["task", "set-checked", "demo", "p1", "a", "0", "--rev", rev]
     )
     assert first.exit_code == 0
     rev2 = json.loads(first.stdout)["rev"]
     second = runner.invoke(
-        cli.app, ["task", "set-checked", "demo", "p1", "a", "0", "true", "--rev", rev2]
+        cli.app, ["task", "set-checked", "demo", "p1", "a", "0", "--rev", rev2]
     )
     assert second.exit_code == 0
     doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "p1"]).stdout)
@@ -871,11 +871,14 @@ def test_schema_conditional_writes_and_list_envelope(patched_cli: None) -> None:
     assert "conditional_writes" in parsed
     cw = parsed["conditional_writes"]
     assert isinstance(cw, list)
-    # Known conditional-write commands that carry --rev.
+    # Known conditional-write commands that carry a REQUIRED --rev.
     assert "doc delete" in cw
     assert "phase move" in cw
     assert "section move" in cw
-    assert "task set-checked" in cw
+    assert "task toggle" in cw
+    # set-checked's --rev is optional (needed only for the explicit-index form, not
+    # --all), so it is NOT unconditionally rev-gated and stays out of the list.
+    assert "task set-checked" not in cw
     # List envelope shape documented.
     assert "list" in parsed["envelopes"]
 
@@ -1106,7 +1109,6 @@ def test_task_add_index_is_addressable_by_set_checked(patched_cli: None) -> None
             "p1",
             "a",
             str(task_index),
-            "true",
             "--rev",
             rev,
         ],
@@ -1150,7 +1152,6 @@ def test_task_add_second_index_advances(patched_cli: None) -> None:
             "p1",
             "a",
             str(second_add["task"]["index"]),
-            "true",
             "--rev",
             second_add["rev"],
         ],
@@ -1854,3 +1855,142 @@ def test_doc_create_date_rejects_non_iso(patched_cli: None) -> None:
         ],
     )
     assert result.exit_code == ExitCode.VALIDATION
+
+
+# ---------------------------------------------------------------------------
+# Feature: bulk task completion (set-checked --all / multi-index, phase complete)
+# ---------------------------------------------------------------------------
+
+
+def test_set_checked_all_checks_every_task_rev_free(patched_cli: None) -> None:
+    # --all targets every task without requiring a rev.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    # Add a 2nd task so there are two to check.
+    runner.invoke(cli.app, ["task", "add", "demo", "p1", "a", "t2"])
+    result = runner.invoke(cli.app, ["task", "set-checked", "demo", "p1", "a", "--all"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    assert "phase" in parsed
+    assert "status" in parsed["phase"]
+    assert all(t["checked"] is True for t in parsed["phase"]["tasks"])
+
+
+def test_set_checked_all_unchecked_clears_every_task(patched_cli: None) -> None:
+    # First check all, then clear all — both rev-free.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    runner.invoke(cli.app, ["task", "set-checked", "demo", "p1", "a", "--all"])
+    result = runner.invoke(
+        cli.app, ["task", "set-checked", "demo", "p1", "a", "--all", "--unchecked"]
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    assert all(t["checked"] is False for t in parsed["phase"]["tasks"])
+
+
+def test_set_checked_multi_index_checks_those(patched_cli: None) -> None:
+    # Explicit index list is position-sensitive and requires --rev; only the named
+    # indices flip — the omitted one stays unchecked (proves selective, not check-all).
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    runner.invoke(cli.app, ["task", "add", "demo", "p1", "a", "t2"])
+    runner.invoke(cli.app, ["task", "add", "demo", "p1", "a", "t3"])
+    rev = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "p1"]).stdout)["rev"]
+    result = runner.invoke(
+        cli.app, ["task", "set-checked", "demo", "p1", "a", "0", "2", "--rev", rev]
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    tasks = parsed["phase"]["tasks"]
+    assert tasks[0]["checked"] is True
+    assert tasks[1]["checked"] is False
+    assert tasks[2]["checked"] is True
+
+
+def test_set_checked_multi_index_requires_rev_exits_validation(
+    patched_cli: None,
+) -> None:
+    # Explicit indices without --rev must be rejected at the CLI layer.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(cli.app, ["task", "set-checked", "demo", "p1", "a", "0"])
+    _assert_validation_exit(result)
+
+
+def test_set_checked_all_and_indices_conflict_exits_validation(
+    patched_cli: None,
+) -> None:
+    # Passing both explicit indices and --all is a usage error.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app, ["task", "set-checked", "demo", "p1", "a", "0", "--all"]
+    )
+    _assert_validation_exit(result)
+
+
+def test_set_checked_no_target_exits_validation(patched_cli: None) -> None:
+    # No indices and no --all is a usage error.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(cli.app, ["task", "set-checked", "demo", "p1", "a"])
+    _assert_validation_exit(result)
+
+
+def test_set_checked_index_out_of_range_exits_validation(patched_cli: None) -> None:
+    # An out-of-range index must surface as a 422 -> exit VALIDATION.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    rev = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "p1"]).stdout)["rev"]
+    result = runner.invoke(
+        cli.app, ["task", "set-checked", "demo", "p1", "a", "99", "--rev", rev]
+    )
+    _assert_validation_exit(result)
+
+
+def test_set_checked_multi_index_stale_rev_exits_stale(patched_cli: None) -> None:
+    # A wrong rev with explicit indices must surface as a 409 -> exit STALE_REV.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app,
+        ["task", "set-checked", "demo", "p1", "a", "0", "--rev", "does-not-match"],
+    )
+    assert result.exit_code == ExitCode.STALE_REV
+
+
+def test_phase_complete_checks_all_and_sets_done(patched_cli: None) -> None:
+    # `phase complete` checks every task and sets status=done in one rev-free call.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    # Add a 2nd task (left unchecked).
+    runner.invoke(cli.app, ["task", "add", "demo", "p1", "a", "t2"])
+    result = runner.invoke(cli.app, ["phase", "complete", "demo", "p1", "a"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    assert parsed["phase"]["status"] == "done"
+    assert all(t["checked"] is True for t in parsed["phase"]["tasks"])
+
+
+def test_toggle_phase_slice_includes_status(patched_cli: None) -> None:
+    # Regression guard: the phase slice emitted by toggle now always contains status.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    rev = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "p1"]).stdout)["rev"]
+    result = runner.invoke(
+        cli.app, ["task", "toggle", "demo", "p1", "a", "0", "--rev", rev]
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    assert "status" in parsed["phase"]

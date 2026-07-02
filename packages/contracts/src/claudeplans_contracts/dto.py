@@ -132,6 +132,19 @@ class ToggleTaskRequest(BaseModel):
     checked: bool
 
 
+class SetTasksCheckedRequest(BaseModel):
+    """Set the checked state of some or all of a phase's tasks to an ABSOLUTE value.
+
+    `indices=None` targets every task (order-independent, applied rev-free); an
+    explicit index list is position-sensitive and gated on the caller's rev.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    checked: bool
+    indices: list[int] | None = None
+
+
 class EditTaskRequest(BaseModel):
     """Replace a task's text."""
 

@@ -33,6 +33,7 @@ from claudeplans_contracts import (
     SetDocumentMetaRequest,
     SetPhaseRequest,
     SetSectionRequest,
+    SetTasksCheckedRequest,
     StaleRevision,
     ToggleTaskRequest,
     ValidationError,
@@ -339,6 +340,35 @@ class PlanClient:
             f"{base}/toggle",
             json=body.model_dump(mode="json"),
             headers={"If-Match": rev},
+        )
+        return self._reply(resp)
+
+    def set_tasks_checked(
+        self,
+        uid: str,
+        project: str,
+        slug: str,
+        phase_slug: str,
+        checked: bool,
+        *,
+        indices: list[int] | None = None,
+        rev: str | None = None,
+    ) -> Reply:
+        body = SetTasksCheckedRequest(checked=checked, indices=indices)
+        headers = {"If-Match": rev} if rev is not None else {}
+        resp = self._http.put(
+            f"{self._doc_base(uid, project, slug)}"
+            f"/phases/{_seg(phase_slug)}/tasks/checked",
+            json=body.model_dump(mode="json", exclude_none=True),
+            headers=headers,
+        )
+        return self._reply(resp)
+
+    def complete_phase(
+        self, uid: str, project: str, slug: str, phase_slug: str
+    ) -> Reply:
+        resp = self._http.post(
+            f"{self._doc_base(uid, project, slug)}/phases/{_seg(phase_slug)}/complete",
         )
         return self._reply(resp)
 

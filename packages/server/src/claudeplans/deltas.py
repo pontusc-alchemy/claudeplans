@@ -187,6 +187,47 @@ def toggle_task(
     return doc.model_copy(update={"phases": phases})
 
 
+def set_tasks_checked(
+    doc: Document,
+    phase_slug: str,
+    indices: list[int] | None,
+    checked: bool,
+) -> Document:
+    """Set `checked` on the given task indices (None = every task in the phase).
+
+    The all-tasks form (indices=None) is order-independent and re-apply-safe, so it
+    rides the rev-free read_modify_write path; an explicit index list is
+    position-sensitive and core gates it on the caller's rev.
+    """
+    i = _find_phase(doc, phase_slug)
+    phase = doc.phases[i]
+    if indices is not None:
+        for idx in indices:
+            _check_task_index(phase, idx)
+    targets = range(len(phase.tasks)) if indices is None else indices
+    tasks = list(phase.tasks)
+    for idx in targets:
+        tasks[idx] = tasks[idx].model_copy(update={"checked": checked})
+    phases = list(doc.phases)
+    phases[i] = phases[i].model_copy(update={"tasks": tasks})
+    return doc.model_copy(update={"phases": phases})
+
+
+def complete_phase(doc: Document, phase_slug: str) -> Document:
+    """Check every task in the phase and set its status to done in one transition.
+
+    Tasks are checked before the status flip, so a completed phase never trips the
+    done-with-open-tasks drift warning.
+    """
+    i = _find_phase(doc, phase_slug)
+    tasks = [t.model_copy(update={"checked": True}) for t in doc.phases[i].tasks]
+    phases = list(doc.phases)
+    phases[i] = phases[i].model_copy(
+        update={"tasks": tasks, "status": PhaseStatus.done}
+    )
+    return doc.model_copy(update={"phases": phases})
+
+
 def edit_task(doc: Document, phase_slug: str, task_index: int, text: str) -> Document:
     """Replace a task's `text`."""
     i = _find_phase(doc, phase_slug)

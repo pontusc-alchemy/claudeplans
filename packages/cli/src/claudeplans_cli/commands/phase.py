@@ -165,6 +165,25 @@ def move(
 
 @app.command()
 @handle_errors
+def complete(
+    ctx: typer.Context,
+    project: str,
+    slug: str,
+    phase_slug: str,
+) -> None:
+    """Check every task in the phase and mark it done, in one rev-free call.
+
+    A whole-phase transition: tasks are checked before the status flip, so it never
+    trips the done-with-open-tasks warning. Convenience over `task set-checked --all`
+    then `phase set-status done`.
+    """
+    c: AppContext = ctx.obj
+    reply = c.client.complete_phase(c.uid, project, slug, phase_slug)
+    emit_write(reply, full=c.full, slice_=f"phase:{phase_slug}")
+
+
+@app.command()
+@handle_errors
 def rm(ctx: typer.Context, project: str, slug: str, phase_slug: str) -> None:
     """Remove a phase."""
     c: AppContext = ctx.obj
