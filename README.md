@@ -31,7 +31,7 @@ plugins/plan/                  # Claude Code plan plugin (skills + CLI shim in b
 this repo). Install by adding the repo as a marketplace pinned to a release tag:
 
 ```text
-/plugin marketplace add pontusc-alchemy/host-plans@v0.0.1
+/plugin marketplace add pontusc-alchemy/claudeplans@v0.0.1
 /plugin install plan@plans
 ```
 
@@ -39,10 +39,13 @@ Then run the `/plan:setup` skill — it asks whether this machine is a client
 (CLI shim + server address) or a server (compose stack + `/etc/hosts` alias)
 and walks through the matching flow.
 
-**Cutting a release** (manual): the shim inside a tag must reference that same
-tag. Update the ref in `plugins/plan/bin/claudeplans` and the `version` in
-`plugins/plan/.claude-plugin/plugin.json`, commit, tag that commit, push the
-tag. Consumers move up by re-adding the marketplace at the new tag.
+**Cutting a release** (manual): the shim pins a full commit SHA (immutable to
+uv, so the CLI serves from cache with no per-call network check — a tag ref
+would re-fetch on every invocation). Flow: land all `packages/` changes and
+note the resulting SHA → update that SHA in `plugins/plan/bin/claudeplans` and
+bump `version` in `plugins/plan/.claude-plugin/plugin.json` → commit → tag that
+commit → push the tag. Consumers move up by re-adding the marketplace at the
+new tag.
 
 ## Dev inner loop
 
