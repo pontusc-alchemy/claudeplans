@@ -37,14 +37,15 @@ _VALID_CREATE = json.dumps(
 
 @pytest.fixture
 def patched_cli(client: PlanClient, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    def build_client(url: str) -> PlanClient:
+    def build_client(_url: str) -> PlanClient:
         return client
 
     monkeypatch.setattr(cli, "build_client", build_client)
     yield
 
 
-def test_create_from_stdin_exits_ok_and_prints_slug(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_create_from_stdin_exits_ok_and_prints_slug() -> None:
     result = runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -55,7 +56,8 @@ def test_create_from_stdin_exits_ok_and_prints_slug(patched_cli: None) -> None:
     assert "data" not in parsed
 
 
-def test_doc_create_shell_flags_set_status_description_date(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_create_shell_flags_set_status_description_date() -> None:
     # The shell create form lands status/description/date in ONE call (no follow-up
     # doc set / set-status).
     result = runner.invoke(
@@ -86,7 +88,8 @@ def test_doc_create_shell_flags_set_status_description_date(patched_cli: None) -
     assert data["date"] == "2026-06-26"
 
 
-def test_doc_create_shell_status_omitted_defaults_draft(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_create_shell_status_omitted_defaults_draft() -> None:
     # Omitting --status falls back to the DTO's draft default (status is only added
     # to the create body when explicitly given).
     result = runner.invoke(
@@ -98,14 +101,16 @@ def test_doc_create_shell_status_omitted_defaults_draft(patched_cli: None) -> No
     assert doc["data"]["status"] == "draft"
 
 
-def test_get_missing_doc_exits_not_found(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_get_missing_doc_exits_not_found() -> None:
     result = runner.invoke(cli.app, ["doc", "get", "demo", "ghost"])
     assert result.exit_code == ExitCode.NOT_FOUND
     err = json.loads(result.stderr)
     assert err["error"] == "not_found"
 
 
-def test_usage_error_exits_two_distinct_from_not_found(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_usage_error_exits_two_distinct_from_not_found() -> None:
     # A malformed command line (missing the required slug arg) is Typer/Click usage
     # -> exit 2, which NOT_FOUND (5) no longer collides with.
     result = runner.invoke(cli.app, ["doc", "get", "demo"])
@@ -114,7 +119,7 @@ def test_usage_error_exits_two_distinct_from_not_found(patched_cli: None) -> Non
 
 
 def test_service_down_exits_transport_no_traceback(
-    client: PlanClient, monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # A transport failure (here: every request refused) is a structured error on
     # stderr with the dedicated exit code, never a stacktrace.
@@ -126,7 +131,7 @@ def test_service_down_exits_transport_no_traceback(
             base_url="http://t", transport=httpx.MockTransport(refuse)
         )
     )
-    monkeypatch.setattr(cli, "build_client", lambda url: down_client)
+    monkeypatch.setattr(cli, "build_client", lambda _url: down_client)
     result = runner.invoke(cli.app, ["doc", "get", "demo", "p1"])
     assert result.exit_code == ExitCode.TRANSPORT
     err = json.loads(result.stderr)
@@ -134,7 +139,8 @@ def test_service_down_exits_transport_no_traceback(
     assert "Traceback" not in result.stderr
 
 
-def test_stale_rev_toggle_exits_stale(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_stale_rev_toggle_exits_stale() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -145,7 +151,8 @@ def test_stale_rev_toggle_exits_stale(patched_cli: None) -> None:
     assert result.exit_code == 9
 
 
-def test_malformed_from_json_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_malformed_from_json_exits_validation() -> None:
     result = runner.invoke(
         cli.app,
         ["doc", "create", "demo", "--from-json", '{"type":"plan"}'],
@@ -153,7 +160,8 @@ def test_malformed_from_json_exits_validation(patched_cli: None) -> None:
     assert result.exit_code == 4
 
 
-def test_foreign_uid_write_exits_forbidden(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_foreign_uid_write_exits_forbidden() -> None:
     # Under noop auth the caller is always "dev"; a write to a foreign path-uid is
     # Forbidden (403 fires before the not-found read) -> exit 3.
     result = runner.invoke(
@@ -162,7 +170,8 @@ def test_foreign_uid_write_exits_forbidden(patched_cli: None) -> None:
     assert result.exit_code == 3
 
 
-def test_malformed_merge_patch_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_malformed_merge_patch_exits_validation() -> None:
     # Create a doc + section, then send invalid JSON to --merge-patch -> exit 4.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -175,7 +184,8 @@ def test_malformed_merge_patch_exits_validation(patched_cli: None) -> None:
     assert result.exit_code == 4
 
 
-def test_create_full_flag_prints_full_doc(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_create_full_flag_prints_full_doc() -> None:
     result = runner.invoke(
         cli.app,
         ["--full", "doc", "create", "demo", "--from-json", "-"],
@@ -187,7 +197,8 @@ def test_create_full_flag_prints_full_doc(patched_cli: None) -> None:
     assert "rev" in parsed
 
 
-def test_stale_rev_toggle_stderr_carries_current_rev(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_stale_rev_toggle_stderr_carries_current_rev() -> None:
     # Create doc, then attempt a toggle with a wrong rev -> exit 9 + JSON on stderr.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -202,7 +213,8 @@ def test_stale_rev_toggle_stderr_carries_current_rev(patched_cli: None) -> None:
     assert err["current_rev"]
 
 
-def test_task_toggle_default_prints_phase_tasks(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_task_toggle_default_prints_phase_tasks() -> None:
     # Create doc then toggle task 0; default output carries the affected phase.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -222,7 +234,8 @@ def test_task_toggle_default_prints_phase_tasks(patched_cli: None) -> None:
     assert "data" not in parsed
 
 
-def test_phase_move_default_prints_ordering(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_phase_move_default_prints_ordering() -> None:
     # Create doc with one phase, add a second, then move it.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -247,7 +260,8 @@ def _assert_validation_exit(result: Result) -> None:
     assert err["error"] == "validation"
 
 
-def test_add_section_reserved_anchor_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_add_section_reserved_anchor_exits_validation() -> None:
     # The '@end' footgun is rejected at the boundary, not stored verbatim.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -256,7 +270,8 @@ def test_add_section_reserved_anchor_exits_validation(patched_cli: None) -> None
     _assert_validation_exit(result)
 
 
-def test_add_phase_path_corrupting_slug_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_add_phase_path_corrupting_slug_exits_validation() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -264,7 +279,8 @@ def test_add_phase_path_corrupting_slug_exits_validation(patched_cli: None) -> N
     _assert_validation_exit(result)
 
 
-def test_add_task_empty_text_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_add_task_empty_text_exits_validation() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -272,14 +288,16 @@ def test_add_task_empty_text_exits_validation(patched_cli: None) -> None:
     _assert_validation_exit(result)
 
 
-def test_create_empty_title_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_create_empty_title_exits_validation() -> None:
     # DocumentCreate has no title validator; the server's Document compose rejects it.
     body = json.dumps({"type": "plan", "slug": "p2", "title": ""})
     result = runner.invoke(cli.app, ["doc", "create", "demo", "--from-json", body])
     _assert_validation_exit(result)
 
 
-def test_edit_task_empty_text_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_edit_task_empty_text_exits_validation() -> None:
     # edit_task mutates via model_copy (no field validator); the rejection comes from
     # core's whole-document re-validation before persist. Belt-and-suspenders for that
     # model_copy path, distinct from the eager-construction add_* paths.
@@ -296,7 +314,8 @@ def test_edit_task_empty_text_exits_validation(patched_cli: None) -> None:
 # --- phase set --name --------------------------------------------------------
 
 
-def test_phase_set_name_renames(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_phase_set_name_renames() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -313,7 +332,8 @@ def test_phase_set_name_renames(patched_cli: None) -> None:
 # --- section move --rev ------------------------------------------------------
 
 
-def test_section_move_reorders(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_section_move_reorders() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -334,7 +354,8 @@ def test_section_move_reorders(patched_cli: None) -> None:
 # --- task add --at 0 ---------------------------------------------------------
 
 
-def test_task_add_at_inserts_at_front(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_task_add_at_inserts_at_front() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -351,7 +372,8 @@ def test_task_add_at_inserts_at_front(patched_cli: None) -> None:
 # --- section add --at --------------------------------------------------------
 
 
-def test_section_add_at_inserts(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_section_add_at_inserts() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -370,7 +392,8 @@ def test_section_add_at_inserts(patched_cli: None) -> None:
 # --- phase add --at ----------------------------------------------------------
 
 
-def test_phase_add_at_inserts_at_front(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_phase_add_at_inserts_at_front() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -384,7 +407,8 @@ def test_phase_add_at_inserts_at_front(patched_cli: None) -> None:
     assert phases[1] == "a"
 
 
-def test_phase_add_at_out_of_range_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_phase_add_at_out_of_range_exits_validation() -> None:
     # An out-of-range --at surfaces as a clean exit 4, not a 500 or silent append.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -398,7 +422,8 @@ def test_phase_add_at_out_of_range_exits_validation(patched_cli: None) -> None:
 # --- task set-checked --------------------------------------------------------
 
 
-def test_task_set_checked_sets_state(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_task_set_checked_sets_state() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -414,7 +439,8 @@ def test_task_set_checked_sets_state(patched_cli: None) -> None:
 # --- doc set (omit-to-leave) -------------------------------------------------
 
 
-def test_doc_set_title_and_description(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_set_title_and_description() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -428,7 +454,8 @@ def test_doc_set_title_and_description(patched_cli: None) -> None:
     assert doc["data"]["description"] == "Desc"
 
 
-def test_doc_set_title_only_leaves_description(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_set_title_only_leaves_description() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -445,7 +472,8 @@ def test_doc_set_title_only_leaves_description(patched_cli: None) -> None:
     assert doc["data"]["description"] == "D1"
 
 
-def test_doc_set_frontmatter_invalid_json_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_set_frontmatter_invalid_json_exits_validation() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -455,7 +483,8 @@ def test_doc_set_frontmatter_invalid_json_exits_validation(patched_cli: None) ->
     _assert_validation_exit(result)
 
 
-def test_doc_set_empty_title_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_set_empty_title_exits_validation() -> None:
     # `doc set --title ""` must reject via the phase-2 validator (re-validation on
     # persist), not silently blank the title.
     runner.invoke(
@@ -465,7 +494,8 @@ def test_doc_set_empty_title_exits_validation(patched_cli: None) -> None:
     _assert_validation_exit(result)
 
 
-def test_task_set_checked_is_idempotent(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_task_set_checked_is_idempotent() -> None:
     # Asserting the same absolute state twice stays True (not a flip) — each call uses
     # the rev returned by the previous one.
     runner.invoke(
@@ -485,7 +515,8 @@ def test_task_set_checked_is_idempotent(patched_cli: None) -> None:
     assert doc["data"]["phases"][0]["tasks"][0]["checked"] is True
 
 
-def test_section_move_stale_rev_exits_stale(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_section_move_stale_rev_exits_stale() -> None:
     # `section move` is position-sensitive: a wrong --rev is a 409 -> exit 9, proving
     # the route's If-Match gate is wired (regression guard for dropping IfMatchDep).
     runner.invoke(
@@ -623,7 +654,8 @@ def test_search_phase_name_returns_phase_kind_hit(live_url: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_project_lineage_json_shape(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_project_lineage_json_shape() -> None:
     # Create a plan doc; lineage should have research+unlinked_plans keys.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -641,9 +673,8 @@ def test_project_lineage_json_shape(patched_cli: None) -> None:
     assert "p1" in slugs
 
 
-def test_project_lineage_linked_plan_appears_under_research_node(
-    patched_cli: None,
-) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_project_lineage_linked_plan_appears_under_research_node() -> None:
     # Create a research doc and a plan that cites it as primary; the plan must
     # appear under the research node's `plans` list and NOT in `unlinked_plans`.
     research_body = json.dumps({"type": "research", "slug": "r1", "title": "R One"})
@@ -681,7 +712,8 @@ def test_project_lineage_linked_plan_appears_under_research_node(
 # ---------------------------------------------------------------------------
 
 
-def test_doc_rev_returns_non_empty_rev(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_rev_returns_non_empty_rev() -> None:
     # Default output is the bare rev token (no JSON envelope), so it composes
     # directly as --rev "$(claudeplans doc rev ...)".
     create_result = runner.invoke(
@@ -697,7 +729,8 @@ def test_doc_rev_returns_non_empty_rev(patched_cli: None) -> None:
     assert token == create_rev
 
 
-def test_doc_rev_json_flag_emits_envelope(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_rev_json_flag_emits_envelope() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -707,7 +740,8 @@ def test_doc_rev_json_flag_emits_envelope(patched_cli: None) -> None:
     assert parsed["rev"].isdigit()
 
 
-def test_doc_rev_full_flag_emits_envelope(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_rev_full_flag_emits_envelope() -> None:
     # The global --full flag is passed BEFORE the subcommand.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -718,9 +752,8 @@ def test_doc_rev_full_flag_emits_envelope(patched_cli: None) -> None:
     assert parsed["rev"].isdigit()
 
 
-def test_doc_rev_json_and_full_flags_together_emit_one_envelope(
-    patched_cli: None,
-) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_rev_json_and_full_flags_together_emit_one_envelope() -> None:
     # --json and global --full both request the envelope; combined they still
     # print exactly one {rev} envelope, not a conflict/duplication.
     runner.invoke(
@@ -732,7 +765,8 @@ def test_doc_rev_json_and_full_flags_together_emit_one_envelope(
     assert parsed["rev"].isdigit()
 
 
-def test_doc_rev_bare_token_composes_as_rev(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_rev_bare_token_composes_as_rev() -> None:
     # The ergonomic win this phase exists for: no jq/json.loads needed to extract
     # the rev before using it in a position-sensitive write.
     runner.invoke(
@@ -746,9 +780,8 @@ def test_doc_rev_bare_token_composes_as_rev(patched_cli: None) -> None:
     assert result.exit_code == 0
 
 
-def test_malformed_rev_exits_validation_with_invalid_rev_kind(
-    patched_cli: None,
-) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_malformed_rev_exits_validation_with_invalid_rev_kind() -> None:
     # A malformed --rev is a client input error (exit 4), distinct from a genuine
     # concurrency conflict (exit 9) — it fails before any StaleRevision check.
     runner.invoke(
@@ -762,7 +795,8 @@ def test_malformed_rev_exits_validation_with_invalid_rev_kind(
     assert err["error"] == "invalid_rev"
 
 
-def test_empty_rev_exits_validation_with_invalid_rev_kind(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_empty_rev_exits_validation_with_invalid_rev_kind() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -774,7 +808,8 @@ def test_empty_rev_exits_validation_with_invalid_rev_kind(patched_cli: None) -> 
     assert err["error"] == "invalid_rev"
 
 
-def test_doc_rev_missing_doc_exits_not_found(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_rev_missing_doc_exits_not_found() -> None:
     result = runner.invoke(cli.app, ["doc", "rev", "demo", "ghost"])
     assert result.exit_code == ExitCode.NOT_FOUND
     err = json.loads(result.stderr)
@@ -859,7 +894,8 @@ async def test_server_optional_if_match_rejects_malformed_rev(tmp_path: Path) ->
 _VALID_RESEARCH = json.dumps({"type": "research", "slug": "r1", "title": "R One"})
 
 
-def test_doc_list_type_filter_research_only(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_list_type_filter_research_only() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -878,7 +914,8 @@ def test_doc_list_type_filter_research_only(patched_cli: None) -> None:
     assert "p1" not in slugs
 
 
-def test_doc_list_type_filter_plan_only(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_list_type_filter_plan_only() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -902,7 +939,8 @@ def test_doc_list_type_filter_plan_only(patched_cli: None) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_schema_command_shape(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_schema_command_shape() -> None:
     result = runner.invoke(cli.app, ["schema"])
     assert result.exit_code == 0
     parsed = json.loads(result.stdout)
@@ -939,7 +977,8 @@ def test_schema_command_shape(patched_cli: None) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_create_reply_includes_type(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_create_reply_includes_type() -> None:
     result = runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -954,7 +993,8 @@ def test_create_reply_includes_type(patched_cli: None) -> None:
 
 
 # Task 1: doc delete emits {rev, warnings}
-def test_doc_delete_emits_rev_warnings(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_delete_emits_rev_warnings() -> None:
     create_result = runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -968,7 +1008,8 @@ def test_doc_delete_emits_rev_warnings(patched_cli: None) -> None:
 
 
 # Task 1: doc list emits {data, warnings}
-def test_doc_list_emits_data_warnings_envelope(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_list_emits_data_warnings_envelope() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -981,7 +1022,8 @@ def test_doc_list_emits_data_warnings_envelope(patched_cli: None) -> None:
 
 
 # Task 1: doc phases emits {rev, phases, warnings}
-def test_doc_phases_includes_warnings(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_phases_includes_warnings() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -995,7 +1037,8 @@ def test_doc_phases_includes_warnings(patched_cli: None) -> None:
 
 
 # Task 2: --fields with unknown key exits 4 with {"error":"validation"}
-def test_doc_get_unknown_field_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_get_unknown_field_exits_validation() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1006,7 +1049,8 @@ def test_doc_get_unknown_field_exits_validation(patched_cli: None) -> None:
 
 
 # Task 2: --section with absent anchor exits 4 with {"error":"validation"}
-def test_doc_get_absent_section_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_get_absent_section_exits_validation() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1017,7 +1061,8 @@ def test_doc_get_absent_section_exits_validation(patched_cli: None) -> None:
 
 
 # Task 2: --phase with absent slug exits 4 with {"error":"validation"}
-def test_doc_get_absent_phase_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_get_absent_phase_exits_validation() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1028,7 +1073,8 @@ def test_doc_get_absent_phase_exits_validation(patched_cli: None) -> None:
 
 
 # Task 3: doc set-status alias works identically to doc status
-def test_doc_set_status_alias_works(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_set_status_alias_works() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1043,7 +1089,8 @@ def test_doc_set_status_alias_works(patched_cli: None) -> None:
 
 
 # Task 5: schema command includes conditional_writes and list envelope
-def test_schema_conditional_writes_and_list_envelope(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_schema_conditional_writes_and_list_envelope() -> None:
     result = runner.invoke(cli.app, ["schema"])
     assert result.exit_code == 0
     parsed = json.loads(result.stdout)
@@ -1065,7 +1112,8 @@ def test_schema_conditional_writes_and_list_envelope(patched_cli: None) -> None:
 
 
 # schema exposes a per-command flag map + global flags an agent can author from.
-def test_schema_command_flags_and_global_flags(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_schema_command_flags_and_global_flags() -> None:
     result = runner.invoke(cli.app, ["schema"])
     assert result.exit_code == 0
     parsed = json.loads(result.stdout)
@@ -1105,7 +1153,8 @@ def test_schema_command_flags_and_global_flags(patched_cli: None) -> None:
 
 
 # Task 6: linking a non-existent research ref exits 4 (validation)
-def test_doc_link_nonexistent_ref_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_link_nonexistent_ref_exits_validation() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1114,7 +1163,8 @@ def test_doc_link_nonexistent_ref_exits_validation(patched_cli: None) -> None:
 
 
 # Task 6: linking a real research doc in same project succeeds
-def test_doc_link_real_research_ref_succeeds(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_link_real_research_ref_succeeds() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1150,7 +1200,8 @@ _NESTED_CREATE = json.dumps(
 
 # Task 1: doc create --from-json with nested sections+phases+tasks scaffolds
 # the full document in one call.
-def test_create_from_json_full_scaffold(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_create_from_json_full_scaffold() -> None:
     result = runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_NESTED_CREATE
     )
@@ -1172,7 +1223,8 @@ def test_create_from_json_full_scaffold(patched_cli: None) -> None:
 
 # Task 2: task add (append) emits {rev, warnings, task:{phase, index}}
 # with index = prior_len - 1 (0-based last position after append).
-def test_task_add_append_emits_index(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_task_add_append_emits_index() -> None:
     # _VALID_CREATE already has one task ("t1") in phase "a".
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -1190,7 +1242,8 @@ def test_task_add_append_emits_index(patched_cli: None) -> None:
 
 
 # Task 2: task add --at N emits index = N.
-def test_task_add_at_emits_index(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_task_add_at_emits_index() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1209,7 +1262,8 @@ def test_task_add_at_emits_index(patched_cli: None) -> None:
 
 
 # Task 3 (new): task add --checked creates a pre-checked task.
-def test_task_add_checked_flag_creates_checked_task(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_task_add_checked_flag_creates_checked_task() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1231,7 +1285,8 @@ def test_task_add_checked_flag_creates_checked_task(patched_cli: None) -> None:
 
 
 # Task 3 (new): task add without --checked defaults to unchecked.
-def test_task_add_default_is_unchecked(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_task_add_default_is_unchecked() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1273,7 +1328,8 @@ def test_no_color_help_has_no_ansi() -> None:
 
 
 # Task 5: index returned by `task add` addresses `set-checked` / `toggle`.
-def test_task_add_index_is_addressable_by_set_checked(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_task_add_index_is_addressable_by_set_checked() -> None:
     # _VALID_CREATE has one task in phase "a", so an append lands at index 1.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -1313,7 +1369,8 @@ def test_task_add_index_is_addressable_by_set_checked(patched_cli: None) -> None
 
 
 # Task 5 (second add): index advances and the second task is also addressable.
-def test_task_add_second_index_advances(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_task_add_second_index_advances() -> None:
     # After two appends the indices are 1 and 2 respectively.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -1362,9 +1419,8 @@ def test_task_add_second_index_advances(patched_cli: None) -> None:
         "query?x",  # '?' → ditto
     ],
 )
-def test_bad_slug_chars_exit_validation_not_crash(
-    patched_cli: None, bad_slug: str
-) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_bad_slug_chars_exit_validation_not_crash(bad_slug: str) -> None:
     body = json.dumps({"type": "plan", "slug": bad_slug, "title": "T"})
     result = runner.invoke(cli.app, ["doc", "create", "demo", "--from-json", body])
     assert result.exit_code == ExitCode.VALIDATION
@@ -1396,7 +1452,8 @@ def test_malformed_url_exits_transport_no_traceback() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_doc_view_emits_json_with_url_key(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_view_emits_json_with_url_key() -> None:
     result = runner.invoke(cli.app, ["doc", "view", "demo", "p1"])
     assert result.exit_code == 0
     parsed = json.loads(result.stdout)
@@ -1404,7 +1461,8 @@ def test_doc_view_emits_json_with_url_key(patched_cli: None) -> None:
     assert "p1" in parsed["url"]
 
 
-def test_project_view_emits_json_with_url_key(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_project_view_emits_json_with_url_key() -> None:
     result = runner.invoke(cli.app, ["project", "view", "demo"])
     assert result.exit_code == 0
     parsed = json.loads(result.stdout)
@@ -1427,9 +1485,8 @@ def test_project_view_emits_json_with_url_key(patched_cli: None) -> None:
         "nul\x00byte",  # NUL → server crash or filesystem fault
     ],
 )
-def test_bad_project_on_create_exits_validation(
-    patched_cli: None, bad_project: str
-) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_bad_project_on_create_exits_validation(bad_project: str) -> None:
     # A bad project arg is caught client-side before any request is made.
     body = json.dumps({"type": "plan", "slug": "p1", "title": "T"})
     result = runner.invoke(cli.app, ["doc", "create", bad_project, "--from-json", body])
@@ -1439,7 +1496,8 @@ def test_bad_project_on_create_exits_validation(
     assert "Traceback" not in result.stderr
 
 
-def test_bad_project_on_list_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_bad_project_on_list_exits_validation() -> None:
     # doc list with a bad project → exit 4, not a null/false result.
     result = runner.invoke(cli.app, ["doc", "list", "a#b"])
     assert result.exit_code == ExitCode.VALIDATION
@@ -1448,7 +1506,8 @@ def test_bad_project_on_list_exits_validation(patched_cli: None) -> None:
     assert "Traceback" not in result.stderr
 
 
-def test_bad_project_on_search_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_bad_project_on_search_exits_validation() -> None:
     result = runner.invoke(cli.app, ["search", "a#b", "some query"])
     assert result.exit_code == ExitCode.VALIDATION
     err = json.loads(result.stderr)
@@ -1456,7 +1515,8 @@ def test_bad_project_on_search_exits_validation(patched_cli: None) -> None:
     assert "Traceback" not in result.stderr
 
 
-def test_bad_uid_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_bad_uid_exits_validation() -> None:
     # A bad --uid on any command → exit 4 structured error.
     result = runner.invoke(cli.app, ["--uid", "x#y", "doc", "list", "demo"])
     assert result.exit_code == ExitCode.VALIDATION
@@ -1465,7 +1525,8 @@ def test_bad_uid_exits_validation(patched_cli: None) -> None:
     assert "Traceback" not in result.stderr
 
 
-def test_bad_project_nothing_stored(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_bad_project_nothing_stored() -> None:
     # A bad project arg is rejected before any write; a subsequent list must not
     # show the document.
     body = json.dumps({"type": "plan", "slug": "p-check", "title": "T"})
@@ -1482,7 +1543,8 @@ def test_bad_project_nothing_stored(patched_cli: None) -> None:
     assert "p-check" not in slugs
 
 
-def test_valid_segments_still_work(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_valid_segments_still_work() -> None:
     # Legitimate project/uid/slug values must not be rejected by _seg.
     result = runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", _VALID_CREATE]
@@ -1497,7 +1559,8 @@ def test_valid_segments_still_work(patched_cli: None) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_project_set_name_round_trips(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_project_set_name_round_trips() -> None:
     # set-name exits 0 and returns {project, name}.
     result = runner.invoke(
         cli.app, ["project", "set-name", "demo", "My Project (2026)"]
@@ -1508,7 +1571,8 @@ def test_project_set_name_round_trips(patched_cli: None) -> None:
     assert parsed["name"] == "My Project (2026)"
 
 
-def test_project_list_reports_name_after_set(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_project_list_reports_name_after_set() -> None:
     # Create a doc so the project exists, then name it and verify list carries name.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -1523,7 +1587,8 @@ def test_project_list_reports_name_after_set(patched_cli: None) -> None:
     assert demo["name"] == "Demo Project"
 
 
-def test_project_list_name_is_none_when_unset(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_project_list_name_is_none_when_unset() -> None:
     # A project with no display name set should return name=null in the listing.
     # Use a unique project slug that has never been named in this fixture scope.
     unnamed_body = json.dumps({"type": "plan", "slug": "u1", "title": "Unnamed"})
@@ -1541,21 +1606,24 @@ def test_project_list_name_is_none_when_unset(patched_cli: None) -> None:
     assert proj["name"] is None
 
 
-def test_project_set_name_empty_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_project_set_name_empty_exits_validation() -> None:
     result = runner.invoke(cli.app, ["project", "set-name", "demo", "   "])
     assert result.exit_code == ExitCode.VALIDATION
     err = json.loads(result.stderr)
     assert err["error"] == "validation"
 
 
-def test_project_set_name_foreign_uid_exits_forbidden(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_project_set_name_foreign_uid_exits_forbidden() -> None:
     result = runner.invoke(
         cli.app, ["--uid", "evil", "project", "set-name", "demo", "Name"]
     )
     assert result.exit_code == ExitCode.FORBIDDEN
 
 
-def test_phase_set_prose_flags_persist(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_phase_set_prose_flags_persist() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1583,7 +1651,8 @@ def test_phase_set_prose_flags_persist(patched_cli: None) -> None:
     assert phase["notes"] == "A revision note"
 
 
-def test_section_add_placement_flag_persists(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_section_add_placement_flag_persists() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1597,7 +1666,8 @@ def test_section_add_placement_flag_persists(patched_cli: None) -> None:
     assert section["placement"] == "trail"
 
 
-def test_phase_set_help_lists_prose_options(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_phase_set_help_lists_prose_options() -> None:
     import re
 
     # Force a wide terminal so Typer doesn't truncate option names with an ellipsis
@@ -1610,7 +1680,8 @@ def test_phase_set_help_lists_prose_options(patched_cli: None) -> None:
     assert "--notes" in plain
 
 
-def test_section_add_help_lists_placement_choices(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_section_add_help_lists_placement_choices() -> None:
     import re
 
     result = runner.invoke(
@@ -1624,7 +1695,8 @@ def test_section_add_help_lists_placement_choices(patched_cli: None) -> None:
     assert "lead|trail" in plain
 
 
-def test_section_add_invalid_placement_exits_usage(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_section_add_invalid_placement_exits_usage() -> None:
     # A bad enum CHOICE is a Typer parse-time usage error (exit 2), distinct from a
     # parseable-but-invalid value that reaches the server as a 422 (exit 4).
     runner.invoke(
@@ -1637,7 +1709,8 @@ def test_section_add_invalid_placement_exits_usage(patched_cli: None) -> None:
     assert result.exit_code == ExitCode.USAGE
 
 
-def test_phase_set_intro_empty_string_clears(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_phase_set_intro_empty_string_clears() -> None:
     # '' is sent (not omitted), so it clears a previously-set field — the CLI-layer
     # invariant the help advertises and that exclude_none must preserve.
     runner.invoke(
@@ -1650,7 +1723,8 @@ def test_phase_set_intro_empty_string_clears(patched_cli: None) -> None:
     assert json.loads(get_result.stdout)["data"]["phases"][0]["intro"] == ""
 
 
-def test_section_set_placement_flag_persists(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_section_set_placement_flag_persists() -> None:
     # The set path (vs add) drives --placement through runner.invoke end to end.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -1669,9 +1743,8 @@ def test_section_set_placement_flag_persists(patched_cli: None) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_phase_set_intro_file_reads_from_file(
-    patched_cli: None, tmp_path: Path
-) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_phase_set_intro_file_reads_from_file(tmp_path: Path) -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1687,7 +1760,8 @@ def test_phase_set_intro_file_reads_from_file(
     assert "Second para." in intro
 
 
-def test_phase_set_notes_file_stdin(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_phase_set_notes_file_stdin() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1702,7 +1776,8 @@ def test_phase_set_notes_file_stdin(patched_cli: None) -> None:
     assert "A card from stdin." in notes
 
 
-def test_phase_set_inline_and_file_conflict_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_phase_set_inline_and_file_conflict_exits_validation() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1713,7 +1788,8 @@ def test_phase_set_inline_and_file_conflict_exits_validation(patched_cli: None) 
     assert result.exit_code == ExitCode.VALIDATION
 
 
-def test_phase_set_missing_file_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_phase_set_missing_file_exits_validation() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1724,9 +1800,8 @@ def test_phase_set_missing_file_exits_validation(patched_cli: None) -> None:
     assert result.exit_code == ExitCode.VALIDATION
 
 
-def test_phase_add_non_utf8_file_exits_validation(
-    patched_cli: None, tmp_path: Path
-) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_phase_add_non_utf8_file_exits_validation(tmp_path: Path) -> None:
     # A non-UTF-8 --*-file must surface as a clean validation error (exit 4),
     # never an uncaught UnicodeDecodeError traceback (the "never a traceback"
     # contract). UnicodeDecodeError is a ValueError, not an OSError.
@@ -1748,9 +1823,8 @@ def test_phase_add_non_utf8_file_exits_validation(
 # ---------------------------------------------------------------------------
 
 
-def test_section_set_body_file_reads_from_file(
-    patched_cli: None, tmp_path: Path
-) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_section_set_body_file_reads_from_file(tmp_path: Path) -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1767,7 +1841,8 @@ def test_section_set_body_file_reads_from_file(
     assert "Second para." in body
 
 
-def test_section_add_body_file_stdin(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_section_add_body_file_stdin() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1792,9 +1867,8 @@ def test_section_add_body_file_stdin(patched_cli: None) -> None:
     assert bodies and "A card from stdin." in bodies[0]
 
 
-def test_section_set_body_inline_and_file_conflict_exits_validation(
-    patched_cli: None,
-) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_section_set_body_inline_and_file_conflict_exits_validation() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1806,7 +1880,8 @@ def test_section_set_body_inline_and_file_conflict_exits_validation(
     assert result.exit_code == ExitCode.VALIDATION
 
 
-def test_section_set_missing_body_file_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_section_set_missing_body_file_exits_validation() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1818,7 +1893,8 @@ def test_section_set_missing_body_file_exits_validation(patched_cli: None) -> No
     assert result.exit_code == ExitCode.VALIDATION
 
 
-def test_section_add_no_body_defaults_empty(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_section_add_no_body_defaults_empty() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1832,9 +1908,8 @@ def test_section_add_no_body_defaults_empty(patched_cli: None) -> None:
     assert bodies and bodies[0] == ""
 
 
-def test_section_add_body_inline_and_file_conflict_exits_validation(
-    patched_cli: None,
-) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_section_add_body_inline_and_file_conflict_exits_validation() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1856,7 +1931,8 @@ def test_section_add_body_inline_and_file_conflict_exits_validation(
     assert result.exit_code == ExitCode.VALIDATION
 
 
-def test_section_add_missing_body_file_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_section_add_missing_body_file_exits_validation() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
     )
@@ -1881,7 +1957,8 @@ def test_section_add_missing_body_file_exits_validation(patched_cli: None) -> No
 # ---------------------------------------------------------------------------
 
 
-def test_doctor_reports_reachable(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doctor_reports_reachable() -> None:
     result = runner.invoke(cli.app, ["doctor"])
     assert result.exit_code == 0
     parsed = json.loads(result.stdout)
@@ -1907,7 +1984,7 @@ def test_doctor_reports_unreachable_exit_zero(
             base_url="http://t", transport=httpx.MockTransport(refuse)
         )
     )
-    monkeypatch.setattr(cli, "build_client", lambda url: down_client)
+    monkeypatch.setattr(cli, "build_client", lambda _url: down_client)
     result = runner.invoke(cli.app, ["doctor"])
     assert result.exit_code == 0
     parsed = json.loads(result.stdout)
@@ -1920,7 +1997,7 @@ def test_doctor_non_2xx_reports_unreachable(
 ) -> None:
     # A server that responds with 503 — HTTPStatusError branch. doctor must still
     # exit 0 and report reachable:false with a truthy detail string.
-    def always_503(request: httpx.Request) -> httpx.Response:
+    def always_503(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(503)
 
     down_client = PlanClient(
@@ -1928,7 +2005,7 @@ def test_doctor_non_2xx_reports_unreachable(
             base_url="http://t", transport=httpx.MockTransport(always_503)
         )
     )
-    monkeypatch.setattr(cli, "build_client", lambda url: down_client)
+    monkeypatch.setattr(cli, "build_client", lambda _url: down_client)
     result = runner.invoke(cli.app, ["doctor"])
     assert result.exit_code == 0
     parsed = json.loads(result.stdout)
@@ -1953,7 +2030,8 @@ def test_doctor_bad_url_no_traceback() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_phase_add_prose_flags_persist(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_phase_add_prose_flags_persist() -> None:
     # Create a doc, then add a phase with all three prose flags in one call.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -1984,7 +2062,8 @@ def test_phase_add_prose_flags_persist(patched_cli: None) -> None:
     assert phases["ph2"]["notes"] == "Z"
 
 
-def test_phase_add_without_prose_defaults_to_empty(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_phase_add_without_prose_defaults_to_empty() -> None:
     # A phase add without prose flags must store intro/exit_criteria/notes as "".
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -2000,7 +2079,8 @@ def test_phase_add_without_prose_defaults_to_empty(patched_cli: None) -> None:
     assert phases["ph3"]["notes"] == ""
 
 
-def test_doc_create_date_rejects_control_chars(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_create_date_rejects_control_chars() -> None:
     # A newline embedded in --date must be rejected as a control character (exit 4).
     result = runner.invoke(
         cli.app,
@@ -2021,7 +2101,8 @@ def test_doc_create_date_rejects_control_chars(patched_cli: None) -> None:
     assert result.exit_code == ExitCode.VALIDATION
 
 
-def test_doc_create_date_rejects_non_iso(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_create_date_rejects_non_iso() -> None:
     # A syntactically invalid date string must be rejected (exit 4).
     result = runner.invoke(
         cli.app,
@@ -2047,7 +2128,8 @@ def test_doc_create_date_rejects_non_iso(patched_cli: None) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_set_checked_all_checks_every_task_rev_free(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_set_checked_all_checks_every_task_rev_free() -> None:
     # --all targets every task without requiring a rev.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -2062,7 +2144,8 @@ def test_set_checked_all_checks_every_task_rev_free(patched_cli: None) -> None:
     assert all(t["checked"] is True for t in parsed["phase"]["tasks"])
 
 
-def test_set_checked_all_unchecked_clears_every_task(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_set_checked_all_unchecked_clears_every_task() -> None:
     # First check all, then clear all — both rev-free.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -2076,7 +2159,8 @@ def test_set_checked_all_unchecked_clears_every_task(patched_cli: None) -> None:
     assert all(t["checked"] is False for t in parsed["phase"]["tasks"])
 
 
-def test_set_checked_multi_index_checks_those(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_set_checked_multi_index_checks_those() -> None:
     # Explicit index list is position-sensitive and requires --rev; only the named
     # indices flip — the omitted one stays unchecked (proves selective, not check-all).
     runner.invoke(
@@ -2096,9 +2180,8 @@ def test_set_checked_multi_index_checks_those(patched_cli: None) -> None:
     assert tasks[2]["checked"] is True
 
 
-def test_set_checked_multi_index_requires_rev_exits_validation(
-    patched_cli: None,
-) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_set_checked_multi_index_requires_rev_exits_validation() -> None:
     # Explicit indices without --rev must be rejected at the CLI layer.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -2107,9 +2190,8 @@ def test_set_checked_multi_index_requires_rev_exits_validation(
     _assert_validation_exit(result)
 
 
-def test_set_checked_all_and_indices_conflict_exits_validation(
-    patched_cli: None,
-) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_set_checked_all_and_indices_conflict_exits_validation() -> None:
     # Passing both explicit indices and --all is a usage error.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -2120,7 +2202,8 @@ def test_set_checked_all_and_indices_conflict_exits_validation(
     _assert_validation_exit(result)
 
 
-def test_set_checked_no_target_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_set_checked_no_target_exits_validation() -> None:
     # No indices and no --all is a usage error.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -2129,7 +2212,8 @@ def test_set_checked_no_target_exits_validation(patched_cli: None) -> None:
     _assert_validation_exit(result)
 
 
-def test_set_checked_index_out_of_range_exits_validation(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_set_checked_index_out_of_range_exits_validation() -> None:
     # An out-of-range index must surface as a 422 -> exit VALIDATION.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -2141,7 +2225,8 @@ def test_set_checked_index_out_of_range_exits_validation(patched_cli: None) -> N
     _assert_validation_exit(result)
 
 
-def test_set_checked_multi_index_stale_rev_exits_stale(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_set_checked_multi_index_stale_rev_exits_stale() -> None:
     # A wrong rev with explicit indices must surface as a 409 -> exit STALE_REV.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -2153,7 +2238,8 @@ def test_set_checked_multi_index_stale_rev_exits_stale(patched_cli: None) -> Non
     assert result.exit_code == ExitCode.STALE_REV
 
 
-def test_phase_complete_checks_all_and_sets_done(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_phase_complete_checks_all_and_sets_done() -> None:
     # `phase complete` checks every task and sets status=done in one rev-free call.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
@@ -2167,7 +2253,8 @@ def test_phase_complete_checks_all_and_sets_done(patched_cli: None) -> None:
     assert all(t["checked"] is True for t in parsed["phase"]["tasks"])
 
 
-def test_toggle_phase_slice_includes_status(patched_cli: None) -> None:
+@pytest.mark.usefixtures("patched_cli")
+def test_toggle_phase_slice_includes_status() -> None:
     # Regression guard: the phase slice emitted by toggle now always contains status.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
