@@ -30,7 +30,7 @@ addopts = "-q"
 asyncio_mode = "auto"
 
 [tool.ty.environment]
-root = ["./packages/contracts/src", "./packages/server/src", "./packages/cli/src"]
+root = ["./packages/contracts/src", "./packages/server/src", "./packages/cli/src", "./tests/integration"]
 
 [tool.ty.src]
 include = ["packages", "tests"]

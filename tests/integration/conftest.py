@@ -20,6 +20,7 @@ from httpx import ASGITransport, BaseTransport, Request, Response
 
 from claudeplans.config import AuthMode, FilesystemSettings, Settings
 from claudeplans.main import create_app
+from claudeplans_cli import cli
 from claudeplans_cli.client import PlanClient
 
 
@@ -78,3 +79,12 @@ def transport(tmp_path: Path) -> Iterator[SyncASGITransport]:
 @pytest.fixture
 def client(transport: SyncASGITransport) -> PlanClient:
     return plan_client(transport)
+
+
+@pytest.fixture
+def patched_cli(client: PlanClient, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    def build_client(_url: str) -> PlanClient:
+        return client
+
+    monkeypatch.setattr(cli, "build_client", build_client)
+    yield
