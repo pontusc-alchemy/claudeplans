@@ -1,5 +1,5 @@
 # claudeplans — dev inner loop + Docker Bake jobs. (Make requires real tabs.)
-.PHONY: venv check lint fmt typecheck test bake-ci ci serve-build serve up down
+.PHONY: venv check lint fmt typecheck test bake-ci ci serve-build serve up down seed
 
 UV ?= uv
 
@@ -41,3 +41,6 @@ up: ## Build + run the dev stack (default project claudeplans-dev) on 127.0.0.1:
 
 down: ## Stop the dev stack (volumes kept; wipe: docker compose down -v).
 	docker compose down
+
+seed: ## Seed demo projects into the dev stack (override: CLAUDEPLANS_URL=...).
+	$(UV) run python scripts/seed.py
