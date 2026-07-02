@@ -367,6 +367,34 @@ def test_section_add_at_inserts(patched_cli: None) -> None:
     assert anchors[1] == "existing"
 
 
+# --- phase add --at ----------------------------------------------------------
+
+
+def test_phase_add_at_inserts_at_front(patched_cli: None) -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app, ["phase", "add", "demo", "p1", "z", "Zeta", "--at", "0"]
+    )
+    assert result.exit_code == 0
+    doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "p1"]).stdout)
+    phases = [p["slug"] for p in doc["data"]["phases"]]
+    assert phases[0] == "z"
+    assert phases[1] == "a"
+
+
+def test_phase_add_at_out_of_range_exits_validation(patched_cli: None) -> None:
+    # An out-of-range --at surfaces as a clean exit 4, not a 500 or silent append.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app, ["phase", "add", "demo", "p1", "z", "Zeta", "--at", "99"]
+    )
+    _assert_validation_exit(result)
+
+
 # --- task set-checked --------------------------------------------------------
 
 
@@ -1032,6 +1060,8 @@ def test_schema_conditional_writes_and_list_envelope(patched_cli: None) -> None:
     assert "task set-checked" not in cw
     # List envelope shape documented.
     assert "list" in parsed["envelopes"]
+    # Move index semantics documented in the agent-facing contract.
+    assert "move_index" in parsed
 
 
 # schema exposes a per-command flag map + global flags an agent can author from.
@@ -1054,6 +1084,10 @@ def test_schema_command_flags_and_global_flags(patched_cli: None) -> None:
     assert at["kind"] == "option"
     assert at["required"] is False
     assert at["type"] == "integer"
+    # phase add gained --at, mirroring task/section add.
+    phase_at = next(f for f in cf["phase add"] if f["opts"] == ["--at"])
+    assert phase_at["required"] is False
+    assert phase_at["type"] == "integer"
     # Arguments are tagged argument-vs-option, marked required, and typed.
     project = next(f for f in add_flags if f["opts"] == ["project"])
     assert project["kind"] == "argument"

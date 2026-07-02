@@ -81,6 +81,7 @@ def add_phase(
     intro: str = "",
     exit_criteria: str = "",
     notes: str = "",
+    at: int | None = None,
 ) -> Document:
     """Append a phase (the plan surface is append-only; reposition is move_phase).
 
@@ -97,7 +98,14 @@ def add_phase(
         exit_criteria=exit_criteria,
         notes=notes,
     )
-    return doc.model_copy(update={"phases": [*doc.phases, phase]})
+    phases = list(doc.phases)
+    if at is None:
+        phases.append(phase)
+    else:
+        if not 0 <= at <= len(phases):
+            raise ValidationError(f"at {at} out of range")
+        phases.insert(at, phase)
+    return doc.model_copy(update={"phases": phases})
 
 
 def set_phase(

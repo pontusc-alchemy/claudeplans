@@ -121,6 +121,31 @@ def test_move_phase_missing_raises() -> None:
         deltas.move_phase(_doc(), "zzz", 0)
 
 
+def test_add_phase_at_inserts_at_index() -> None:
+    doc = _doc()
+    before = _snapshot(doc)
+    out = deltas.add_phase(doc, "c", "Gamma", PhaseStatus.todo, at=0)
+    assert [p.slug for p in out.phases] == ["c", "a", "b"]
+    assert _snapshot(doc) == before
+
+
+def test_add_phase_at_none_appends() -> None:
+    out = deltas.add_phase(_doc(), "c", "Gamma", PhaseStatus.todo, at=None)
+    assert [p.slug for p in out.phases] == ["a", "b", "c"]
+
+
+def test_add_phase_at_out_of_range_raises() -> None:
+    with pytest.raises(ValidationError):
+        deltas.add_phase(_doc(), "c", "Gamma", PhaseStatus.todo, at=99)
+
+
+def test_add_phase_at_len_appends() -> None:
+    # at == len(phases) is the inclusive upper bound: it appends, same as at=None.
+    doc = _doc()  # 2 phases
+    out = deltas.add_phase(doc, "c", "Gamma", PhaseStatus.todo, at=len(doc.phases))
+    assert [p.slug for p in out.phases] == ["a", "b", "c"]
+
+
 def test_remove_phase() -> None:
     doc = _doc()
     before = _snapshot(doc)

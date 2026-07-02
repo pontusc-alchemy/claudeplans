@@ -70,7 +70,7 @@ class DocStatusRequest(BaseModel):
 
 
 class AddPhaseRequest(BaseModel):
-    """Add a phase (appended; reposition is the separate move op)."""
+    """Add a phase (appended, or at a specific index)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -81,6 +81,7 @@ class AddPhaseRequest(BaseModel):
     intro: str = ""
     exit_criteria: str = ""
     notes: str = ""
+    at: int | None = None
 
 
 class PhaseStatusRequest(BaseModel):

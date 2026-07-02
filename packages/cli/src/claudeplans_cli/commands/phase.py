@@ -59,6 +59,10 @@ _ADD_EXIT = typer.Option(
 _ADD_NOTES = typer.Option(
     "--notes", help="phase notes prose (markdown); omitted = empty"
 )
+_AT = typer.Option(
+    "--at",
+    help="0-based insert position; appends if omitted. Unconditional (no --rev).",
+)
 
 
 @app.command()
@@ -70,6 +74,7 @@ def add(
     phase_slug: str,
     name: Annotated[str, _NAME],
     status: Annotated[PhaseStatus, _ADD_STATUS] = PhaseStatus.todo,
+    at: Annotated[int | None, _AT] = None,
     intro: Annotated[str | None, _ADD_INTRO] = None,
     exit_criteria: Annotated[str | None, _ADD_EXIT] = None,
     notes: Annotated[str | None, _ADD_NOTES] = None,
@@ -77,7 +82,7 @@ def add(
     exit_criteria_file: Annotated[str | None, _SET_EXIT_FILE] = None,
     notes_file: Annotated[str | None, _SET_NOTES_FILE] = None,
 ) -> None:
-    """Append a phase, optionally with prose, in one call.
+    """Append a phase (or insert at --at), optionally with prose, in one call.
 
     Prose flags accept inline text or a --<flag>-file path ('-' = stdin);
     omitted prose defaults to empty.
@@ -98,6 +103,7 @@ def add(
         intro,
         exit_criteria,
         notes,
+        at,
     )
     emit_write(reply, full=c.full)
 
@@ -157,7 +163,11 @@ def move(
     to_index: Annotated[int, _TO_INDEX],
     rev: Annotated[str, _REV],
 ) -> None:
-    """Move a phase to a new index (conditional on --rev)."""
+    """Move a phase to a new index (conditional on --rev).
+
+    to_index is the absolute position AFTER the phase is removed from its current
+    slot, so the valid range is [0, phase_count - 1].
+    """
     c: AppContext = ctx.obj
     reply = c.client.move_phase(c.uid, project, slug, phase_slug, to_index, rev=rev)
     emit_write(reply, full=c.full, slice_="phases-ordering")

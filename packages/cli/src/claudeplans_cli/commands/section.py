@@ -84,7 +84,11 @@ def move(
     to_index: Annotated[int, _TO_INDEX],
     rev: Annotated[str, _REV],
 ) -> None:
-    """Move a section to a new index (conditional on --rev)."""
+    """Move a section to a new index (conditional on --rev).
+
+    to_index is the absolute position AFTER the section is removed from its current
+    slot, so the valid range is [0, section_count - 1].
+    """
     c: AppContext = ctx.obj
     reply = c.client.move_section(c.uid, project, slug, anchor, to_index, rev=rev)
     emit_write(reply, full=c.full)

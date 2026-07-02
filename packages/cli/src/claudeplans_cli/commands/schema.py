@@ -141,6 +141,10 @@ def schema(ctx: typer.Context) -> None:
                 "global_flags are passed before the subcommand: "
                 "claudeplans <global_flags> <command> [args/command_flags]"
             ),
+            "move_index": (
+                "phase/section move to_index is the absolute position AFTER the "
+                "item is removed from its current slot: valid range [0, count-1]"
+            ),
             "conditional_writes": sorted(conditional),
         }
     )

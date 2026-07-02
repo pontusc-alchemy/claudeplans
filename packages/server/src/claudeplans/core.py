@@ -197,6 +197,7 @@ async def add_phase(
     intro: str = "",
     exit_criteria: str = "",
     notes: str = "",
+    at: int | None = None,
     *,
     user: CurrentUser,
 ) -> tuple[str, Document]:
@@ -204,7 +205,7 @@ async def add_phase(
         repo,
         key,
         lambda doc: deltas.add_phase(
-            doc, slug, name, status, intro, exit_criteria, notes
+            doc, slug, name, status, intro, exit_criteria, notes, at
         ),
         user=user,
     )

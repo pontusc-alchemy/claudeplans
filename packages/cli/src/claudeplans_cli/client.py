@@ -262,6 +262,7 @@ class PlanClient:
         intro: str = "",
         exit_criteria: str = "",
         notes: str = "",
+        at: int | None = None,
     ) -> Reply:
         body = AddPhaseRequest(
             slug=phase_slug,
@@ -270,10 +271,11 @@ class PlanClient:
             intro=intro,
             exit_criteria=exit_criteria,
             notes=notes,
+            at=at,
         )
         resp = self._http.post(
             f"{self._doc_base(uid, project, slug)}/phases",
-            json=body.model_dump(mode="json"),
+            json=body.model_dump(mode="json", exclude_none=True),
         )
         return self._reply(resp)
 
