@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# CLI shim: runs the claudeplans CLI at the plugin's release tag via uvx.
+# The ref below MUST match the tag this commit ships under — bump it together
+# with .claude-plugin/plugin.json "version" when cutting a release (see README).
+exec uvx --from "git+ssh://git@github.com/pontusc-alchemy/host-plans@v0.0.1#subdirectory=packages/cli" claudeplans "$@"

@@ -20,8 +20,29 @@ packages/
 tests/{unit,integration,contract,fixtures}/
 Dockerfile docker-bake.hcl     # build / serve / ci stages, one image: claudeplans:<stage>
 scripts/ci.sh                  # the quality gate (ruff + ty + pytest)
-plugins/plan/                  # Claude Code plan plugin (skills only)
+plugins/plan/                  # Claude Code plan plugin (skills + CLI shim in bin/)
 ```
+
+## Claude Code plugin
+
+[`plugins/plan/`](plugins/plan/) ships the plan-lifecycle skills **and** the
+`claudeplans` CLI — a `bin/` shim that runs the pinned release via
+[uvx](https://docs.astral.sh/uv/guides/tools/) (requires `uv` and SSH access to
+this repo). Install by adding the repo as a marketplace pinned to a release tag:
+
+```text
+/plugin marketplace add pontusc-alchemy/host-plans@v0.0.1
+/plugin install plan@plans
+```
+
+Then run the `/plan:setup` skill — it asks whether this machine is a client
+(CLI shim + server address) or a server (compose stack + `/etc/hosts` alias)
+and walks through the matching flow.
+
+**Cutting a release** (manual): the shim inside a tag must reference that same
+tag. Update the ref in `plugins/plan/bin/claudeplans` and the `version` in
+`plugins/plan/.claude-plugin/plugin.json`, commit, tag that commit, push the
+tag. Consumers move up by re-adding the marketplace at the new tag.
 
 ## Dev inner loop
 
@@ -87,11 +108,11 @@ The CLI defaults to `http://127.0.0.1:8000` and uid `dev`; override with
 One Dockerfile, three stages, built via [Docker Bake](https://docs.docker.com/build/bake/)
 into one image (`claudeplans`) tagged by stage:
 
-| Target | Tag | Contents |
-| --- | --- | --- |
+| Target  | Tag                 | Contents                                                                                               |
+| ------- | ------------------- | ------------------------------------------------------------------------------------------------------ |
 | `serve` | `claudeplans:serve` | bare runtime — server member installed non-editable into the venv; uvicorn as PID 1 on :8000, non-root |
-| `ci` | `claudeplans:ci` | external deps + dev toolchain; runs `scripts/ci.sh` against bind-mounted source |
-| `build` | `claudeplans:build` | intermediate — the server's runtime venv |
+| `ci`    | `claudeplans:ci`    | external deps + dev toolchain; runs `scripts/ci.sh` against bind-mounted source                        |
+| `build` | `claudeplans:build` | intermediate — the server's runtime venv                                                               |
 
 ```shell
 make serve-build      # docker buildx bake serve

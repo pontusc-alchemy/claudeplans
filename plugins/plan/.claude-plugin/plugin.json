@@ -1,5 +1,6 @@
 {
   "name": "plan",
+  "version": "0.0.1",
   "description": "Research → plan → iterate → review lifecycle over the claudeplans service (CLI + live HTML view)",
   "author": { "name": "Pontus Curtsson" },
   "skills": ["./skills/"]
