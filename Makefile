@@ -33,8 +33,8 @@ ci: bake-ci  ## Run the gate in the ci image against mounted source.
 serve-build: ## Build the bare serve image.
 	docker buildx bake serve
 
-serve: ## Run the bare serve image locally on :8000.
-	docker run --rm -p 8000:8000 claudeplans:serve
+serve: ## Bring up the stable stack (compose; run from the pinned release worktree).
+	docker compose up --build -d
 
 up: ## Build + run the local stack (compose, filesystem + noop auth) on :8000.
 	docker compose up --build -d
