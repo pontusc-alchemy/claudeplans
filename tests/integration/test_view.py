@@ -61,6 +61,15 @@ async def _read_frame(lines: AsyncIterator[str]) -> list[str]:
     return frame
 
 
+async def _read_doc_frame(lines: AsyncIterator[str]) -> list[str]:
+    """Read the next doc-body (`event: message`) frame, skipping the interleaved
+    `event: sidebar` frames the live sidebar emits on connect and on every change."""
+    while True:
+        frame = await _read_frame(lines)
+        if "event: sidebar" not in frame:
+            return frame
+
+
 async def test_view_page_renders(tmp_path: Path) -> None:
     async with _client(tmp_path) as client:
         await client.post(DOCS, json=PLAN_BODY)
@@ -418,7 +427,7 @@ async def test_sse_emits_on_connect_and_on_mutation(live_server: str) -> None:
                 f"{DOCS}/p1/phases/a/status", json={"status": "done"}
             )
             assert resp.status_code == 200
-            nxt = await asyncio.wait_for(_read_frame(lines), 5)
+            nxt = await asyncio.wait_for(_read_doc_frame(lines), 5)
             assert any('phase-a-status" class="pill done"' in line for line in nxt)
 
 
@@ -460,7 +469,7 @@ async def test_delete_while_watching_emits_removed_frame(live_server: str) -> No
             await asyncio.wait_for(_read_frame(lines), 5)  # drain the snapshot frame
             deleted = await client.delete(f"{DOCS}/p1", headers={"If-Match": rev})
             assert deleted.status_code == 204
-            frame = await asyncio.wait_for(_read_frame(lines), 5)
+            frame = await asyncio.wait_for(_read_doc_frame(lines), 5)
             assert any("This document was removed." in line for line in frame)
 
 
@@ -472,7 +481,7 @@ async def test_sidebar_collapsible_and_indicators(tmp_path: Path) -> None:
         resp = await client.get(VIEW)
         assert resp.status_code == 200
         body = resp.text
-        assert "<details open>" in body  # current project expanded
+        assert '<details data-project="demo" open>' in body  # current project expanded
         assert 'class="status-dot status-draft"' in body  # plan default status
         assert 'class="doc-type doc-type-plan"' in body  # type marker
         # The dot/marker are visual-only; screen readers get the status + type
