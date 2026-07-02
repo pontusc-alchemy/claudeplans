@@ -46,8 +46,8 @@ from .storage.repository import Repository
 logger = logging.getLogger(__name__)
 
 # Hit-kind sort priority (a score tie-breaker only — ranking is by match score):
-# a project, then a document's own title, then its phases, then its sections.
-_KIND_ORDER: dict[str, int] = {"project": 0, "title": 1, "phase": 2, "section": 3}
+# a document's own title, then its phases, then its sections.
+_KIND_ORDER: dict[str, int] = {"title": 1, "phase": 2, "section": 3}
 
 
 def _fold(text: str) -> str:
@@ -211,23 +211,14 @@ class SearchIndex:
         # key, whereas evicting would drop a good entry on a transient blip.
         self._docs[key] = _project(key, doc)
 
-    def query(
-        self,
-        q: str,
-        *,
-        prefix: str = "",
-        project_names: dict[str, str] | None = None,
-    ) -> SearchResults:
-        """Return fuzzy hits over titles, section/phase headings, and — when
-        `project_names` is supplied — project display names.
+    def query(self, q: str, *, prefix: str = "") -> SearchResults:
+        """Return fuzzy hits over titles and section/phase headings.
 
         `prefix` scopes to a key prefix (`"alice/demo/"` for one user+project,
         `"alice/"` for one user across projects). The query is split into whitespace
         terms; an entry matches when every term is an in-order subsequence of it, and
         results are ranked by summed match score (best first) with deterministic
-        tie-breakers. `project_names` (slug -> display name; missing slugs fall back to
-        the slug) enables `kind="project"` hits that navigate to the lineage page — it
-        is passed only by the user-scoped route, so per-project search is unchanged.
+        tie-breakers.
         """
         terms = _fold(q).split()
         if not terms:
@@ -239,11 +230,9 @@ class SearchIndex:
         def add(score: float, key: str, order: int, text: str, hit: SearchHit) -> None:
             scored.append((score, key, order, text, hit))
 
-        projects_seen: set[str] = set()
         for doc in self._docs.values():
             if not doc.key.startswith(prefix):
                 continue
-            projects_seen.add(doc.project)
             score = _match(terms, doc.title)
             if score is not None:
                 add(
@@ -273,20 +262,6 @@ class SearchIndex:
                         name,
                         self._hit(doc, kind="phase", text=name, anchor=slug),
                     )
-        if project_names is not None:
-            for project in projects_seen:
-                display = project_names.get(project, project)
-                score = _match(terms, display)
-                if score is None and display != project:
-                    score = _match(terms, project)  # also let the bare slug match
-                if score is not None:
-                    add(
-                        score,
-                        project,
-                        _KIND_ORDER["project"],
-                        display,
-                        self._project_hit(project, display),
-                    )
         scored.sort(key=lambda r: (-r[0], r[1], r[2], r[3]))
         return SearchResults(query=q, hits=[r[4] for r in scored])
 
@@ -308,20 +283,4 @@ class SearchIndex:
             kind=kind,
             text=text,
             anchor=anchor,
-        )
-
-    @staticmethod
-    def _project_hit(project: str, display: str) -> SearchHit:
-        """A project-level hit: no document, navigates to the lineage page. `type`
-        and `status` are None — a project is not a document."""
-        return SearchHit(
-            key=project,
-            project=project,
-            slug="",
-            title=display,
-            type=None,
-            status=None,
-            kind="project",
-            text=display,
-            anchor=None,
         )

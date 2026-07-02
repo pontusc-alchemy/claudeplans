@@ -201,12 +201,16 @@ async def test_user_search_is_fuzzy_multiterm(live_server: str) -> None:
         assert any(h["kind"] == "title" and h["slug"] == "h1" for h in hits2)
 
 
-async def test_user_search_matches_project_display_name(live_server: str) -> None:
-    """Searching a project's display name yields a kind='project' hit that points at
-    that project (navigates to its lineage page), fuzzily and across projects."""
+async def test_user_search_does_not_match_project_display_name_or_slug(
+    live_server: str,
+) -> None:
+    """Search is document-scoped only: a query matching only a project's display
+    name, or only its slug, surfaces no hit for that project — even once the
+    project's one doc is fully indexed."""
     user_search = "/v1/users/dev/search"
     async with httpx.AsyncClient(base_url=live_server) as client:
-        # A project exists only if it has a doc; then give it a display name.
+        # A project exists only if it has a doc; then give it a display name whose
+        # words never appear in that doc's title/headings.
         await client.post(
             "/v1/users/dev/projects/other/docs",
             json={"type": "plan", "slug": "q1", "title": "Beta Plan"},
@@ -217,24 +221,30 @@ async def test_user_search_matches_project_display_name(live_server: str) -> Non
         )
         assert named.status_code == 200
 
-        async def _project_hit() -> dict[str, object] | None:
-            r = await client.get(user_search, params={"q": "onboarding restruct"})
+        # Confirm the doc (and hence its project) is indexed before asserting
+        # absence, so a false negative can't be mistaken for indexing lag.
+        async def _indexed() -> bool:
+            r = await client.get(user_search, params={"q": "beta"})
             if r.status_code != 200:
-                return None
-            for h in r.json()["hits"]:
-                if h["kind"] == "project" and h["project"] == "other":
-                    return h
-            return None
+                return False
+            return any(h["slug"] == "q1" for h in r.json()["hits"])
 
-        hit: dict[str, object] | None = None
         for _ in range(100):
-            hit = await _project_hit()
-            if hit is not None:
+            if await _indexed():
                 break
             await asyncio.sleep(0.02)
-        assert hit is not None, "project display-name search returned no project hit"
-        assert hit["project_name"] == "Onboarding Restructure"
-        assert hit["slug"] == ""
+        else:
+            raise AssertionError("doc was not indexed")
+
+        # The display name matches nothing in the doc, so no hit surfaces.
+        r = await client.get(user_search, params={"q": "onboarding restruct"})
+        assert r.status_code == 200
+        assert r.json()["hits"] == []
+
+        # Neither does the bare project slug.
+        r = await client.get(user_search, params={"q": "other"})
+        assert r.status_code == 200
+        assert r.json()["hits"] == []
 
 
 async def test_user_search_ranks_substring_above_scatter(live_server: str) -> None:
@@ -262,38 +272,3 @@ async def test_user_search_ranks_substring_above_scatter(live_server: str) -> No
             raise AssertionError("both docs were not indexed")
         assert order[0] == "r1"  # the contiguous-substring match leads
         assert order.index("r1") < order.index("r2")
-
-
-async def test_user_search_matches_project_by_slug_when_name_differs(
-    live_server: str,
-) -> None:
-    """A project still matches on its slug even when it has a display name that does
-    not match the query — and the resulting hit still carries the display name."""
-    user_search = "/v1/users/dev/search"
-    async with httpx.AsyncClient(base_url=live_server) as client:
-        await client.post(
-            "/v1/users/dev/projects/redis/docs",
-            json={"type": "plan", "slug": "r1", "title": "Beta Plan"},
-        )
-        named = await client.put(
-            "/v1/users/dev/projects/redis/name", json={"name": "Cache Layer"}
-        )
-        assert named.status_code == 200
-
-        async def _slug_hit() -> dict[str, object] | None:
-            r = await client.get(user_search, params={"q": "redis"})
-            if r.status_code != 200:
-                return None
-            for h in r.json()["hits"]:
-                if h["kind"] == "project" and h["project"] == "redis":
-                    return h
-            return None
-
-        hit: dict[str, object] | None = None
-        for _ in range(100):
-            hit = await _slug_hit()
-            if hit is not None:
-                break
-            await asyncio.sleep(0.02)
-        assert hit is not None, "slug-fallback project match returned no project hit"
-        assert hit["project_name"] == "Cache Layer"

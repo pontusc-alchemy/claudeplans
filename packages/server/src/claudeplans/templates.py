@@ -168,13 +168,12 @@ def build_sidebar(
     current_project: str | None,
     current_slug: str | None,
     view_url: Callable[[str, str], str],
-    lineage_url: Callable[[str], str],
 ) -> dict[str, object]:
     """Build the render-ready sidebar context.
 
     Logic-free templates: every link URL and the active-entry (`current`) flags are
     computed here in Python, so `_sidebar.html` only iterates. `view_url(project,
-    slug)` and `lineage_url(project)` are supplied by the route layer.
+    slug)` is supplied by the route layer.
     """
 
     def _doc(project: str, ref: PlanRef | ResearchNode) -> dict[str, object]:
@@ -200,10 +199,7 @@ def build_sidebar(
             {
                 "project": pt.project,
                 "name": pt.name,
-                "lineage_url": lineage_url(pt.project),
                 "current": pt.project == current_project,
-                "is_current_page": pt.project == current_project
-                and current_slug is None,
                 "doc_count": pt.doc_count,
                 "research": research,
                 "unlinked_plans": unlinked,

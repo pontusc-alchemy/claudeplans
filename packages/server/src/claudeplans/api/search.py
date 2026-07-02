@@ -64,7 +64,4 @@ async def search_user(
         validate_key_segment(uid)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    names = project_registry.names_for(uid)
-    return _with_names(
-        index.query(q, prefix=f"{uid}/", project_names=names), project_registry, uid
-    )
+    return _with_names(index.query(q, prefix=f"{uid}/"), project_registry, uid)

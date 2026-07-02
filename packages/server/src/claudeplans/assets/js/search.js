@@ -79,8 +79,7 @@
   }
 
   // Hits can come from any of the user's projects, so the project segment comes
-  // from the hit itself. A kind="project" hit short-circuits to that project's
-  // lineage page; otherwise the DOM id scheme lives in _doc_body.html: sections
+  // from the hit itself. The DOM id scheme lives in _doc_body.html: sections
   // render id="section-{anchor}", phases id="phase-{slug}" — mirror that here so the
   // fragment resolves (the hit's bare `anchor` alone would not match).
   function viewUrl(hit) {
@@ -89,9 +88,6 @@
       encodeURIComponent(uid) +
       "/projects/" +
       encodeURIComponent(hit.project);
-    if (hit.kind === "project") {
-      return base + "/"; // the project lineage page
-    }
     var url = base + "/docs/" + encodeURIComponent(hit.slug) + "/view";
     if (hit.anchor) {
       if (hit.kind === "phase") {
@@ -128,9 +124,7 @@
       var doc = document.createElement("span");
       doc.className = "search-doc";
       var pname = hits[i].project_name || hits[i].project;
-      if (hits[i].kind === "project") {
-        doc.textContent = "open project";
-      } else if (hits[i].kind === "title") {
+      if (hits[i].kind === "title") {
         doc.textContent = pname;
       } else {
         doc.textContent = hits[i].title + " · " + pname;

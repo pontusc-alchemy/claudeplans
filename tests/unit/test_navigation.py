@@ -153,7 +153,6 @@ async def test_build_sidebar_marks_active_doc_by_project_and_slug(
         current_project="projA",
         current_slug="shared",
         view_url=lambda p, s: f"/view/{p}/{s}",
-        lineage_url=lambda p: f"/lin/{p}",
     )
 
     sb_projects = cast(list[dict[str, Any]], sidebar["projects"])
@@ -186,7 +185,6 @@ async def test_build_sidebar_plan_appears_under_primary_research_node(
         current_project="projA",
         current_slug="p2",
         view_url=lambda p, s: f"/view/{p}/{s}",
-        lineage_url=lambda p: f"/lin/{p}",
     )
 
     sb_projects = cast(list[dict[str, Any]], sidebar["projects"])
@@ -209,7 +207,6 @@ async def test_build_sidebar_no_active_when_no_current_doc(tmp_path: Path) -> No
         current_project=None,
         current_slug=None,
         view_url=lambda p, s: f"/view/{p}/{s}",
-        lineage_url=lambda p: f"/lin/{p}",
     )
 
     sb_projects = cast(list[dict[str, Any]], sidebar["projects"])
@@ -218,7 +215,7 @@ async def test_build_sidebar_no_active_when_no_current_doc(tmp_path: Path) -> No
     assert all(not d["current"] for d in proj["unlinked_plans"])
 
 
-async def test_build_sidebar_project_is_current_page_only_on_lineage(
+async def test_build_sidebar_project_current_with_and_without_open_doc(
     tmp_path: Path,
 ) -> None:
     repo = FilesystemRepository(tmp_path / "data")
@@ -227,7 +224,7 @@ async def test_build_sidebar_project_is_current_page_only_on_lineage(
     projects = await build_user_tree(repo, "dev")
     users = await list_users(repo, registry, "dev")
 
-    # Doc-view page (a slug is open): project is the active ancestor, NOT current-page.
+    # Doc-view page (a slug is open): the project is still the active ancestor.
     on_doc = templates.build_sidebar(
         users=users,
         projects=projects,
@@ -235,13 +232,11 @@ async def test_build_sidebar_project_is_current_page_only_on_lineage(
         current_project="projA",
         current_slug="p1",
         view_url=lambda p, s: f"/view/{p}/{s}",
-        lineage_url=lambda p: f"/lin/{p}",
     )
     a_on_doc = cast(list[dict[str, Any]], on_doc["projects"])[0]
     assert a_on_doc["current"] is True
-    assert a_on_doc["is_current_page"] is False
 
-    # Lineage page (no slug open): project IS the current page (gets the box).
+    # Lineage page (no slug open): the project is still the active ancestor.
     on_lin = templates.build_sidebar(
         users=users,
         projects=projects,
@@ -249,11 +244,9 @@ async def test_build_sidebar_project_is_current_page_only_on_lineage(
         current_project="projA",
         current_slug=None,
         view_url=lambda p, s: f"/view/{p}/{s}",
-        lineage_url=lambda p: f"/lin/{p}",
     )
     a_on_lin = cast(list[dict[str, Any]], on_lin["projects"])[0]
     assert a_on_lin["current"] is True
-    assert a_on_lin["is_current_page"] is True
 
 
 async def test_list_users_ignores_stray_root_level_file(tmp_path: Path) -> None:
@@ -292,7 +285,6 @@ async def test_build_sidebar_entries_carry_status_and_type(tmp_path: Path) -> No
         current_project="projA",
         current_slug=None,
         view_url=lambda p, s: f"/view/{p}/{s}",
-        lineage_url=lambda p: f"/lin/{p}",
     )
     sb_projects = cast(list[dict[str, Any]], sidebar["projects"])
     research = sb_projects[0]["research"][0]
@@ -342,7 +334,6 @@ async def test_sidebar_carries_display_name(tmp_path: Path) -> None:
         current_project=None,
         current_slug=None,
         view_url=lambda p, s: f"/view/{p}/{s}",
-        lineage_url=lambda p: f"/lin/{p}",
     )
 
     sb_projects = cast(list[dict[str, Any]], sidebar["projects"])

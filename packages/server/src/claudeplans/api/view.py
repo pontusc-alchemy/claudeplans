@@ -47,10 +47,6 @@ def _view_url(uid: str, project: str, slug: str) -> str:
     return f"/v1/users/{uid}/projects/{project}/docs/{slug}/view"
 
 
-def _project_url(uid: str, project: str) -> str:
-    return f"/v1/users/{uid}/projects/{project}/"
-
-
 def _user_url(uid: str) -> str:
     return f"/v1/users/{uid}/"
 
@@ -73,7 +69,6 @@ async def _build_sidebar(
         current_project=project,
         current_slug=slug,
         view_url=lambda p, s: _view_url(uid, p, s),
-        lineage_url=lambda p: _project_url(uid, p),
     )
 
 

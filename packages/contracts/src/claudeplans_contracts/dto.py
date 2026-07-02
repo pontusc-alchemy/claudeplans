@@ -232,7 +232,7 @@ class SearchHit(BaseModel):
     title: str
     type: DocType | None = None
     status: DocStatus | None = None
-    kind: Literal["title", "section", "phase", "project"]
+    kind: Literal["title", "section", "phase"]
     text: str
     anchor: str | None = None
     project_name: str | None = None

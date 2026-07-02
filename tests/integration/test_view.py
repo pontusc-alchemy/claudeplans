@@ -201,6 +201,7 @@ async def test_view_page_has_sidebar_with_active_doc(tmp_path: Path) -> None:
         assert 'id="user-select"' in body  # the user switcher
         assert "/assets/js/ui.js" in body  # same-origin switcher script
         assert 'aria-current="page"' in body  # the open doc is highlighted
+        assert 'href="/v1/users/dev/projects/demo/"' not in body  # title is not a link
         # CSP must be unchanged by the sidebar work.
         csp = resp.headers["content-security-policy"]
         assert "script-src 'self'" in csp
@@ -217,7 +218,8 @@ async def test_lineage_page_has_sidebar(tmp_path: Path) -> None:
         body = resp.text
         assert 'class="sidebar"' in body
         assert 'id="user-select"' in body
-        assert 'aria-current="page"' in body  # the project title is the current page
+        assert 'class="sidebar-project current"' in body  # the project still highlights
+        assert "aria-current" not in body  # no doc is open on the lineage page
 
 
 async def test_user_landing_renders(tmp_path: Path) -> None:
