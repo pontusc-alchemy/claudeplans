@@ -1,7 +1,8 @@
 """Tests for config round-trip, resolution precedence, list commands, and view URLs.
 
-Uses the same in-process harness as test_cli_e2e.py: `build_client` is
-monkeypatched so CliRunner drives the full router stack without a socket.
+Uses the same in-process harness as the other CLI tests (the `patched_cli`
+fixture in conftest.py): `build_client` is monkeypatched so CliRunner drives
+the full router stack without a socket.
 
 All tests are hermetic: XDG_CONFIG_HOME is redirected to a per-test tmp dir so the
 real ~/.config/claudeplans/config.toml is never read or written.
