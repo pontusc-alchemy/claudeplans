@@ -19,6 +19,7 @@ class DocStatus(StrEnum):
     draft = "draft"
     active = "active"
     done = "done"
+    archived = "archived"
 
 
 class PhaseStatus(StrEnum):

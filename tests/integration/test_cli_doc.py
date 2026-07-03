@@ -583,6 +583,22 @@ def test_doc_set_status_alias_works() -> None:
 
 
 @pytest.mark.usefixtures("patched_cli")
+def test_doc_status_archived_round_trips() -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=VALID_CREATE
+    )
+    result = runner.invoke(cli.app, ["doc", "status", "demo", "p1", "archived"])
+    assert result.exit_code == 0
+    doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "p1"]).stdout)
+    assert doc["data"]["status"] == "archived"
+    # Unarchive is just setting the status back.
+    result = runner.invoke(cli.app, ["doc", "status", "demo", "p1", "active"])
+    assert result.exit_code == 0
+    doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "p1"]).stdout)
+    assert doc["data"]["status"] == "active"
+
+
+@pytest.mark.usefixtures("patched_cli")
 def test_doc_link_nonexistent_ref_exits_validation() -> None:
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=VALID_CREATE
