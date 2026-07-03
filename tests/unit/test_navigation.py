@@ -6,7 +6,7 @@ from pydantic import JsonValue
 
 from claudeplans import templates
 from claudeplans.auth.registry import UserRegistry
-from claudeplans.navigation import build_user_tree, list_users
+from claudeplans.navigation import build_user_tree, list_users, load_project_lineage
 from claudeplans.projects import ProjectRegistry
 from claudeplans.storage.filesystem import FilesystemRepository
 from claudeplans.storage.repository import CREATE
@@ -21,6 +21,7 @@ def _doc(
     owner: str = "dev",
     primary: str | None = None,
     refs: list[str] | None = None,
+    status: str | None = None,
 ) -> dict[str, JsonValue]:
     doc: dict[str, JsonValue] = {
         "type": doc_type,
@@ -33,6 +34,8 @@ def _doc(
         doc["primary_research_ref"] = primary
     if refs is not None:
         doc["research_refs"] = refs
+    if status is not None:
+        doc["status"] = status
     return doc
 
 
@@ -62,6 +65,43 @@ async def test_build_user_tree_groups_sorts_and_reflects_lineage(
     node = proj_b.lineage.research[0]
     assert node.slug == "r1"
     assert [p.slug for p in node.plans] == ["p1"]
+
+
+async def test_build_user_tree_partitions_archived_docs(tmp_path: Path) -> None:
+    repo = FilesystemRepository(tmp_path / "data")
+    await _put(repo, _doc("projA", "active-plan", "plan"))
+    await _put(repo, _doc("projA", "old-plan", "plan", status="archived"))
+
+    trees = await build_user_tree(repo, "dev")
+
+    assert len(trees) == 1
+    tree = trees[0]
+    assert tree.doc_count == 2  # total, including the archived doc
+    assert [p.slug for p in tree.lineage.unlinked_plans] == ["active-plan"]
+    assert [p.slug for p in tree.archived.unlinked_plans] == ["old-plan"]
+
+
+async def test_build_user_tree_empty_archived_yields_empty_lineage(
+    tmp_path: Path,
+) -> None:
+    repo = FilesystemRepository(tmp_path / "data")
+    await _put(repo, _doc("projA", "p1", "plan"))
+
+    trees = await build_user_tree(repo, "dev")
+
+    assert trees[0].archived.research == ()
+    assert trees[0].archived.unlinked_plans == ()
+
+
+async def test_load_project_lineage_partitions_archived_docs(tmp_path: Path) -> None:
+    repo = FilesystemRepository(tmp_path / "data")
+    await _put(repo, _doc("projA", "active-plan", "plan"))
+    await _put(repo, _doc("projA", "old-plan", "plan", status="archived"))
+
+    active, archived = await load_project_lineage(repo, "dev", "projA")
+
+    assert [p.slug for p in active.unlinked_plans] == ["active-plan"]
+    assert [p.slug for p in archived.unlinked_plans] == ["old-plan"]
 
 
 async def test_build_user_tree_scoped_to_user(tmp_path: Path) -> None:

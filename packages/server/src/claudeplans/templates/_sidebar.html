@@ -34,6 +34,34 @@
           {% endfor %}
         </ul>
         {% endif %}
+        {# data-project keys the archived group into ui.js's open-freeze +
+           persistence machinery; "//" cannot occur in a real project slug. #}
+        {% if proj.archived %}
+        <details class="archived-group" data-project="{{ proj.project }}//archived"{% if proj.archived.open %} open{% endif %}>
+          <summary class="archived-title">Archived ({{ proj.archived.count }})</summary>
+          <ul class="research-roots">
+            {% for r in proj.archived.research %}
+            <li class="research-node">
+              <a class="research-title" href="{{ r.view_url }}"{% if r.current %} aria-current="page"{% endif %}><span class="status-dot status-{{ r.status }}"></span><span class="doc-type doc-type-{{ r.type }}"></span><span class="sr-only">{{ r.type }}, {{ r.status }}: </span>{{ r.title }}</a>
+              {% if r.plans %}
+              <ul class="plans">
+                {% for p in r.plans %}
+                <li class="plan"><a href="{{ p.view_url }}"{% if p.current %} aria-current="page"{% endif %}><span class="status-dot status-{{ p.status }}"></span><span class="doc-type doc-type-{{ p.type }}"></span><span class="sr-only">{{ p.type }}, {{ p.status }}: </span>{{ p.title }}</a></li>
+                {% endfor %}
+              </ul>
+              {% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+          {% if proj.archived.unlinked_plans %}
+          <ul class="unlinked-plans">
+            {% for p in proj.archived.unlinked_plans %}
+            <li class="plan"><a href="{{ p.view_url }}"{% if p.current %} aria-current="page"{% endif %}><span class="status-dot status-{{ p.status }}"></span><span class="doc-type doc-type-{{ p.type }}"></span><span class="sr-only">{{ p.type }}, {{ p.status }}: </span>{{ p.title }}</a></li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+        </details>
+        {% endif %}
       </details>
     </li>
     {% endfor %}

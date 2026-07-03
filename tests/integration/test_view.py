@@ -551,6 +551,113 @@ async def test_lineage_json_unlinked_plan_carries_status_and_type(
         assert plan["status"] == "draft"
 
 
+async def test_sidebar_shows_archived_doc_collapsed_and_excluded_from_main_tree(
+    tmp_path: Path,
+) -> None:
+    async with _client(tmp_path) as client:
+        await client.post(DOCS, json=PLAN_BODY)  # slug=p1, active
+        await client.post(
+            DOCS,
+            json={
+                "type": "plan",
+                "slug": "old",
+                "title": "Old Plan",
+                "status": "archived",
+            },
+        )
+        resp = await client.get(VIEW)
+        assert resp.status_code == 200
+        body = resp.text
+        # Collapsed (no `open`), keyed into ui.js persistence via data-project.
+        opening_tag = '<details class="archived-group" data-project="demo//archived">'
+        assert opening_tag in body
+        assert "<summary" in body and "Archived (1)" in body
+        # The archived doc appears once, inside the archived group only.
+        assert body.count("Old Plan") == 1
+        archived_index = body.index(opening_tag)
+        assert body.index("Old Plan") > archived_index
+        # The active doc stays in the main (non-archived) tree.
+        assert body.index("Plan One") < archived_index
+
+
+async def test_sidebar_archived_group_auto_expands_for_current_doc(
+    tmp_path: Path,
+) -> None:
+    # Viewing an archived doc must render its group expanded, or the
+    # aria-current highlight would be hidden inside a collapsed <details>.
+    async with _client(tmp_path) as client:
+        await client.post(DOCS, json=PLAN_BODY)
+        await client.post(
+            DOCS,
+            json={
+                "type": "plan",
+                "slug": "old",
+                "title": "Old Plan",
+                "status": "archived",
+            },
+        )
+        resp = await client.get(f"{DOCS}/old/view")
+        assert resp.status_code == 200
+        assert (
+            '<details class="archived-group" data-project="demo//archived" open>'
+            in resp.text
+        )
+
+
+async def test_sidebar_no_archived_group_when_no_archived_docs(
+    tmp_path: Path,
+) -> None:
+    async with _client(tmp_path) as client:
+        await client.post(DOCS, json=PLAN_BODY)
+        resp = await client.get(VIEW)
+        assert resp.status_code == 200
+        assert "archived-group" not in resp.text
+
+
+async def test_project_lineage_page_shows_archived_group(tmp_path: Path) -> None:
+    async with _client(tmp_path) as client:
+        await client.post(
+            DOCS, json={"type": "plan", "slug": "p2", "title": "Plan Two"}
+        )
+        await client.post(
+            DOCS,
+            json={
+                "type": "plan",
+                "slug": "old",
+                "title": "Old Plan",
+                "status": "archived",
+            },
+        )
+        resp = await client.get(LINEAGE)
+        assert resp.status_code == 200
+        # Scope to the lineage main content only — the sidebar carries its own
+        # (separately tested) archived group and would otherwise confound the index
+        # comparisons below.
+        main = resp.text.split('<main class="lineage"', 1)[1]
+        assert '<details class="archived-group">' in main
+        archived_index = main.index('<details class="archived-group">')
+        assert main.index("Old Plan") > archived_index
+        assert main.index("Plan Two") < archived_index
+
+
+async def test_lineage_json_excludes_archived_docs(tmp_path: Path) -> None:
+    async with _client(tmp_path) as client:
+        await client.post(DOCS, json=PLAN_BODY)  # slug=p1, active
+        await client.post(
+            DOCS,
+            json={
+                "type": "plan",
+                "slug": "old",
+                "title": "Old Plan",
+                "status": "archived",
+            },
+        )
+        resp = await client.get("/v1/users/dev/projects/demo/lineage")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert [p["slug"] for p in data["unlinked_plans"]] == ["p1"]
+
+
 # --- templates: field-map rendering ------------------------------------------
 
 

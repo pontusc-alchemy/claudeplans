@@ -4,7 +4,8 @@ combinations:
 - `empty`  — registry display name only, zero docs (must NOT appear anywhere).
 - `atlas`  — a research doc + a standalone plan (no research link → unlinked).
 - `beacon` — a research doc + a plan linked to it (primary ref → nests under the
-  research node) + a standalone research doc with no plans.
+  research node) + a standalone research doc with no plans + an archived plan
+  (surfaces in the sidebar's collapsed "Archived" group).
 
 Idempotent: doc creation treats 409 (slug already exists) as already-seeded and
 skips; project display names re-PUT freely. Targets the dev stack by default —
@@ -126,6 +127,13 @@ SEED: list[tuple[str, str, list[dict[str, Any]]]] = [
                 "title": "Logging Spike",
                 "status": "draft",
                 "description": "Standalone research — no plans hang off it.",
+            },
+            {
+                "type": "plan",
+                "slug": "legacy-migration",
+                "title": "Legacy Migration",
+                "status": "archived",
+                "description": "Retired plan — surfaces in the sidebar's Archived group.",
             },
         ],
     ),

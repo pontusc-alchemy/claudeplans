@@ -20,6 +20,7 @@
   --blocked: #f7768e;
   --draft: #9aa5ce;
   --active: #e0af68;
+  --archived: #565f89;
 }
 
 * {
@@ -188,6 +189,16 @@ body.md-typeset {
   list-style-position: inside;
 }
 
+.archived-group {
+  margin: 0.5rem 0 0 0.75rem;
+  color: var(--fg-muted);
+}
+
+.archived-title {
+  cursor: pointer;
+  font-size: 0.85em;
+}
+
 .status-dot {
   display: inline-block;
   width: 0.5em;
@@ -208,6 +219,10 @@ body.md-typeset {
 
 .status-dot.status-draft {
   background: var(--draft);
+}
+
+.status-dot.status-archived {
+  background: var(--archived);
 }
 
 .doc-type {

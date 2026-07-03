@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 
 from claudeplans_contracts import Document
+from claudeplans_contracts.enums import DocStatus
 from claudeplans_contracts.errors import PlanError
 
 from . import core
@@ -26,11 +27,16 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class ProjectTree:
-    """One project's documents, grouped into a lineage tree for the sidebar."""
+    """One project's documents, grouped into a lineage tree for the sidebar.
+
+    `lineage` covers the active (non-archived) docs; `archived` is the same fold
+    over the docs with `DocStatus.archived`.
+    """
 
     project: str
     name: str
     lineage: Lineage
+    archived: Lineage
     doc_count: int
 
 
@@ -62,13 +68,26 @@ async def _load_documents(repo: Repository, keys: Iterable[str]) -> list[Documen
     return docs
 
 
-async def load_project_lineage(repo: Repository, uid: str, project: str) -> Lineage:
-    """Fold one user+project's documents into a Lineage, poison docs skipped."""
+def _split_lineages(docs: list[Document]) -> tuple[Lineage, Lineage]:
+    """Fold docs into (active, archived) lineages, partitioned by archived status."""
+    active = [d for d in docs if d.status is not DocStatus.archived]
+    archived = [d for d in docs if d.status is DocStatus.archived]
+    return build_lineage(active), build_lineage(archived)
+
+
+async def load_project_lineage(
+    repo: Repository, uid: str, project: str
+) -> tuple[Lineage, Lineage]:
+    """Fold one user+project's documents into (active, archived) Lineages.
+
+    Poison docs are skipped. Docs with `DocStatus.archived` are folded into the
+    second (archived) lineage instead of the first.
+    """
     # Trailing slash scopes to the project segment exactly: validate_key_segment
     # forbids slashes in a segment, so "uid/project/" can't match a sibling.
     prefix = f"{uid}/{project}/"
     keys = [entry.key for entry in await repo.list(prefix)]
-    return build_lineage(await _load_documents(repo, keys))
+    return _split_lineages(await _load_documents(repo, keys))
 
 
 async def build_user_tree(
@@ -94,11 +113,13 @@ async def build_user_tree(
     trees: list[ProjectTree] = []
     for project in sorted(by_project):
         docs = await _load_documents(repo, by_project[project])
+        active, archived = _split_lineages(docs)
         trees.append(
             ProjectTree(
                 project=project,
                 name=names.get(project, project),
-                lineage=build_lineage(docs),
+                lineage=active,
+                archived=archived,
                 doc_count=len(docs),
             )
         )

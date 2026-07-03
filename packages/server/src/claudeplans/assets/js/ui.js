@@ -56,9 +56,10 @@
   // time), and the attribute-sync loop skips an update when this returns false.
   // Without it, the snapshot sidebar frame sent on SSE connect re-adds the
   // server-default `open` to a project the user just collapsed, so the collapse
-  // does not survive navigation. Scoped to the `open` attribute on project
-  // <details> only; every other attribute (status dots, titles, aria-current)
-  // morphs normally.
+  // does not survive navigation. Scoped to the `open` attribute on
+  // details[data-project] — project nodes AND each project's nested archived
+  // group (keyed "<project>//archived") — so both join the same persistence;
+  // every other attribute (status dots, titles, aria-current) morphs normally.
   if (window.Idiomorph && Idiomorph.defaults && Idiomorph.defaults.callbacks) {
     Idiomorph.defaults.callbacks.beforeAttributeUpdated = function (attr, node) {
       if (attr === "open" && node.matches && node.matches("details[data-project]")) {

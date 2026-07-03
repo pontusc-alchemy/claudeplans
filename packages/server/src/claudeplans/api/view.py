@@ -206,14 +206,15 @@ async def project_lineage(
     project_registry: ProjectRegistryDep,
 ) -> HTMLResponse:
     """Render the lineage index for one user+project."""
-    lineage = await navigation.load_project_lineage(repo, uid, project)
+    active, archived = await navigation.load_project_lineage(repo, uid, project)
     sidebar = await _build_sidebar(repo, registry, project_registry, uid, project, None)
     title = project_registry.get(uid, project) or project
     html = templates.render_lineage_page(
-        lineage,
+        active,
         title=title,
         view_url=lambda slug: _view_url(uid, project, slug),
         sidebar=sidebar,
+        archived=archived,
     )
     return HTMLResponse(html, headers={"Content-Security-Policy": CSP})
 
@@ -243,5 +244,7 @@ async def project_lineage_json(
     uid: str, project: str, repo: RepoDep
 ) -> LineageResponse:
     """Return the lineage tree for one user+project as plain JSON."""
-    lineage = await navigation.load_project_lineage(repo, uid, project)
-    return LineageResponse.model_validate(dataclasses.asdict(lineage))
+    active, _archived = await navigation.load_project_lineage(repo, uid, project)
+    # Archived docs are deliberately excluded from the JSON lineage: the contract
+    # is consumed by CLIs parsing with extra="forbid" and must stay unchanged.
+    return LineageResponse.model_validate(dataclasses.asdict(active))

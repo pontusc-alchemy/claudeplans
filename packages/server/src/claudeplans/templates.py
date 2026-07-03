@@ -114,13 +114,11 @@ def render_page(
     )
 
 
-def render_lineage_page(
-    lineage: Lineage,
-    title: str,
-    view_url: Callable[[str], str],
-    sidebar: dict[str, object] | None = None,
-) -> str:
-    """Render the project lineage index. `view_url(slug)` builds each doc link."""
+def _lineage_projection(
+    lineage: Lineage, view_url: Callable[[str], str]
+) -> dict[str, object]:
+    """Project a Lineage into the `{research, unlinked_plans}` shape the lineage
+    template walks. `view_url(slug)` builds each doc link."""
     research = [
         {
             "title": node.title,
@@ -134,9 +132,30 @@ def render_lineage_page(
     unlinked = [
         {"title": p.title, "view_url": view_url(p.slug)} for p in lineage.unlinked_plans
     ]
+    return {"research": research, "unlinked_plans": unlinked}
+
+
+def render_lineage_page(
+    lineage: Lineage,
+    title: str,
+    view_url: Callable[[str], str],
+    archived: Lineage,
+    sidebar: dict[str, object] | None = None,
+) -> str:
+    """Render the project lineage index. `view_url(slug)` builds each doc link.
+
+    `archived` is the same lineage fold over archived-status docs; it renders as a
+    separate, collapsed group and is `None` in the template context when empty.
+    """
+    archived_ctx = (
+        _lineage_projection(archived, view_url)
+        if archived.research or archived.unlinked_plans
+        else None
+    )
     return env.get_template("lineage.html").render(
         title=title,
-        lineage={"research": research, "unlinked_plans": unlinked},
+        lineage=_lineage_projection(lineage, view_url),
+        archived=archived_ctx,
         sidebar=sidebar,
     )
 
@@ -185,16 +204,41 @@ def build_sidebar(
             "type": ref.type.value,
         }
 
-    proj_ctx: list[dict[str, object]] = []
-    for pt in projects:
+    def _archived_slugs(lineage: Lineage) -> set[str]:
+        """Every doc slug in the archived lineage (backlinks are duplicates)."""
+        return (
+            {n.slug for n in lineage.research}
+            | {p.slug for n in lineage.research for p in n.plans}
+            | {p.slug for p in lineage.unlinked_plans}
+        )
+
+    def _research_and_unlinked(
+        project: str, lineage: Lineage
+    ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
         research = [
             {
-                **_doc(pt.project, n),
-                "plans": [_doc(pt.project, p) for p in n.plans],
+                **_doc(project, n),
+                "plans": [_doc(project, p) for p in n.plans],
             }
-            for n in pt.lineage.research
+            for n in lineage.research
         ]
-        unlinked = [_doc(pt.project, p) for p in pt.lineage.unlinked_plans]
+        unlinked = [_doc(project, p) for p in lineage.unlinked_plans]
+        return research, unlinked
+
+    proj_ctx: list[dict[str, object]] = []
+    for pt in projects:
+        research, unlinked = _research_and_unlinked(pt.project, pt.lineage)
+        archived_research, archived_unlinked = _research_and_unlinked(
+            pt.project, pt.archived
+        )
+        # Count = every archived doc (research + its primary plans + unlinked
+        # plans); backlinks are duplicates of a plan counted under its primary
+        # research node, so they are never counted here.
+        archived_count = (
+            len(pt.archived.research)
+            + sum(len(n.plans) for n in pt.archived.research)
+            + len(pt.archived.unlinked_plans)
+        )
         proj_ctx.append(
             {
                 "project": pt.project,
@@ -203,6 +247,19 @@ def build_sidebar(
                 "doc_count": pt.doc_count,
                 "research": research,
                 "unlinked_plans": unlinked,
+                "archived": (
+                    {
+                        "research": archived_research,
+                        "unlinked_plans": archived_unlinked,
+                        "count": archived_count,
+                        # Auto-expand when the doc being viewed is archived;
+                        # stored user intent still wins on the client (ui.js).
+                        "open": pt.project == current_project
+                        and current_slug in _archived_slugs(pt.archived),
+                    }
+                    if archived_count
+                    else None
+                ),
             }
         )
     return {
