@@ -60,7 +60,10 @@ On approval, revise the doc **in place** — never create a new slug or version:
 - **Drifted** / **still open** items keep their status.
 - Where reality diverged, update phase prose via `phase set` (`--intro`/`--exit-criteria`/`--notes`; revision cards go in `--notes`), or a section body via `section set` / `section patch` — plain markdown, no HTML spans or pills:
   ```shell
-  claudeplans phase set "<project>" "<slug>" "<phase-slug>" --notes "<!!! note ...>"
+  claudeplans phase set "<project>" "<slug>" "<phase-slug>" --notes-file - <<'EOF'
+  !!! note "Revised"
+      Block form required: type + quoted title, body indented 4 spaces.
+  EOF
   claudeplans section set "<project>" "<slug>" "<anchor>" --body "<updated markdown>"
   claudeplans section patch "<project>" "<slug>" "<anchor>" --merge-patch '{"body":"<updated>"}'
   ```

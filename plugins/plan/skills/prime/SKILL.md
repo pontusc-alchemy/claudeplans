@@ -18,7 +18,7 @@ claudeplans doc get "<project>" "<slug>"
 claudeplans doc phases "<project>" "<slug>"
 ```
 
-Non-zero exit → relay stderr and stop. For a `type: plan` doc, `doc phases` returns `{rev, phases:[{slug, name, status, tasks:[{text, checked}]}], warnings}` — the current phase is the first entry whose status is not `done`.
+Non-zero exit → relay stderr and stop. For a `type: plan` doc, `doc phases` returns `{rev, phases:[{slug, name, status, tasks:[{text, checked}], intro, exit_criteria, notes}], warnings}` — phase prose comes back inline — and the current phase is the first entry whose status is not `done`.
 
 ## Brief (delegate)
 

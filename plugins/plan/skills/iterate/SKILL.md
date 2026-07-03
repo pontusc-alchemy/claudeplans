@@ -14,13 +14,17 @@ Drive a plan document through execution, mutating it via the claudeplans CLI as 
 claudeplans doc phases "<project>" "<slug>"
 ```
 
-→ JSON `{rev, phases:[{slug, name, status, tasks:[{text, checked}]}], warnings}`; non-zero exit → relay stderr and stop. The `current` phase is the first entry whose `status` is not `done` — compute this from the list. Hold the `rev` value — it is required for every position-sensitive write. The current phase's prose (`intro` / `exit_criteria` / `notes`) lives in its own fields — read them with `claudeplans doc get "<project>" "<slug>"` when you need the exit criteria or intro.
+→ JSON `{rev, phases:[{slug, name, status, tasks:[{text, checked}], intro, exit_criteria, notes}], warnings}`; non-zero exit → relay stderr and stop. The `current` phase is the first entry whose `status` is not `done` — compute this from the list. Hold the `rev` value — it is required for every position-sensitive write. Phase prose (`intro` / `exit_criteria` / `notes`) is returned inline — no extra `doc get` call is needed for it.
 
 Arguments must carry both `<project>` and `<slug>` — there is no fuzzy resolve. For project-wide discovery: list projects with `claudeplans project list`, list a project's documents with `claudeplans doc list <project>` (both return JSON). The lineage page is the human browser view — open it with `claudeplans project view <project>` which prints its URL. (The search endpoint requires `?q=<term>` and performs keyword search, not enumeration.)
 
 ## Work the next phase
 
 - Restate the `current` phase's open tasks to the user.
+- A phase with **zero tasks** is prose-scoped: its `intro` defines the work and its
+  `exit_criteria` define done — drive from those, and stop at the same sign-off gate.
+  If a concrete breakdown emerges, materialize it with `claudeplans task add` so
+  progress becomes visible in the document.
 - Work them **task by task, in conversation** — confirm before each edit, surface commands and output, keep the user in the loop.
 - If you delegate implementation work to sub-agents, instruct them never to call the `claudeplans` CLI for writes — the plan doc is mutated only from the main thread.
 - As tasks complete, mutate the document via the CLI (re-read `doc phases` to refresh `rev` before each position-sensitive call; if one still races and exits `9`, reuse the `current_rev` it prints and retry):
@@ -41,11 +45,13 @@ Arguments must carry both `<project>` and `<slug>` — there is no fuzzy resolve
   claudeplans task set-checked "<project>" "<slug>" "<phase-slug>" 0 2 4 --rev <rev>
   ```
 
-  Advance the phase:
+  Advance the phase (all rev-free; close + open is one chained line):
   ```shell
   claudeplans phase set-status "<project>" "<slug>" "<phase-slug>" doing   # when phase starts
   claudeplans phase set-status "<project>" "<slug>" "<phase-slug>" done    # only at exit criteria
   claudeplans phase set-status "<project>" "<slug>" "<phase-slug>" blocked # if stuck
+  claudeplans phase set-status "<project>" "<slug>" "<done-phase>" done && \
+    claudeplans phase set-status "<project>" "<slug>" "<next-phase>" doing # the transition idiom
   ```
 
   Add a phase mid-plan (then reposition it):
@@ -55,11 +61,16 @@ Arguments must carry both `<project>` and `<slug>` — there is no fuzzy resolve
   ```
 
   Set a phase's prose — intro / exit criteria / notes (markdown; omitted flags are
-  left unchanged, `""` clears; `--<flag>-file <path>` or `-` for stdin avoids shell
-  quoting for multi-line prose):
+  left unchanged, `""` clears). Prefer `--<flag>-file <path>` or `-` (stdin) over an
+  inline flag for anything longer than a sentence or containing shell metacharacters
+  (`$`, backticks, quotes) — one quoting slip corrupts the doc silently:
   ```shell
   claudeplans phase set "<project>" "<slug>" "<phase-slug>" --intro "<markdown>" --exit-criteria "<markdown>"
-  claudeplans phase set "<project>" "<slug>" "<phase-slug>" --notes-file notes.md
+  claudeplans phase set "<project>" "<slug>" "<phase-slug>" --notes-file - <<'EOF'
+  !!! note "Decision"
+      Admonitions need this block form: type + quoted title on the `!!!` line,
+      body indented 4 spaces. `??? note "Title"` renders collapsed.
+  EOF
   ```
 
   Record learnings in a dedicated section as discoveries happen:
@@ -72,7 +83,7 @@ Arguments must carry both `<project>` and `<slug>` — there is no fuzzy resolve
   claudeplans section patch "<project>" "<slug>" "learnings" --merge-patch '{"body":"<full updated body>"}'
   ```
 
-  Section bodies are **plain markdown** — no HTML spans or pills. A phase's prose lives in its `intro`/`exit_criteria`/`notes` fields (set via `phase set`), not in section bodies; revision/decision cards (`!!!`/`???` admonitions) go in `--notes`.
+  Section bodies are **plain markdown** — no HTML spans or pills. A phase's prose lives in its `intro`/`exit_criteria`/`notes` fields (set via `phase set`), not in section bodies; revision/decision cards go in `--notes` as `!!!`/`???` admonitions in the block form shown above — an inline `??? Decision: text` is not admonition syntax and renders as plain text.
 
 ## Diverge & stop
 
