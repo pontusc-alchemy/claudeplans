@@ -36,9 +36,28 @@
   commands against them) **is the agreed exemption** to the global "never run
   state-changing commands" rule. Everything else that rule covers stays barred.
 
+## Codebase notes
+
+- **Python is pinned to `>=3.14,<3.15`** in every member's `pyproject.toml`, and
+  the Docker image is `python:3.14-slim` — all 3.14 syntax is in play.
+- **PEP 758 is valid here — do not flag it.** Unparenthesized multi-exception
+  handlers (`except KeyError, ValueError:`) are legal Python 3.14 syntax, not a
+  Python-2 SyntaxError. Example in-tree:
+  `packages/server/src/claudeplans/api/listing.py`.
+- **Dev stack facts**: `make up` serves on `127.0.0.1:9394` with the noop auth
+  provider's single fixed uid `dev`; `make seed` populates demo projects
+  (`empty`/`atlas`/`beacon`) idempotently via `scripts/seed.py`.
+- **Module intent maps**: `packages/{contracts,server,cli}/README.md` and
+  `tests/README.md` give 1–2 lines per module on what belongs where — consult
+  them before grepping blind.
+
 ## Interactions
 
-- This project uses a Makefile for all interactions. To run tests, formatting, linting, builds or anything similar check what exists in the Makefile. If something is missing, add it.
+- This project uses a Makefile for all interactions. To run tests, formatting, linting, builds or anything similar check what exists in the Makefile (`make help` lists everything). If something is missing, add it.
+- Daily loop: targets that need the venv depend on `make venv` themselves;
+  `make check` is the full quality gate (ruff check + format --check + ty +
+  pytest) — run it before proposing any commit. `make lint`/`fmt`/`typecheck`/
+  `test` for partial runs.
 
 ## Code intelligence
 

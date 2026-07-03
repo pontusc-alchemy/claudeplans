@@ -23,6 +23,9 @@ scripts/ci.sh                  # the quality gate (ruff + ty + pytest)
 plugins/plan/                  # Claude Code plan plugin (skills + CLI shim in bin/)
 ```
 
+Each package (and `tests/`) carries a short README mapping module intent —
+start there when locating where a change belongs.
+
 ## Claude Code plugin
 
 [`plugins/plan/`](plugins/plan/) ships the plan-lifecycle skills **and** the
@@ -37,7 +40,9 @@ this repo). Install by adding the repo as a marketplace pinned to a release tag:
 
 Then run the `/plan:setup` skill — it asks whether this machine is a client
 (CLI shim + server address) or a server (compose stack + `/etc/hosts` alias)
-and walks through the matching flow.
+and walks through the matching flow. The skills cover the whole lifecycle —
+`/plan:research` → `write` → `prime` → `iterate` → `review`, plus `update`
+and `setup` — mapped in [`plugins/plan/README.md`](plugins/plan/README.md).
 
 **Cutting a release** (manual): the shim pins a full commit SHA (immutable to
 uv, so the CLI serves from cache with no per-call network check — a tag ref
@@ -69,6 +74,7 @@ targets run it as two separate compose projects that never share state:
 make serve     # stable stack — project `claudeplans`, bind from the checkout's .env; run from the release worktree
 make up        # dev stack — default project `claudeplans-dev`, 127.0.0.1:9394, disposable volumes
 make down      # stop the dev stack (volumes kept; wipe: docker compose down -v)
+make seed      # demo projects (empty/atlas/beacon; idempotent) — brings the dev stack up first
 ```
 
 It sets the `CLAUDEPLANS_`-prefixed env (`CLAUDEPLANS_AUTH_MODE=noop`,

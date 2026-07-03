@@ -40,7 +40,7 @@ def _doc_row(entry: ListEntry) -> DocListEntry | None:
         title = entry.metadata["title"]
         doc_type = DocType(entry.metadata["type"])
         status = DocStatus(entry.metadata["status"])
-    except KeyError, ValueError:
+    except KeyError, ValueError:  # unparenthesized multi-except: PEP 758 (3.14)
         # Missing or invalid enum value: skip rather than 500.
         return None
     return DocListEntry(slug=slug, title=title, type=doc_type, status=status)
