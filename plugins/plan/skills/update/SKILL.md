@@ -50,8 +50,12 @@ claudeplans task edit "<project>" "<slug>" "<phase-slug>" <index> "<new text>" -
 
 **Doc status** — flip the lifecycle state:
 ```shell
-claudeplans doc status "<project>" "<slug>" draft|active|done
+claudeplans doc status "<project>" "<slug>" draft|active|done|archived
 ```
+`archived` is the reversible retire: the doc leaves the active sidebar/lineage
+trees (collapsed per-project "Archived" group) and search results, but stays
+listed in `doc list`. Unarchive by setting the status back. Hard delete
+(`doc delete --rev`) remains the destructive path.
 
 **Structural moves** (rename slug, reorder sections across docs, delete) are out of scope — the slug is the document's identity; renaming requires re-creating the doc. Flag these and ask the user to handle them explicitly.
 

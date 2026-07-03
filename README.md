@@ -34,7 +34,7 @@ start there when locating where a change belongs.
 this repo). Install by adding the repo as a marketplace pinned to a release tag:
 
 ```text
-/plugin marketplace add pontusc-alchemy/claudeplans@v0.0.1
+/plugin marketplace add pontusc-alchemy/claudeplans@v0.0.2
 /plugin install plan@plans
 ```
 
