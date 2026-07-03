@@ -42,13 +42,15 @@
   });
 })();
 
-// Per-project expand/collapse persistence. Expand state is owned by the client:
-// idiomorph is configured to never touch the `open` attribute on the project
+// Expand/collapse persistence for every details[data-project] — project nodes
+// and each project's nested archived group. Expand state is owned by the
+// client: idiomorph is configured to never touch the `open` attribute on these
 // <details> (see the beforeAttributeUpdated default below), so live sidebar SSE
 // morphs update the tree, titles, and status dots without ever reopening a
-// project the user collapsed. Stored state is therefore applied once on load;
-// the afterSwap hook only binds click handlers on projects added by a live
-// update. Toggles are recorded under a stable per-project key.
+// node the user collapsed. Stored state is therefore applied once on load;
+// the afterSwap hook only binds click handlers on nodes added by a live
+// update. Toggles are recorded under a stable per-node key (the project slug,
+// or "<project>//archived" for an archived group).
 (function () {
   "use strict";
   // Freeze `open` against morphs. The htmx morph ext merges
@@ -96,7 +98,7 @@
       }
       if (!bound.has(el)) {
         bound.add(el);
-        // Record only USER intent: a click on the project's own <summary>. The
+        // Record only USER intent: a click on this node's own <summary>. The
         // native <details> toggle runs as the click's default action, so read
         // the resulting state on the next frame. Listening to `toggle` instead
         // would also capture idiomorph's morph-driven attribute sync (e.g. the
