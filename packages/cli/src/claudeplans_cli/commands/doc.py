@@ -30,6 +30,7 @@ from ..output import emit, emit_obj, emit_phases, emit_write
 app = typer.Typer(no_args_is_help=True)
 
 _TYPE = typer.Option("--type")
+_LIST_STATUS = typer.Option("--status")
 _FROM_JSON = typer.Option(
     "--from-json",
     help=(
@@ -275,16 +276,19 @@ def list_(
     ctx: typer.Context,
     project: str,
     type_: Annotated[DocType | None, _TYPE] = None,
+    status: Annotated[DocStatus | None, _LIST_STATUS] = None,
 ) -> None:
-    """List all documents in a project, optionally filtered by --type."""
+    """List all documents in a project, optionally filtered by --type/--status."""
     c: AppContext = ctx.obj
     raw = c.client.list_docs(c.uid, project)
-    if type_ is not None and isinstance(raw, dict):
+    if (type_ is not None or status is not None) and isinstance(raw, dict):
         items = raw.get("items", [])
         filtered = [
             item
             for item in (items if isinstance(items, list) else [])
-            if isinstance(item, dict) and item.get("type") == type_.value
+            if isinstance(item, dict)
+            and (type_ is None or item.get("type") == type_.value)
+            and (status is None or item.get("status") == status.value)
         ]
         result: object = {"project": raw.get("project"), "items": filtered}
     else:

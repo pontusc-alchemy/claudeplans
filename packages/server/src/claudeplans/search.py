@@ -219,6 +219,9 @@ class SearchIndex:
         terms; an entry matches when every term is an in-order subsequence of it, and
         results are ranked by summed match score (best first) with deterministic
         tie-breakers.
+
+        Archived docs never match — they stay IN the index (the projection carries
+        their status), so unarchiving surfaces them again without a rebuild.
         """
         terms = _fold(q).split()
         if not terms:
@@ -232,6 +235,8 @@ class SearchIndex:
 
         for doc in self._docs.values():
             if not doc.key.startswith(prefix):
+                continue
+            if doc.status is DocStatus.archived:
                 continue
             score = _match(terms, doc.title)
             if score is not None:

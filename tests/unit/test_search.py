@@ -17,7 +17,7 @@ from claudeplans.search import SearchIndex
 from claudeplans.storage.filesystem import FilesystemRepository
 from claudeplans.storage.repository import CREATE, Repository, _Create
 from claudeplans_contracts import Document, Phase, Section, document_key
-from claudeplans_contracts.enums import DocType, PhaseStatus
+from claudeplans_contracts.enums import DocStatus, DocType, PhaseStatus
 
 
 def _repo(tmp_path: Path) -> FilesystemRepository:
@@ -30,6 +30,7 @@ def _doc(
     *,
     project: str = "demo",
     owner: str = "dev",
+    status: DocStatus = DocStatus.draft,
     sections: Sequence[tuple[str, str]] = (),
     phases: Sequence[tuple[str, str]] = (),
 ) -> Document:
@@ -39,6 +40,7 @@ def _doc(
         slug=slug,
         title=title,
         owner_id=owner,
+        status=status,
         sections=[Section(anchor=a, heading=h, level=2) for a, h in sections],
         phases=[
             Phase(slug=s, name=n, status=PhaseStatus.todo, tasks=[]) for s, n in phases
@@ -150,6 +152,26 @@ async def test_index_reflects_update_event(tmp_path: Path) -> None:
         feed.publish(Event(key=key, rev=new_rev))
         await _until(lambda: index.query("new").hits)
         assert index.query("old").hits == []  # stale title dropped
+
+
+async def test_archived_doc_invisible_until_unarchived(tmp_path: Path) -> None:
+    # Archived docs stay IN the index but never match; flipping the status back
+    # surfaces them again on the same running index — no rebuild involved.
+    repo = _repo(tmp_path)
+    rev = await _put(repo, _doc("p1", "Retired Plan"))
+    key = document_key("dev", "demo", "p1")
+    async with _running_index(repo) as (index, feed):
+        assert index.query("retired").hits
+        rev = await _put(
+            repo,
+            _doc("p1", "Retired Plan", status=DocStatus.archived),
+            expected_rev=rev,
+        )
+        feed.publish(Event(key=key, rev=rev))
+        await _until(lambda: index.query("retired").hits == [])
+        rev = await _put(repo, _doc("p1", "Retired Plan"), expected_rev=rev)
+        feed.publish(Event(key=key, rev=rev))
+        await _until(lambda: index.query("retired").hits)
 
 
 async def test_index_reflects_delete_event(tmp_path: Path) -> None:

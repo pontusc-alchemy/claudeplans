@@ -484,6 +484,28 @@ def test_doc_list_type_filter_plan_only() -> None:
 
 
 @pytest.mark.usefixtures("patched_cli")
+def test_doc_list_status_filter() -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=VALID_CREATE
+    )
+    runner.invoke(
+        cli.app,
+        ["doc", "create", "demo", "--from-json", "-"],
+        input=_VALID_RESEARCH,
+    )
+    runner.invoke(cli.app, ["doc", "status", "demo", "p1", "archived"])
+    result = runner.invoke(cli.app, ["doc", "list", "demo", "--status", "archived"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    slugs = [i["slug"] for i in parsed["data"]["items"]]
+    assert slugs == ["p1"]
+    # Unfiltered list still returns archived rows.
+    result = runner.invoke(cli.app, ["doc", "list", "demo"])
+    slugs = [i["slug"] for i in json.loads(result.stdout)["data"]["items"]]
+    assert "p1" in slugs and "r1" in slugs
+
+
+@pytest.mark.usefixtures("patched_cli")
 def test_create_reply_includes_type() -> None:
     result = runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=VALID_CREATE
