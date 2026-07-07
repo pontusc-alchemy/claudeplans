@@ -21,6 +21,7 @@ Arguments must carry both `<project>` and `<slug>` — there is no fuzzy resolve
 ## Work the next phase
 
 - Restate the `current` phase's open tasks to the user.
+- **Resolve the phase's pointers before implementing.** If the phase prose references research-doc sections (`see research <research-slug> § <anchor>`) or external docs URLs, load them first — delegate a `general-purpose` agent to run `claudeplans doc get` / fetch the URL and return the referenced blocks **verbatim** (brief it: reads only — never call the `claudeplans` CLI for any write). Implementing from the task text alone while the intended shape sits unread in a referenced doc is how tasks get done "the wrong way".
 - A phase with **zero tasks** is prose-scoped: its `intro` defines the work and its
   `exit_criteria` define done — drive from those, and stop at the same sign-off gate.
   If a concrete breakdown emerges, materialize it with `claudeplans task add` so

@@ -58,6 +58,17 @@ claudeplans section add "<project>" "<slug>" "<anchor>" "<Heading>" --body "<mar
 
 Section bodies are **plain markdown** — do not write HTML spans, pills, or admonitions; the service renders and sanitizes.
 
+## Task shape & constraints
+
+Tasks state intent **plus the decisions the implementer would otherwise guess** — a task that leaves structure open gets implemented "correctly" in the wrong shape. For code-heavy phases, pin the shape in the phase prose (`--intro`/`--notes`), not crammed into task text:
+
+- **File tree** of the files the phase creates or reshapes — a short indented list is enough.
+- **Public interfaces**: names and signatures (params, returns) of the functions/classes/CLI verbs the phase introduces. Skeletons only — signatures and load-bearing fields, never full implementations; verbatim shapes stay in the research doc (no research doc? give them a dedicated section in the plan itself).
+- **Placement & naming**: which module/package each piece lands in, plus any naming decisions that must hold across tasks.
+- **Canonical-pattern pointers**: where the implementer finds the intended idiom, chosen by what the phase touches — code phases point at API/library docs and an in-repo file to mirror; infra phases point at provider docs or module source. Reference research-doc material by anchor (`see research <research-slug> § <anchor>`) so it is resolvable, not "see the research doc".
+
+Keep tasks single-action. When a task is judgment-heavy, embed its acceptance criterion in the task text ("…; done when X") rather than relying on the phase-level exit criteria alone.
+
 ## On approval
 
 Once the user approves the plan, flip status:

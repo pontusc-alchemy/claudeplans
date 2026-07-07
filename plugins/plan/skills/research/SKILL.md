@@ -50,6 +50,8 @@ claudeplans section add "<project>" "<slug>" "<anchor>" "<Heading>" --body "<mar
 
 Section bodies are **plain markdown** — cite sources inline as `[official docs](url)`. Mark every unverified / third-party claim in the body text (e.g. `[unverified — third-party source]`). Do not write HTML spans, pills, or admonitions — the service renders and sanitizes the markdown.
 
+Give canonical examples (config blocks, interface shapes, verbatim snippets) their own sections with stable, descriptive anchors — plan documents reference them by `<research-slug> § <anchor>`, so an example buried mid-section under a vague anchor is effectively lost to the implementer.
+
 When the findings are substantive, flip status:
 
 ```shell
