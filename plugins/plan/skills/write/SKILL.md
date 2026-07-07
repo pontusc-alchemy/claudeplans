@@ -58,9 +58,44 @@ claudeplans section add "<project>" "<slug>" "<anchor>" "<Heading>" --body "<mar
 
 Section bodies are **plain markdown** — do not write HTML spans, pills, or admonitions; the service renders and sanitizes.
 
+## Phase decomposition
+
+The default shape for carving work into phases — deviate with judgment (a migration or a spike may not decompose this way), but note why in the executive summary:
+
+- **Boundaries first.** Decide the modules/components and the seams between them before writing any phase; the shape contracts below hang off those boundaries.
+- **One phase = one independently verifiable unit.** Each phase delivers a piece provable on its own, and its `exit_criteria` **is** that proof — a runnable check (tests pass, `terraform plan` clean, a functional probe against the deployed unit), not "code written".
+- **Front-load assumption checks.** The first phase verifies whatever the rest of the plan hangs on (module capabilities, live-system facts, access) so a wrong assumption dies in phase 1, not phase 6.
+- **Integrate last, explicitly.** Wiring proven pieces together is its own phase with end-to-end exit criteria — never smeared across the build phases.
+
+## Module map
+
+Plans that introduce or reshape more than one code unit carry a **module map** —
+the wiring diagram the phases build against. Skip it (and say so in the executive
+summary) for single-module plans, config-only changes, or spikes; the per-phase
+Task shape below then carries the load alone. Card format and anchors are
+specified in `${CLAUDE_PLUGIN_ROOT}/AUTHORING.md` § Document conventions.
+
+- **One `module-map` section** (anchor `module-map`, after the executive
+  summary): the module list (name → owner phase) and the dependency edges —
+  `A → B: what crosses the seam` — plus the end-to-end proof the integration
+  phase must run. Wiring only; contracts live in the cards.
+- **One card per module** (anchor `mod-<name>`, level 3): **Purpose** ·
+  **Requires** (inputs, config, upstream `§ mod-x`, pinned external deps) ·
+  **Provides** (interface skeletons — names + signatures + load-bearing
+  fields, artifacts, side effects) · **Verification** (the runnable check
+  proving Provides holds) · **Owner** (`<phase-slug>`). The card is the
+  single source of truth for that module's shape.
+- **Phases point, never copy.** Phase intros reference cards
+  (`Builds § mod-parser`; `Wires § mod-parser → § mod-store`) — a contract
+  stated twice is a contract that drifts. The integration phase's intro is the
+  edge list; its `exit_criteria` is the end-to-end proof from `module-map`.
+- **Every Provides line is somebody's Requires** — an output no module or
+  exit criterion consumes is scope creep; a Requires nothing provides is a
+  missing phase. Check both directions before the status flip.
+
 ## Task shape & constraints
 
-Tasks state intent **plus the decisions the implementer would otherwise guess** — a task that leaves structure open gets implemented "correctly" in the wrong shape. For code-heavy phases, pin the shape in the phase prose (`--intro`/`--notes`), not crammed into task text:
+Tasks state intent **plus the decisions the implementer would otherwise guess** — a task that leaves structure open gets implemented "correctly" in the wrong shape. When the plan carries a module map, file trees, interfaces, and placement live in the module cards — phase prose points (`Builds § mod-parser`), never restates. For map-less code-heavy phases, pin the shape in the phase prose (`--intro`/`--notes`), not crammed into task text:
 
 - **File tree** of the files the phase creates or reshapes — a short indented list is enough.
 - **Public interfaces**: names and signatures (params, returns) of the functions/classes/CLI verbs the phase introduces. Skeletons only — signatures and load-bearing fields, never full implementations; verbatim shapes stay in the research doc (no research doc? give them a dedicated section in the plan itself).

@@ -126,3 +126,21 @@ GET /v1/users/{uid}/projects/{project}/docs/{slug}/view
 GET /v1/users/{uid}/projects/{project}/
 GET /v1/users/{uid}/projects/{project}/search
 ```
+
+## Document conventions
+
+Reserved section anchors the skills read and write by name:
+
+- `module-map` — plan wiring: module list (name → owner phase), dependency
+  edges (`A → B: what crosses the seam`), the integration phase's end-to-end
+  proof. Wiring only.
+- `mod-<name>` — one card per module, level 3, the source of truth for its
+  contract: **Purpose** · **Requires** (inputs, config, upstream `§ mod-x`,
+  pinned deps) · **Provides** (interface skeletons, artifacts, side effects) ·
+  **Verification** (runnable proof of Provides) · **Owner** (phase slug).
+- `learnings` — discoveries recorded during `/plan:iterate`.
+- `review-log` — dated reconciliation entries from `/plan:review`.
+
+In-doc pointers are spelled `§ <anchor>`; cross-doc pointers
+`see research <slug> § <anchor>`. Contracts are stated once, in the card —
+phases and tasks point.

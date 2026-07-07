@@ -21,7 +21,16 @@ Arguments must carry both `<project>` and `<slug>` — there is no fuzzy resolve
 ## Work the next phase
 
 - Restate the `current` phase's open tasks to the user.
-- **Resolve the phase's pointers before implementing.** If the phase prose references research-doc sections (`see research <research-slug> § <anchor>`) or external docs URLs, load them first — delegate a `general-purpose` agent to run `claudeplans doc get` / fetch the URL and return the referenced blocks **verbatim** (brief it: reads only — never call the `claudeplans` CLI for any write). Implementing from the task text alone while the intended shape sits unread in a referenced doc is how tasks get done "the wrong way".
+- **Resolve the phase's pointers before implementing.** If the phase prose
+  references research-doc sections (`see research <research-slug> § <anchor>`),
+  in-doc module cards (`§ mod-<name>`), or external docs URLs, load them first.
+  In-doc cards load directly — `claudeplans doc get "<project>" "<slug>"
+  --section "mod-<name>"`; for research docs and URLs, delegate a
+  `general-purpose` agent to return the referenced blocks **verbatim** (brief
+  it: reads only — never call the `claudeplans` CLI for any write). A module
+  card's **Requires/Provides is the contract the phase implements against** —
+  implementing from the task text alone while the intended shape sits unread
+  in a referenced doc is how tasks get done "the wrong way".
 - A phase with **zero tasks** is prose-scoped: its `intro` defines the work and its
   `exit_criteria` define done — drive from those, and stop at the same sign-off gate.
   If a concrete breakdown emerges, materialize it with `claudeplans task add` so
@@ -89,6 +98,13 @@ Arguments must carry both `<project>` and `<slug>` — there is no fuzzy resolve
 ## Diverge & stop
 
 - If reality diverges from the plan mid-phase, update the relevant phase prose via `phase set` (`--intro`/`--exit-criteria`/`--notes`), or a section body via `section set` / `section patch`, to match.
+- **Gate the phase on its contracts.** Before proposing `done` on a phase that
+  owns module cards: diff the implemented surface against each card's
+  Requires/Provides — real signatures, deps, artifacts, side effects, shown to
+  the user against the declared contract. Conforms → proceed to exit criteria.
+  Diverges deliberately → amend the card via `section set` (and note the
+  decision in phase `--notes`) before the flip; the card must leave the phase
+  true. Diverges accidentally → fix the code, not the card.
 - **STOP at exit criteria** for explicit user sign-off before setting the phase to `done` and opening the next phase.
 - Doc status is **not** automatically set by the service when the last phase completes — once the last phase is `done`, set the doc status explicitly:
   ```shell

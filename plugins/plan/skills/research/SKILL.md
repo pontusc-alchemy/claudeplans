@@ -28,6 +28,9 @@ Map the domain before going deep. Spawn `general-purpose` agents (`sonnet` minim
 
 - **Find the official docs / primary source first.** Verify any blog/third-party against official sources; if none cover the point, third-party is acceptable but MUST be flagged unverified.
 - Return verbatim specifics (versions, flags, exact config, URLs) — not paraphrase. Capture each claim's source.
+- For each candidate library/service, capture its own requires/provides — what
+  it needs configured, what it emits, side effects — in a card-shaped block, so
+  a plan's module cards can cite it by anchor.
 
 ## 2 — Deepen (delegate, opus — iterate)
 

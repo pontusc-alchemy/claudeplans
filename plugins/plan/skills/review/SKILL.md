@@ -37,6 +37,10 @@ Instruct every delegated agent (here and in step 2) to return findings only and 
 For each claim, spawn read-only `general-purpose` (`sonnet`) agents to check what is actually true:
 
 - Do the asserted files/configs/resources exist as the plan specifies?
+- Plan carries a module map (`module-map` / `mod-*` sections)? Verify **shape**,
+  not just existence: diff the implemented interfaces, dependencies, artifacts,
+  and side effects against each card's Requires/Provides. A **drifted** verdict
+  names the contract line that diverged.
 - Were the `todo` / `doing` / `blocked` phases and unchecked tasks built? Fully or partially?
 - Are version pins still current? Check live (web/registry) — never trust training data.
 
@@ -67,6 +71,7 @@ On approval, revise the doc **in place** — never create a new slug or version:
   claudeplans section set "<project>" "<slug>" "<anchor>" --body "<updated markdown>"
   claudeplans section patch "<project>" "<slug>" "<anchor>" --merge-patch '{"body":"<updated>"}'
   ```
+  Contract drift reconciles into the module card itself (`section set` on `mod-<name>`) with the decision recorded in the owner phase's `--notes` — never into phase prose alone; name the amended cards in the review-log entry.
 - Append a dated entry to a `review-log` section (create if absent):
   ```shell
   # Create if absent:

@@ -25,6 +25,9 @@ Non-zero exit → relay stderr and stop. For a `type: plan` doc, `doc phases` re
 Spawn one `Agent` (`general-purpose`, `sonnet`) with the JSON output from both calls and instruct it to return a DENSE briefing focused on:
 
 - title + description; section list (anchors + headings) in order;
+- module map, if present: module list with owner phases, dependency edges, and
+  the **verbatim card contracts** (`mod-*` Requires/Provides) for modules owned
+  by the current phase;
 - done phases / locked decisions (status `done`);
 - open/blocked phases and caveats (status `todo|doing|blocked`), open tasks;
 - progress summary (done/total phases, blocked count) and the current phase;
