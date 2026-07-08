@@ -52,9 +52,13 @@ Add prose sections:
 
 ```shell
 claudeplans section add "<project>" "<slug>" "<anchor>" "<Heading>" --body "<markdown>" --level 2
+# multi-line markdown → pipe it straight into stdin via a quoted heredoc, no temp file:
+claudeplans section add "<project>" "<slug>" "<anchor>" "<Heading>" --level 2 --body-file - <<'EOF'
+...markdown...
+EOF
 ```
 
-`--body` takes inline text or `--body-file <path>` (`-` for stdin), mirroring the phase prose flags — reach for the file form for multi-line markdown to sidestep shell-quoting pain. `section set` accepts the same pair.
+`--body` takes inline text or `--body-file <path>` (`-` for stdin), mirroring the phase prose flags. For multi-line markdown, use the **quoted-heredoc-to-stdin** form shown above (`--body-file - <<'EOF' … EOF`) — the quoted delimiter defeats shell interpolation, so no temp file is ever needed. **Do NOT stage the prose in a scratchpad/temp file and then pass its path**: the prose is already in your context, and the harness's "use the scratchpad directory" directive is not a reason to round-trip it through disk. (A delegated sub-agent handing prose back is fine — it can't write via the CLI; but the main thread pipes straight to stdin.) `section set` accepts the same pair.
 
 Section bodies are **plain markdown** — do not write HTML spans, pills, or admonitions; the service renders and sanitizes.
 
