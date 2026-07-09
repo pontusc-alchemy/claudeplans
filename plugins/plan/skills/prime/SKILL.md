@@ -2,7 +2,7 @@
 name: prime
 description: Bootstrap session context from a claudeplans document or project. Given a project and slug, brief that document; for project-wide discovery use `claudeplans project list` / `claudeplans doc list <project>`.
 user-invocable: true
-model-invocable: true
+disable-model-invocation: true
 allowed-tools: Bash, Agent
 model: sonnet
 ---

@@ -2,7 +2,7 @@
 name: setup
 description: Set up claudeplans on this machine — as a client (CLI shim + server address) or as a server (compose stack, optional /etc/hosts alias). Asks which role applies first, then verifies health end-to-end.
 user-invocable: true
-model-invocable: false
+disable-model-invocation: true
 allowed-tools: Bash, Read, AskUserQuestion
 ---
 

@@ -1,6 +1,6 @@
 {
   "name": "plan",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Plan-document lifecycle over the claudeplans service (CLI + live HTML view): research, write, prime, iterate, review, update, setup",
   "author": { "name": "Pontus Curtsson" },
   "skills": ["./skills/"]
