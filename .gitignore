@@ -12,3 +12,5 @@ data/
 # Runtime registry files — written by the server at cwd; never committed.
 users.json
 projects.json
+# Personal Claude Code instructions — machine/driver-specific, never committed.
+CLAUDE.local.md
