@@ -77,6 +77,15 @@ _CREATE_STATUS = typer.Option(
 )
 _CREATE_DESCRIPTION = typer.Option("--description", help="ignored with --from-json")
 _CREATE_DATE = typer.Option("--date", help="ISO date; ignored with --from-json")
+_CREATE_RESEARCH_REF = typer.Option(
+    "--research-ref",
+    help="research doc ref to link; repeatable; forbidden with --from-json",
+)
+_CREATE_PRIMARY_REF = typer.Option(
+    "--primary-research-ref",
+    help="ref to make primary (parent); must be among --research-ref; "
+    "forbidden with --from-json",
+)
 _REV_JSON = typer.Option(
     "--json", help="emit the {rev} envelope instead of the bare token"
 )
@@ -94,14 +103,29 @@ def create(
     status: Annotated[DocStatus | None, _CREATE_STATUS] = None,
     description: Annotated[str | None, _CREATE_DESCRIPTION] = None,
     date: Annotated[str | None, _CREATE_DATE] = None,
+    research_ref: Annotated[list[str] | None, _CREATE_RESEARCH_REF] = None,
+    primary_research_ref: Annotated[str | None, _CREATE_PRIMARY_REF] = None,
 ) -> None:
     """Create a document from a full JSON body or from the shell flags.
 
     Shell form: --type/--slug/--title plus optional --status/--description/--date,
-    so a described/active doc lands in one call. The shell flags are ignored when
-    --from-json is given (it carries the whole body, including its own status).
+    so a described/active doc lands in one call. --research-ref (repeatable) links
+    research docs and --primary-research-ref designates the parent; both are
+    forbidden with --from-json (which carries the whole body, including its own
+    status). The scalar shell flags are ignored when --from-json is given.
     """
     c: AppContext = ctx.obj
+    if from_json is not None and (
+        research_ref is not None or primary_research_ref is not None
+    ):
+        raise ValidationError(
+            "--from-json carries the whole body; do not combine it with "
+            "--research-ref/--primary-research-ref"
+        )
+    if primary_research_ref is not None and (
+        research_ref is None or primary_research_ref not in research_ref
+    ):
+        raise ValidationError("--primary-research-ref must be one of --research-ref")
     if from_json is not None:
         raw = sys.stdin.read() if from_json == "-" else from_json
         payload = DocumentCreate.model_validate_json(raw)
@@ -119,6 +143,10 @@ def create(
         }
         if status is not None:
             fields["status"] = status
+        if research_ref is not None:
+            fields["research_refs"] = research_ref
+        if primary_research_ref is not None:
+            fields["primary_research_ref"] = primary_research_ref
         payload = DocumentCreate.model_validate(fields)
     reply = c.client.create_document(c.uid, project, payload.model_dump(mode="json"))
     emit_write(reply, full=c.full, slice_="create")
@@ -224,6 +252,27 @@ def unlink(
     existing_primary: str | None = data.get("primary_research_ref")
     new_refs, new_primary = unlink_research_ref(existing, existing_primary, ref)
     reply = c.client.put_research_refs(c.uid, project, slug, new_refs, new_primary)
+    emit_write(reply, full=c.full)
+
+
+@app.command("set-primary")
+@handle_errors
+def set_primary(
+    ctx: typer.Context,
+    project: str,
+    slug: str,
+    ref: Annotated[str, _REF],
+) -> None:
+    """Designate <ref> as the primary (parent) research ref; adds it to
+    research_refs first if absent."""
+    c: AppContext = ctx.obj
+    # GET-then-PUT is intentionally unguarded: single-writer local service, and the
+    # PUT is an absolute set of the whole ref list (last-writer-wins).
+    current = c.client.get_document(c.uid, project, slug)
+    data = current.data or {}
+    existing: list[str] = list(data.get("research_refs", []))
+    new_refs = existing if ref in existing else [*existing, ref]
+    reply = c.client.put_research_refs(c.uid, project, slug, new_refs, ref)
     emit_write(reply, full=c.full)
 
 
