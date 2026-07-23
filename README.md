@@ -5,6 +5,10 @@ talks to it, sharing one set of Pydantic models via `claudeplans-contracts`. The
 and CLI are still skeletons — the runnable shapes (FastAPI app, console script,
 quality gate, Docker images) are in place ahead of the feature work.
 
+This README covers what the project *is* and how to run it. How changes get
+made and land — branching, the quality gate, design conventions, releases —
+is covered in [AGENTS.md](AGENTS.md).
+
 ## Layout
 
 A [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/) with a
@@ -45,13 +49,9 @@ and walks through the matching flow. The skills cover the whole lifecycle —
 `/plan:research` → `write` → `prime` → `iterate` → `review`, plus `update`
 and `setup` — mapped in [`plugins/plan/README.md`](plugins/plan/README.md).
 
-**Cutting a release** (manual): the shim pins a full commit SHA (immutable to
-uv, so the CLI serves from cache with no per-call network check — a tag ref
-would re-fetch on every invocation). Flow: land all `packages/` changes and
-note the resulting SHA → update that SHA in `plugins/plan/bin/claudeplans` and
-bump `version` in `plugins/plan/.claude-plugin/plugin.json` → commit → tag that
-commit → push the tag. Consumers move up by re-adding the marketplace at the
-new tag.
+**Cutting a release** is a maintainer action — the recipe (shim SHA + plugin
+version bump, tag) lives in [AGENTS.md](AGENTS.md#git-workflow). Consumers
+move up by re-adding the marketplace at the new tag.
 
 ## Dev inner loop
 

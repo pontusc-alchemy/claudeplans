@@ -60,11 +60,12 @@ task is missing a target, add one rather than documenting a raw command.
 - Never rewrite published history; never force-push shared branches.
 - **Releases** are tagged `vX.Y.Z` on `master` (maintainer action) and consumed
   by the Claude Code plugin: the marketplace pins to the tag, and the CLI ships
-  as a `bin/` uvx shim pinned to a commit SHA. Cutting one: land all
-  `packages/` changes and note the resulting SHA → set that SHA in
-  `plugins/plan/bin/claudeplans` and bump `version` in
-  `plugins/plan/.claude-plugin/plugin.json` → commit → tag that commit on
-  master.
+  as a `bin/` uvx shim pinned to a commit SHA (immutable to uv, so the CLI
+  serves from cache with no per-call network check — a tag ref would re-fetch
+  on every invocation). Cutting one: land all `packages/` changes and note the
+  resulting SHA → set that SHA in `plugins/plan/bin/claudeplans` and bump
+  `version` in `plugins/plan/.claude-plugin/plugin.json` → commit → tag that
+  commit on master → push branch and tag.
 
 ## Design & conventions
 
