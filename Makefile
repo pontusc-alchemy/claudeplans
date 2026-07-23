@@ -1,5 +1,6 @@
 # claudeplans — dev inner loop + Docker Bake jobs. (Make requires real tabs.)
-.PHONY: help venv check lint fmt typecheck test bake-ci ci serve-build serve up down seed
+.PHONY: help venv check lint fmt typecheck test bake-ci ci serve-build serve up down seed \
+	cli-bump cli-install cli-reinstall
 
 UV ?= uv
 
@@ -47,3 +48,12 @@ down: ## Stop the dev stack (volumes kept; wipe: docker compose down -v).
 
 seed: venv $(if $(CLAUDEPLANS_URL),,up) ## Seed demo projects — brings the dev stack up, unless CLAUDEPLANS_URL targets elsewhere.
 	$(UV) run python scripts/seed.py
+
+cli-bump: ## Bump the CLI patch version in packages/cli/pyproject.toml.
+	$(UV) version --package claudeplans-cli --bump patch --no-sync
+
+cli-install: ## (Re)install the CLI as a uv tool from the working tree onto PATH.
+	$(UV) tool install --from ./packages/cli claudeplans-cli --force --reinstall
+
+cli-reinstall: cli-bump cli-install ## Bump the CLI patch version and reinstall it onto PATH.
+	@claudeplans --version
