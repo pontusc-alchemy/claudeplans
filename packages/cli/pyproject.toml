@@ -1,6 +1,6 @@
 [project]
 name = "claudeplans-cli"
-version = "0.1.0"
+version = "0.1.1"
 description = "Agent client (thin CLI + library) for the claudeplans service"
 requires-python = ">=3.14,<3.15"
 dependencies = [
