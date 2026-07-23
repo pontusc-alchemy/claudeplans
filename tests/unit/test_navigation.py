@@ -437,6 +437,46 @@ async def test_resolve_children_lists_primary_children_sorted(
     assert await resolve_children(repo, "dev", "projA", childless) == []
 
 
+async def test_resolve_children_crosses_the_archived_boundary(tmp_path: Path) -> None:
+    """The index is status-agnostic, reciprocal to resolve_parent's upward trail.
+
+    An archived research doc still lists its (active) child, and an active research
+    doc still lists its archived child — build_lineage folds both statuses in one set,
+    so the parent<->child link survives regardless of either side's status.
+    """
+    repo = FilesystemRepository(tmp_path / "data")
+
+    # Archived parent, active child (the resolve_parent asymmetry repro): the child's
+    # trail points up to the archived parent, so the parent must list the child back.
+    await _put(repo, _doc("projA", "old-audit", "research", status="archived"))
+    await _put(
+        repo,
+        _doc("projA", "still-open", "plan", primary="old-audit", refs=["old-audit"]),
+    )
+    archived_parent = _plan_document("old-audit", doc_type=DocType.research)
+    assert await resolve_children(repo, "dev", "projA", archived_parent) == [
+        ChildRef(slug="still-open", title="still-open title")
+    ]
+
+    # Active parent, archived child: the archived sub-plan still appears in the index.
+    await _put(repo, _doc("projA", "live", "research"))
+    await _put(
+        repo,
+        _doc(
+            "projA",
+            "done-leg",
+            "plan",
+            primary="live",
+            refs=["live"],
+            status="archived",
+        ),
+    )
+    active_parent = _plan_document("live", doc_type=DocType.research)
+    assert await resolve_children(repo, "dev", "projA", active_parent) == [
+        ChildRef(slug="done-leg", title="done-leg title")
+    ]
+
+
 async def test_sidebar_carries_display_name(tmp_path: Path) -> None:
     repo = FilesystemRepository(tmp_path / "data")
     registry = UserRegistry(tmp_path / "users.json")
