@@ -29,6 +29,14 @@ class ParentRef:
 
 
 @dataclass(frozen=True, slots=True)
+class ChildRef:
+    """A research doc's sub-doc: the slug to link and the title to label."""
+
+    slug: str
+    title: str
+
+
+@dataclass(frozen=True, slots=True)
 class PlanRef:
     """A plan, reduced to what the lineage page needs to link and label it."""
 

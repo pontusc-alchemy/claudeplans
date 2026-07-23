@@ -453,6 +453,58 @@ async def test_view_page_lineage_trail_degrades_on_dangling_ref(
         assert "doc-lineage-trail" not in resp.text  # dangling ref degrades to no trail
 
 
+# --- sub-doc index (parent research page) -----------------------------------
+
+
+async def test_view_page_shows_subdoc_index_on_parent_research(
+    tmp_path: Path,
+) -> None:
+    async with _client(tmp_path) as client:
+        await client.post(
+            DOCS, json={"type": "research", "slug": "r1", "title": "Research One"}
+        )
+        for slug, title in (("p1", "Plan One"), ("p2", "Plan Two")):
+            await client.post(
+                DOCS,
+                json={
+                    "type": "plan",
+                    "slug": slug,
+                    "title": title,
+                    "research_refs": ["r1"],
+                    "primary_research_ref": "r1",
+                },
+            )
+        resp = await client.get(f"{DOCS}/r1/view")
+        assert resp.status_code == 200
+        body = resp.text
+        assert 'class="doc-subdoc-index"' in body
+        assert "Plan One" in body and "Plan Two" in body
+        # Each child links to its own view page, listed in slug order.
+        assert 'href="/v1/users/dev/projects/demo/docs/p1/view"' in body
+        assert 'href="/v1/users/dev/projects/demo/docs/p2/view"' in body
+        assert body.index("Plan One") < body.index("Plan Two")
+
+
+async def test_view_page_subdoc_index_absent_for_childless_research(
+    tmp_path: Path,
+) -> None:
+    async with _client(tmp_path) as client:
+        await client.post(
+            DOCS, json={"type": "research", "slug": "r1", "title": "Research One"}
+        )
+        resp = await client.get(f"{DOCS}/r1/view")
+        assert resp.status_code == 200
+        assert "doc-subdoc-index" not in resp.text  # no children -> no index
+
+
+async def test_view_page_subdoc_index_absent_for_plan(tmp_path: Path) -> None:
+    async with _client(tmp_path) as client:
+        await client.post(DOCS, json=PLAN_BODY)  # a plan is a leaf, never a parent
+        resp = await client.get(VIEW)
+        assert resp.status_code == 200
+        assert "doc-subdoc-index" not in resp.text
+
+
 # --- SSE: needs a real socket server (ASGITransport can't stream) -----------
 
 
@@ -534,6 +586,35 @@ async def test_view_page_lineage_trail_not_in_sse_morph_payload(
             first = await asyncio.wait_for(_read_frame(lines), 5)
             assert "event: message" in first  # the doc-body snapshot frame
             assert not any("doc-lineage-trail" in line for line in first)
+
+
+async def test_view_page_subdoc_index_not_in_sse_morph_payload(
+    live_server: str,
+) -> None:
+    # The sub-doc index is shell chrome above <main id="doc">, outside the SSE morph
+    # target — so the snapshot morph frame (the #doc body only) must not carry it,
+    # even for a research doc whose page shell renders a real index.
+    async with httpx.AsyncClient(base_url=live_server) as client:
+        await client.post(
+            DOCS, json={"type": "research", "slug": "r1", "title": "Research One"}
+        )
+        await client.post(
+            DOCS,
+            json={
+                "type": "plan",
+                "slug": "p1",
+                "title": "Plan One",
+                "research_refs": ["r1"],
+                "primary_research_ref": "r1",
+            },
+        )
+        async with client.stream(
+            "GET", "/v1/users/dev/projects/demo/docs/r1/events"
+        ) as r:
+            lines = r.aiter_lines()
+            first = await asyncio.wait_for(_read_frame(lines), 5)
+            assert "event: message" in first  # the doc-body snapshot frame
+            assert not any("doc-subdoc-index" in line for line in first)
 
 
 async def test_reconnect_resyncs(live_server: str) -> None:

@@ -252,6 +252,57 @@ body.md-typeset {
   color: var(--fg-muted);
 }
 
+/* Sub-doc index: a research doc's children listed above its title. Shell chrome
+   (outside #doc), same inline inset as the trail so it aligns with the title. */
+.doc-subdoc-index {
+  padding: 1.5rem 2rem 0;
+}
+
+.doc-subdoc-index + .doc {
+  padding-top: 0.85rem;
+}
+
+.subdoc-index-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--fg-muted);
+}
+
+.subdoc-index-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.95rem;
+}
+
+.subdoc-index-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.subdoc-index-list li::before {
+  content: "\25B8";
+  color: var(--fg-muted);
+  opacity: 0.75;
+}
+
+/* Own the link affordance explicitly, so a refactor of the body link scope
+   can't silently drop the accent color or the hover underline. */
+.subdoc-index-list a {
+  color: var(--accent);
+}
+
+.subdoc-index-list a:hover {
+  text-decoration: underline;
+}
+
 .doc-type {
   display: inline-block;
   margin-right: 0.3em;
