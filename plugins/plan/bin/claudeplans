@@ -4,4 +4,4 @@
 # check (a tag ref would re-fetch on every invocation). Pin the SHA of the
 # release-tagged lineage's last packages/-touching commit — bump it together
 # with .claude-plugin/plugin.json "version" when cutting a release (see README).
-exec uvx --from "git+ssh://git@github.com/pontusc-alchemy/claudeplans@45f0ca7ebbe1e853709247d6a491b12e379a5cd0#subdirectory=packages/cli" claudeplans "$@"
+exec uvx --from "git+https://github.com/pontusc-alchemy/claudeplans@45f0ca7ebbe1e853709247d6a491b12e379a5cd0#subdirectory=packages/cli" claudeplans "$@"

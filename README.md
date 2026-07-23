@@ -30,11 +30,12 @@ start there when locating where a change belongs.
 
 [`plugins/plan/`](plugins/plan/) ships the plan-lifecycle skills **and** the
 `claudeplans` CLI — a `bin/` shim that runs the pinned release via
-[uvx](https://docs.astral.sh/uv/guides/tools/) (requires `uv` and SSH access to
-this repo). Install by adding the repo as a marketplace pinned to a release tag:
+[uvx](https://docs.astral.sh/uv/guides/tools/) (requires `uv`). Install by
+adding the repo as a marketplace pinned to the latest
+[release tag](https://github.com/pontusc-alchemy/claudeplans/tags):
 
 ```text
-/plugin marketplace add pontusc-alchemy/claudeplans@v0.0.2
+/plugin marketplace add pontusc-alchemy/claudeplans@vX.Y.Z   # the latest release tag
 /plugin install plan@plans
 ```
 
@@ -161,3 +162,29 @@ make serve-build      # docker buildx bake serve
 make serve            # bring up the stable stack (compose project `claudeplans`)
 make ci               # build claudeplans:ci and run the gate against the working tree
 ```
+
+## Published images (GHCR)
+
+The [Release image workflow](.github/workflows/release.yml) publishes the
+`serve` stage to [`ghcr.io/pontusc-alchemy/claudeplans`](https://ghcr.io/pontusc-alchemy/claudeplans)
+on every `vX.Y.Z` tag — multi-arch (amd64/arm64), tagged `X.Y.Z`, `X.Y`, and
+`latest`. Consume the server without cloning:
+
+```shell
+docker run --rm --name claudeplans \
+  -p 127.0.0.1:8000:8000 \
+  -e CLAUDEPLANS_AUTH_MODE=noop \
+  -e CLAUDEPLANS_STORAGE_BACKEND=filesystem \
+  -e CLAUDEPLANS_FILESYSTEM__ROOT=/data \
+  -e CLAUDEPLANS_REGISTRY_PATH=/state/users.json \
+  -e CLAUDEPLANS_PROJECT_REGISTRY_PATH=/state/projects.json \
+  -v claudeplans_data:/data -v claudeplans_state:/state \
+  ghcr.io/pontusc-alchemy/claudeplans:latest
+```
+
+Pin a `X.Y.Z` / `X.Y` tag instead of `latest` for anything longer-lived.
+
+The same rules as the compose stack apply: keep the bind on loopback (the
+no-op auth provider has no authentication), and both `/data` and `/state`
+need volumes writable by the non-root uid 10001 — fresh named volumes
+inherit that on first mount.
