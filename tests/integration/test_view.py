@@ -377,6 +377,82 @@ async def test_doc_view_has_single_aria_current(tmp_path: Path) -> None:
         assert 'class="sidebar-project current"' in body
 
 
+# --- sub-plan lineage trail -------------------------------------------------
+
+
+async def test_view_page_shows_lineage_trail_for_child_plan(
+    tmp_path: Path,
+) -> None:
+    async with _client(tmp_path) as client:
+        await client.post(
+            DOCS, json={"type": "research", "slug": "r1", "title": "Research One"}
+        )
+        await client.post(
+            DOCS,
+            json={
+                "type": "plan",
+                "slug": "p1",
+                "title": "Plan One",
+                "research_refs": ["r1"],
+                "primary_research_ref": "r1",
+            },
+        )
+        resp = await client.get(VIEW)
+        assert resp.status_code == 200
+        body = resp.text
+        assert 'class="doc-lineage-trail"' in body
+        assert "Research One" in body  # the parent's title labels the trail
+        assert "▸" in body  # the separator between parent and current
+        # The parent link resolves to the research doc's own view page.
+        assert 'href="/v1/users/dev/projects/demo/docs/r1/view"' in body
+
+
+async def test_view_page_lineage_trail_absent_for_root_research(tmp_path: Path) -> None:
+    async with _client(tmp_path) as client:
+        await client.post(
+            DOCS, json={"type": "research", "slug": "r1", "title": "Research One"}
+        )
+        resp = await client.get(f"{DOCS}/r1/view")
+        assert resp.status_code == 200
+        assert "doc-lineage-trail" not in resp.text  # research has no parent lineage
+
+
+async def test_view_page_lineage_trail_absent_for_standalone_plan(
+    tmp_path: Path,
+) -> None:
+    async with _client(tmp_path) as client:
+        await client.post(DOCS, json=PLAN_BODY)  # a plan with no primary_research_ref
+        resp = await client.get(VIEW)
+        assert resp.status_code == 200
+        assert "doc-lineage-trail" not in resp.text
+
+
+async def test_view_page_lineage_trail_degrades_on_dangling_ref(
+    tmp_path: Path,
+) -> None:
+    async with _client(tmp_path) as client:
+        research = await client.post(
+            DOCS, json={"type": "research", "slug": "r1", "title": "Research One"}
+        )
+        rev = research.headers["etag"]
+        await client.post(
+            DOCS,
+            json={
+                "type": "plan",
+                "slug": "p1",
+                "title": "Plan One",
+                "research_refs": ["r1"],
+                "primary_research_ref": "r1",
+            },
+        )
+        # Delete the parent so the plan's primary_research_ref now dangles.
+        deleted = await client.delete(f"{DOCS}/r1", headers={"If-Match": rev})
+        assert deleted.status_code == 204
+        resp = await client.get(VIEW)
+        assert resp.status_code == 200
+        assert "doc-lineage-trail" not in resp.text  # dangling ref degrades to no trail
+
+
 # --- SSE: needs a real socket server (ASGITransport can't stream) -----------
 
 
@@ -431,6 +507,33 @@ async def test_sse_emits_on_connect_and_on_mutation(live_server: str) -> None:
             assert resp.status_code == 200
             nxt = await asyncio.wait_for(_read_doc_frame(lines), 5)
             assert any('phase-a-status" class="pill done"' in line for line in nxt)
+
+
+async def test_view_page_lineage_trail_not_in_sse_morph_payload(
+    live_server: str,
+) -> None:
+    # The lineage trail is shell chrome above <main id="doc">, outside the SSE morph
+    # target — so the snapshot morph frame (the #doc body only) must not carry it,
+    # even for a child plan whose page shell renders a real lineage trail.
+    async with httpx.AsyncClient(base_url=live_server) as client:
+        await client.post(
+            DOCS, json={"type": "research", "slug": "r1", "title": "Research One"}
+        )
+        await client.post(
+            DOCS,
+            json={
+                "type": "plan",
+                "slug": "p1",
+                "title": "Plan One",
+                "research_refs": ["r1"],
+                "primary_research_ref": "r1",
+            },
+        )
+        async with client.stream("GET", EVENTS) as r:
+            lines = r.aiter_lines()
+            first = await asyncio.wait_for(_read_frame(lines), 5)
+            assert "event: message" in first  # the doc-body snapshot frame
+            assert not any("doc-lineage-trail" in line for line in first)
 
 
 async def test_reconnect_resyncs(live_server: str) -> None:

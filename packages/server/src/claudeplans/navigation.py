@@ -13,12 +13,12 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 
 from claudeplans_contracts import Document
-from claudeplans_contracts.enums import DocStatus
+from claudeplans_contracts.enums import DocStatus, DocType
 from claudeplans_contracts.errors import PlanError
 
 from . import core
 from .auth.registry import UserRegistry
-from .lineage import Lineage, build_lineage
+from .lineage import Lineage, ParentRef, build_lineage
 from .projects import ProjectRegistry
 from .storage.repository import Repository
 
@@ -88,6 +88,29 @@ async def load_project_lineage(
     prefix = f"{uid}/{project}/"
     keys = [entry.key for entry in await repo.list(prefix)]
     return _split_lineages(await _load_documents(repo, keys))
+
+
+async def resolve_parent(
+    repo: Repository, uid: str, project: str, doc: Document
+) -> ParentRef | None:
+    """Resolve a plan's lineage parent: the research doc it names as
+    `primary_research_ref`, read once via listing metadata (no body read). None
+    when there is no research parent — the same unlinked case build_lineage folds
+    away.
+    """
+    if doc.type is not DocType.plan or doc.primary_research_ref is None:
+        return None
+    prefix = f"{uid}/{project}/"
+    for entry in await repo.list(prefix):
+        if entry.key.rsplit("/", 1)[1] != doc.primary_research_ref:
+            continue
+        if entry.metadata.get("type") != "research":
+            return None
+        return ParentRef(
+            slug=doc.primary_research_ref,
+            title=entry.metadata.get("title", ""),
+        )
+    return None
 
 
 async def build_user_tree(

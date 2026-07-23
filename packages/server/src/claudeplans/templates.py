@@ -106,11 +106,18 @@ def render_sidebar(sidebar: dict[str, object]) -> str:
 
 
 def render_page(
-    doc: Document, events_url: str, sidebar: dict[str, object] | None = None
+    doc: Document,
+    events_url: str,
+    sidebar: dict[str, object] | None = None,
+    lineage_trail: dict[str, object] | None = None,
 ) -> str:
     """Render the full document page (the morph target wrapping the body)."""
     return env.get_template("document.html").render(
-        title=doc.title, events_url=events_url, sidebar=sidebar, **_doc_context(doc)
+        title=doc.title,
+        events_url=events_url,
+        sidebar=sidebar,
+        lineage_trail=lineage_trail,
+        **_doc_context(doc),
     )
 
 

@@ -6,11 +6,18 @@ from pydantic import JsonValue
 
 from claudeplans import templates
 from claudeplans.auth.registry import UserRegistry
-from claudeplans.navigation import build_user_tree, list_users, load_project_lineage
+from claudeplans.lineage import ParentRef
+from claudeplans.navigation import (
+    build_user_tree,
+    list_users,
+    load_project_lineage,
+    resolve_parent,
+)
 from claudeplans.projects import ProjectRegistry
 from claudeplans.storage.filesystem import FilesystemRepository
 from claudeplans.storage.repository import CREATE
-from claudeplans_contracts import document_key
+from claudeplans_contracts import Document, document_key
+from claudeplans_contracts.enums import DocType
 
 
 def _doc(
@@ -356,6 +363,50 @@ async def test_build_user_tree_falls_back_to_slug_when_name_unset(
     trees = await build_user_tree(repo, "dev")
 
     assert trees[0].name == "projA"  # no registry → slug is the display name
+
+
+def _plan_document(
+    slug: str,
+    *,
+    primary: str | None = None,
+    refs: list[str] | None = None,
+    doc_type: DocType = DocType.plan,
+) -> Document:
+    """A real Document to hand to resolve_parent (the `doc` under test)."""
+    return Document(
+        type=doc_type,
+        project="projA",
+        slug=slug,
+        title=f"{slug} title",
+        owner_id="dev",
+        research_refs=refs or [],
+        primary_research_ref=primary,
+    )
+
+
+async def test_resolve_parent_covers_found_none_wrongtype_and_dangling(
+    tmp_path: Path,
+) -> None:
+    repo = FilesystemRepository(tmp_path / "data")
+    await _put(repo, _doc("projA", "r1", "research"))
+    await _put(repo, _doc("projA", "q1", "plan"))  # a plan the ref may wrongly target
+
+    # (a) parent found -> ParentRef with the research doc's slug + title.
+    child = _plan_document("p1", primary="r1", refs=["r1"])
+    parent = await resolve_parent(repo, "dev", "projA", child)
+    assert parent == ParentRef(slug="r1", title="r1 title")
+
+    # (b) no primary_research_ref -> None.
+    standalone = _plan_document("p2")
+    assert await resolve_parent(repo, "dev", "projA", standalone) is None
+
+    # (c) primary points at a doc whose type == "plan" (not research) -> None.
+    mis_typed = _plan_document("p3", primary="q1", refs=["q1"])
+    assert await resolve_parent(repo, "dev", "projA", mis_typed) is None
+
+    # (d) dangling ref (no listing entry matches the slug) -> None.
+    dangling = _plan_document("p4", primary="ghost", refs=["ghost"])
+    assert await resolve_parent(repo, "dev", "projA", dangling) is None
 
 
 async def test_sidebar_carries_display_name(tmp_path: Path) -> None:
