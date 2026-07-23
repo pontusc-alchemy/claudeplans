@@ -18,7 +18,7 @@ from claudeplans_contracts.errors import PlanError
 
 from . import core
 from .auth.registry import UserRegistry
-from .lineage import Lineage, ParentRef, build_lineage
+from .lineage import ChildRef, Lineage, ParentRef, build_lineage
 from .projects import ProjectRegistry
 from .storage.repository import Repository
 
@@ -111,6 +111,23 @@ async def resolve_parent(
             title=entry.metadata.get("title", ""),
         )
     return None
+
+
+async def resolve_children(
+    repo: Repository, uid: str, project: str, doc: Document
+) -> list[ChildRef]:
+    """Resolve a research doc's sub-docs: the plans that nest under it, via the same
+    build_lineage projection the sidebar and lineage page use — so the index, the
+    sidebar tree, and the lineage page never disagree. Empty for a non-research doc
+    or one with no sub-docs.
+    """
+    if doc.type is not DocType.research:
+        return []
+    active, _archived = await load_project_lineage(repo, uid, project)
+    node = next((n for n in active.research if n.slug == doc.slug), None)
+    if node is None:
+        return []
+    return [ChildRef(slug=plan.slug, title=plan.title) for plan in node.plans]
 
 
 async def build_user_tree(

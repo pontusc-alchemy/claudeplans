@@ -6,11 +6,12 @@ from pydantic import JsonValue
 
 from claudeplans import templates
 from claudeplans.auth.registry import UserRegistry
-from claudeplans.lineage import ParentRef
+from claudeplans.lineage import ChildRef, ParentRef
 from claudeplans.navigation import (
     build_user_tree,
     list_users,
     load_project_lineage,
+    resolve_children,
     resolve_parent,
 )
 from claudeplans.projects import ProjectRegistry
@@ -407,6 +408,33 @@ async def test_resolve_parent_covers_found_none_wrongtype_and_dangling(
     # (d) dangling ref (no listing entry matches the slug) -> None.
     dangling = _plan_document("p4", primary="ghost", refs=["ghost"])
     assert await resolve_parent(repo, "dev", "projA", dangling) is None
+
+
+async def test_resolve_children_lists_primary_children_sorted(
+    tmp_path: Path,
+) -> None:
+    repo = FilesystemRepository(tmp_path / "data")
+    await _put(repo, _doc("projA", "r1", "research"))
+    # Inserted p2 before p1; build_lineage sorts children by slug.
+    await _put(repo, _doc("projA", "p2", "plan", primary="r1", refs=["r1"]))
+    await _put(repo, _doc("projA", "p1", "plan", primary="r1", refs=["r1"]))
+    await _put(repo, _doc("projA", "solo", "plan"))  # no primary -> not a child
+
+    research = _plan_document("r1", doc_type=DocType.research)
+    children = await resolve_children(repo, "dev", "projA", research)
+    assert children == [
+        ChildRef(slug="p1", title="p1 title"),
+        ChildRef(slug="p2", title="p2 title"),
+    ]
+
+    # A plan is a leaf -> no children.
+    leaf = _plan_document("p1", primary="r1", refs=["r1"])
+    assert await resolve_children(repo, "dev", "projA", leaf) == []
+
+    # A childless research doc -> empty.
+    await _put(repo, _doc("projA", "r9", "research"))
+    childless = _plan_document("r9", doc_type=DocType.research)
+    assert await resolve_children(repo, "dev", "projA", childless) == []
 
 
 async def test_sidebar_carries_display_name(tmp_path: Path) -> None:

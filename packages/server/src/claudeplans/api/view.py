@@ -110,12 +110,18 @@ async def view_document(
         if parent is not None
         else None
     )
+    children = await navigation.resolve_children(repo, uid, project, doc)
+    subdoc_index: list[dict[str, object]] = [
+        {"title": child.title, "view_url": _view_url(uid, project, child.slug)}
+        for child in children
+    ]
     sidebar = await _build_sidebar(repo, registry, project_registry, uid, project, slug)
     html = templates.render_page(
         doc,
         events_url=_events_url(uid, project, slug),
         sidebar=sidebar,
         lineage_trail=lineage_trail,
+        subdoc_index=subdoc_index,
     )
     return HTMLResponse(html, headers={"Content-Security-Policy": CSP})
 

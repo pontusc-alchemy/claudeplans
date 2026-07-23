@@ -7,6 +7,16 @@
   <span class="lineage-trail-current" aria-current="page">{{ title }}</span>
 </nav>
 {% endif %}
+{% if subdoc_index %}
+<nav class="doc-subdoc-index" aria-label="Sub-plans">
+  <span class="subdoc-index-label">Sub-plans</span>
+  <ul class="subdoc-index-list">
+    {% for child in subdoc_index %}
+    <li><a href="{{ child.view_url }}">{{ child.title }}</a></li>
+    {% endfor %}
+  </ul>
+</nav>
+{% endif %}
 <main class="doc" id="doc"
       sse-swap="message"
       hx-swap="morph:innerHTML">

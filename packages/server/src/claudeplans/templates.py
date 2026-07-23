@@ -110,6 +110,7 @@ def render_page(
     events_url: str,
     sidebar: dict[str, object] | None = None,
     lineage_trail: dict[str, object] | None = None,
+    subdoc_index: list[dict[str, object]] | None = None,
 ) -> str:
     """Render the full document page (the morph target wrapping the body)."""
     return env.get_template("document.html").render(
@@ -117,6 +118,7 @@ def render_page(
         events_url=events_url,
         sidebar=sidebar,
         lineage_trail=lineage_trail,
+        subdoc_index=subdoc_index,
         **_doc_context(doc),
     )
 
