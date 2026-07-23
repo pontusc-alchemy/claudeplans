@@ -1,0 +1,66 @@
+{
+  "stage": "interview",
+  "title": "host-plans: optional branch-level nesting",
+  "goalSlug": "branch-option",
+  "questions": [
+    {
+      "id": "scope",
+      "prompt": "Which host-plans components are in scope for the branch-option addition?",
+      "description": "Settled already (no need to pick): the file-vs-dir detection rule, one-level cap, project=repo / branch=git-branch defaults, and flat docs keeping working with no migration. This question is only about which code/doc surfaces we touch.",
+      "answerMode": "multi-custom",
+      "recommendedAnswer": "Core read path + gen_index branch walk + diagram surfacing + docs. The write path (new --branch) is only needed if you also want hand-authored PLANS to live under branches, not just generated diagrams — include it if so. check-validation is a nice-to-have.",
+      "recommendedOptionIds": ["read", "index-walk", "diagram-surface", "docs"],
+      "options": [
+        { "id": "read", "label": "plan-doc read path: glob gains projects/*/*/*.md, card() reports branch, resolve recurses one level" },
+        { "id": "index-walk", "label": "gen_index.py: branch-aware doc walk + branch grouping on the landing page" },
+        { "id": "diagram-surface", "label": "gen_index.py: surface generated diagrams/*.html on the landing page (serves the reuse goal)" },
+        { "id": "write", "label": "plan-doc write path: new --branch <name> to author a branched plan doc" },
+        { "id": "check", "label": "plan-doc check: validate branch dir names" },
+        { "id": "docs", "label": "AUTHORING.md + README: document the optional branch level" }
+      ],
+      "required": true
+    },
+    {
+      "id": "layout",
+      "prompt": "How should the plans.claude landing page render branched docs?",
+      "description": "Today gen_index groups cards under one <h2> per project. Branches add a sub-dimension.",
+      "answerMode": "single-custom",
+      "recommendedAnswer": "Nested: a per-branch sub-heading inside each project section. Keeps the project as the primary grouping and reads naturally for a few branches.",
+      "recommendedOptionIds": ["nested"],
+      "options": [
+        { "id": "nested", "label": "Nested — per-branch sub-heading under each project section" },
+        { "id": "flat-tag", "label": "Flat — one card list per project, branch shown as a tag/pill on each card" },
+        { "id": "separate", "label": "Separate — each project/branch is its own top-level section" }
+      ],
+      "required": true
+    },
+    {
+      "id": "surface-how",
+      "prompt": "If diagrams are surfaced in the index, how should they appear?",
+      "description": "Only relevant if 'diagram-surface' is in scope. Diagrams are generated .html with no frontmatter, so they have no title/status/date like .md cards.",
+      "answerMode": "single-custom",
+      "recommendedAnswer": "A compact 'Diagrams' link-list under the matching project/branch (filename-derived labels), visually distinct from plan cards. Lightweight, no frontmatter needed.",
+      "recommendedOptionIds": ["linklist"],
+      "options": [
+        { "id": "linklist", "label": "Compact 'Diagrams' link-list under the project/branch (filename labels)" },
+        { "id": "cards", "label": "Full cards like docs (requires inventing title/date from filename + mtime)" },
+        { "id": "on-doc", "label": "Linked from the related plan doc's card, not as their own entries" }
+      ],
+      "required": false
+    },
+    {
+      "id": "resolve",
+      "prompt": "When a slug exists in more than one place (e.g. flat + branched, or two branches), how should plan-doc resolve it?",
+      "description": "Affects plan-doc resolve and the /plan:* skills that look docs up by bare slug.",
+      "answerMode": "single-custom",
+      "recommendedAnswer": "Report ambiguity (current safe behavior) and accept explicit <branch>/<slug> addressing to disambiguate. Avoids silently picking the wrong doc.",
+      "recommendedOptionIds": ["ambiguity"],
+      "options": [
+        { "id": "ambiguity", "label": "Report ambiguity + accept explicit <branch>/<slug> addressing" },
+        { "id": "current-branch", "label": "Prefer the doc under the current git branch" },
+        { "id": "prefer-flat", "label": "Prefer the flat (no-branch) doc" }
+      ],
+      "required": true
+    }
+  ]
+}

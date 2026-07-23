@@ -1,0 +1,103 @@
+{
+  "stage": "facts",
+  "title": "host-plans: optional branch-level nesting",
+  "goalSlug": "branch-option",
+  "facts": [
+    {
+      "id": "fact-flat-unchanged",
+      "text": "A .md file directly under projects/<project>/ is still a flat slug with no branch; existing flat docs render and resolve unchanged (no migration required).",
+      "accepted": false,
+      "removed": false,
+      "recommendedAutomatedVerification": true,
+      "automatedVerification": true
+    },
+    {
+      "id": "fact-discover-branched",
+      "text": "plan-doc list discovers docs at both projects/<project>/<slug>.md and projects/<project>/<branch>/<slug>.md.",
+      "accepted": false,
+      "removed": false,
+      "recommendedAutomatedVerification": true,
+      "automatedVerification": true
+    },
+    {
+      "id": "fact-card-branch-field",
+      "text": "card() output includes a branch field: empty string for flat docs, the branch directory name for branched docs.",
+      "accepted": false,
+      "removed": false,
+      "recommendedAutomatedVerification": true,
+      "automatedVerification": true
+    },
+    {
+      "id": "fact-one-level-cap",
+      "text": "Branch detection is capped at exactly one level: only projects/<project>/<branch>/<slug>.md is recognized; deeper nesting is not treated as additional branch levels.",
+      "accepted": false,
+      "removed": false,
+      "recommendedAutomatedVerification": true,
+      "automatedVerification": true
+    },
+    {
+      "id": "fact-resolve-branched",
+      "text": "plan-doc resolve finds a branched doc by bare slug when that slug is unique across the tree.",
+      "accepted": false,
+      "removed": false,
+      "recommendedAutomatedVerification": true,
+      "automatedVerification": true
+    },
+    {
+      "id": "fact-resolve-ambiguity",
+      "text": "When a bare slug matches multiple docs (flat + branched, or two branches), resolve reports ambiguity rather than silently picking one.",
+      "accepted": false,
+      "removed": false,
+      "recommendedAutomatedVerification": true,
+      "automatedVerification": true
+    },
+    {
+      "id": "fact-resolve-addressing",
+      "text": "plan-doc resolve accepts explicit <branch>/<slug> addressing to disambiguate a slug that exists under a branch.",
+      "accepted": false,
+      "removed": false,
+      "recommendedAutomatedVerification": true,
+      "automatedVerification": true
+    },
+    {
+      "id": "fact-index-nested",
+      "text": "The plans.claude landing page renders branched docs under a per-branch sub-heading within each project section.",
+      "accepted": false,
+      "removed": false,
+      "recommendedAutomatedVerification": true,
+      "automatedVerification": true
+    },
+    {
+      "id": "fact-index-flat-no-subheading",
+      "text": "Flat docs (no branch) render directly under their project with no spurious branch sub-heading.",
+      "accepted": false,
+      "removed": false,
+      "recommendedAutomatedVerification": true,
+      "automatedVerification": true
+    },
+    {
+      "id": "fact-diagrams-linklist",
+      "text": "The landing page surfaces generated diagrams/*.html as a compact 'Diagrams' link-list under the matching project/branch, with filename-derived labels (no frontmatter required).",
+      "accepted": false,
+      "removed": false,
+      "recommendedAutomatedVerification": true,
+      "automatedVerification": true
+    },
+    {
+      "id": "fact-diagrams-no-empty-group",
+      "text": "A directory containing only .html diagrams (no .md) does not appear as an empty branch or produce a doc card.",
+      "accepted": false,
+      "removed": false,
+      "recommendedAutomatedVerification": true,
+      "automatedVerification": true
+    },
+    {
+      "id": "fact-docs-updated",
+      "text": "AUTHORING.md and README document the optional branch level and the file-vs-dir detection rule.",
+      "accepted": false,
+      "removed": false,
+      "recommendedAutomatedVerification": false,
+      "automatedVerification": false
+    }
+  ]
+}

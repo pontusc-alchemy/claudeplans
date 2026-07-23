@@ -19,6 +19,7 @@ from pathlib import Path
 DOCS_ROOT = Path(os.environ.get("PLANS_SRC", Path.home() / "plans" / "src"))
 TEMPLATES = Path(__file__).resolve().parent.parent / "templates"
 PROJECTS_GLOB = "projects/*/*.md"
+BRANCHED_GLOB = "projects/*/*/*.md"
 
 TYPES = {"research", "plan"}
 STATUSES = {"draft", "active", "done"}
@@ -100,8 +101,11 @@ def quote_value(value):
 
 def card(path):
   fm = parse_frontmatter(path.read_text(encoding="utf-8"))
+  parts = path.resolve().relative_to((DOCS_ROOT / "projects").resolve()).parts
+  branch = parts[1] if len(parts) == 3 else ""
   return {
-    "project": path.parent.name,
+    "project": parts[0],
+    "branch": branch,
     "slug": path.stem,
     "path": str(path),
     "title": fm.get("title", ""),
@@ -113,7 +117,19 @@ def card(path):
 
 
 def all_docs():
-  return sorted(DOCS_ROOT.glob(PROJECTS_GLOB))
+  flat = DOCS_ROOT.glob(PROJECTS_GLOB)
+  branched = DOCS_ROOT.glob(BRANCHED_GLOB)
+  return sorted(set(flat) | set(branched))
+
+
+def find_by_arg(arg):
+  """Return docs matching `arg`. With a '/' it is `<branch>/<slug>` (parent dir
+  name == branch and stem == slug); otherwise a bare stem match across the tree.
+  """
+  if "/" in arg:
+    branch, _, slug = arg.partition("/")
+    return [d for d in all_docs() if d.parent.name == branch and d.stem == slug]
+  return [d for d in all_docs() if d.stem == arg]
 
 
 def _ensure_under_root(path):
@@ -128,7 +144,7 @@ def resolve_path(arg):
   p = Path(arg)
   if p.is_file():
     return _ensure_under_root(p)
-  matches = [d for d in all_docs() if d.stem == arg]
+  matches = find_by_arg(arg)
   if len(matches) == 1:
     return _ensure_under_root(matches[0])
   if len(matches) > 1:
@@ -218,10 +234,11 @@ def cmd_resolve(args):
   arg = args.arg
   project_dir = DOCS_ROOT / "projects" / arg
   if project_dir.is_dir():
-    docs = [card(p) for p in sorted(project_dir.glob("*.md"))]
+    paths = set(project_dir.glob("*.md")) | set(project_dir.glob("*/*.md"))
+    docs = [card(p) for p in sorted(paths)]
     print(json.dumps({"kind": "project", "docs": docs}))
     return
-  exact = [card(p) for p in all_docs() if p.stem == arg]
+  exact = [card(p) for p in find_by_arg(arg)]
   if len(exact) == 1:
     print(json.dumps({"kind": "doc", "docs": exact}))
     return

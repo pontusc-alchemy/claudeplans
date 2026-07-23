@@ -4,6 +4,8 @@ A Claude Code plugin (`plan`) and its marketplace (`plans`) for a research → p
 
 Documents live at `~/plans/src/projects/<project>/<slug>.md`; the landing page is generated, grouped by project. Two cornerstones: `type: research` (full consideration) and `type: plan` (phased execution with in-document learnings).
 
+An optional branch level groups docs by branch — `projects/<project>/<branch>/<slug>.md` — alongside flat `projects/<project>/<slug>.md`. Detection is structural: a `.md` **file** under a project is a flat slug; a **subdirectory** is a branch whose `.md` files are slugs. The branch level is capped at one (deeper nesting is not recognized as further branch levels). A subdirectory named `diagrams/` is reserved for generated `*.html` and is never treated as a branch — so a real git branch literally named `diagrams` would be swallowed by the diagram bucket.
+
 ## Install
 
 ```shell
