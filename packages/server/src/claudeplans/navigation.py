@@ -116,15 +116,31 @@ async def resolve_parent(
 async def resolve_children(
     repo: Repository, uid: str, project: str, doc: Document
 ) -> list[ChildRef]:
-    """Resolve a research doc's sub-docs: the plans that nest under it, via the same
-    build_lineage projection the sidebar and lineage page use — so the index, the
-    sidebar tree, and the lineage page never disagree. Empty for a non-research doc
-    or one with no sub-docs.
+    """Resolve a research doc's sub-docs: the plans whose `primary_research_ref` is
+    this doc, folded via build_lineage exactly as the sidebar and lineage page do —
+    so the index never disagrees with them. Empty for a non-research doc or one with
+    no sub-docs.
+
+    Status-agnostic, mirroring resolve_parent: the fold is over every project doc, so
+    an archived research doc still lists its children and an archived child still
+    appears under its parent — the reciprocal of the child's upward trail, which
+    resolve_parent already renders across the archived boundary. A single fold (not
+    load_project_lineage's active/archived split) is what makes this cross-status:
+    build_lineage can only nest a plan under a research doc when both sit in the same
+    input set.
+
+    Unlike resolve_parent — which matches the in-hand doc's own primary_research_ref
+    against listing metadata (no body read) — the nesting key lives on the other docs,
+    and primary_research_ref is not a listing-metadata field, so this reads the project
+    bodies. The sidebar build reads them too; that double read is accepted at local
+    single-user scale (dedup by threading one load through the view is a later change).
     """
     if doc.type is not DocType.research:
         return []
-    active, _archived = await load_project_lineage(repo, uid, project)
-    node = next((n for n in active.research if n.slug == doc.slug), None)
+    prefix = f"{uid}/{project}/"
+    keys = [entry.key for entry in await repo.list(prefix)]
+    lineage = build_lineage(await _load_documents(repo, keys))
+    node = next((n for n in lineage.research if n.slug == doc.slug), None)
     if node is None:
         return []
     return [ChildRef(slug=plan.slug, title=plan.title) for plan in node.plans]
