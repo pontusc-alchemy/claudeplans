@@ -21,6 +21,14 @@ from claudeplans_contracts.enums import DocStatus, DocType
 
 
 @dataclass(frozen=True, slots=True)
+class ParentRef:
+    """A plan's lineage parent: the research slug to link and the title to label."""
+
+    slug: str
+    title: str
+
+
+@dataclass(frozen=True, slots=True)
 class PlanRef:
     """A plan, reduced to what the lineage page needs to link and label it."""
 

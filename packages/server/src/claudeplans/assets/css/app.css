@@ -225,6 +225,33 @@ body.md-typeset {
   background: var(--archived);
 }
 
+.doc-lineage-trail {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  /* Match the doc's own 2rem inline padding so the trail aligns with the title
+     below it instead of sitting flush to the content edge. */
+  padding: 1.5rem 2rem 0;
+  font-size: 0.8125rem;
+  color: var(--fg-muted);
+}
+
+/* Tighten the doc's top padding when a trail precedes it, so trail + title read
+   as one header block rather than two stacked gaps. */
+.doc-lineage-trail + .doc {
+  padding-top: 0.85rem;
+}
+
+.lineage-trail-sep {
+  color: var(--fg-muted);
+  opacity: 0.75;
+}
+
+.lineage-trail-current {
+  color: var(--fg-muted);
+}
+
 .doc-type {
   display: inline-block;
   margin-right: 0.3em;

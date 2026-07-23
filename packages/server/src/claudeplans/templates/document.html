@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
+{% if lineage_trail %}
+<nav class="doc-lineage-trail" aria-label="Sub-plan lineage">
+  <a href="{{ lineage_trail.view_url }}" class="lineage-trail-parent">{{ lineage_trail.title }}</a>
+  <span class="lineage-trail-sep" aria-hidden="true">▸</span>
+  <span class="lineage-trail-current" aria-current="page">{{ title }}</span>
+</nav>
+{% endif %}
 <main class="doc" id="doc"
       sse-swap="message"
       hx-swap="morph:innerHTML">

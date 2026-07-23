@@ -104,9 +104,18 @@ async def view_document(
     """Render the full document page (the live-view morph target)."""
     key = document_key(uid, project, slug)
     _, doc = await core.get_document(repo, key)
+    parent = await navigation.resolve_parent(repo, uid, project, doc)
+    lineage_trail: dict[str, object] | None = (
+        {"title": parent.title, "view_url": _view_url(uid, project, parent.slug)}
+        if parent is not None
+        else None
+    )
     sidebar = await _build_sidebar(repo, registry, project_registry, uid, project, slug)
     html = templates.render_page(
-        doc, events_url=_events_url(uid, project, slug), sidebar=sidebar
+        doc,
+        events_url=_events_url(uid, project, slug),
+        sidebar=sidebar,
+        lineage_trail=lineage_trail,
     )
     return HTMLResponse(html, headers={"Content-Security-Policy": CSP})
 
