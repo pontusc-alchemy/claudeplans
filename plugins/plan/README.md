@@ -25,7 +25,7 @@ A [uvx](https://docs.astral.sh/uv/guides/tools/) shim pinned to an exact
 commit SHA — immutable to uv, so after the first run the CLI serves from
 cache with no per-call network check (a tag ref would re-fetch every
 invocation). Cutting a release bumps this SHA together with the `version` in
-`.claude-plugin/plugin.json` (recipe in the root [AGENTS.md](../../AGENTS.md)).
+`.claude-plugin/plugin.json` (recipe in the root [LLM.md](../../LLM.md)).
 
 ## `AUTHORING.md`
 

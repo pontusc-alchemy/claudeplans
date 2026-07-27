@@ -7,7 +7,7 @@ quality gate, Docker images) are in place ahead of the feature work.
 
 This README covers what the project *is* and how to run it. How changes get
 made and land — branching, the quality gate, design conventions, releases —
-is covered in [AGENTS.md](AGENTS.md).
+is covered in [LLM.md](LLM.md) (`AGENTS.md` and `CLAUDE.md` symlink to it).
 
 ## Layout
 
@@ -50,7 +50,7 @@ and walks through the matching flow. The skills cover the whole lifecycle —
 and `setup` — mapped in [`plugins/plan/README.md`](plugins/plan/README.md).
 
 **Cutting a release** is a maintainer action — the recipe (shim SHA + plugin
-version bump, tag) lives in [AGENTS.md](AGENTS.md#git-workflow). Consumers
+version bump, tag) lives in [LLM.md](LLM.md#git-workflow). Consumers
 move up by re-adding the marketplace at the new tag.
 
 ## Dev inner loop
