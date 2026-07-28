@@ -445,12 +445,18 @@ body.md-typeset {
   color: var(--fg);
 }
 
-/* Hang the checkbox glyph in the indent so task text lines up with the
-   markdown-bullet text column (Checklist and Exit criteria align). */
+/* Hang the checkbox in the indent so task text lines up with the
+   markdown-bullet text column (Checklist and Exit criteria align). Sized
+   relative to the text rather than the UA default, since a native checkbox
+   (not a text glyph) now renders here; margin-right makes up the difference
+   so the following text still lands on the same column. */
 .task .task-check {
   display: inline-block;
-  width: 1.5rem;
+  width: 0.9em;
+  height: 0.9em;
   margin-left: -1.5rem;
+  margin-right: calc(1.5rem - 0.9em);
+  vertical-align: -0.15em;
 }
 
 /* Admonitions (pymdownx.admonition / details) ---------------------------- */

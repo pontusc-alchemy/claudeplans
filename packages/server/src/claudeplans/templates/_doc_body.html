@@ -28,7 +28,7 @@
     <ul class="tasks">
       {% for t in b.tasks %}
       <li id="phase-{{ b.slug }}-task-{{ loop.index0 }}" class="task {{ 'done' if t.checked else '' }}">
-        <span class="task-check">{{ '☑' if t.checked else '☐' }}</span> {{ t.text }}
+        <label><input type="checkbox" class="task-check"{% if t.checked %} checked{% endif %} disabled> {{ t.text }}</label>
       </li>
       {% endfor %}
     </ul>
