@@ -2,7 +2,8 @@
 combinations:
 
 - `empty`  — registry display name only, zero docs (must NOT appear anywhere).
-- `atlas`  — a research doc + a standalone plan (no research link → unlinked).
+- `atlas`  — a research doc + a standalone plan (no research link → unlinked) +
+  two long lorem-ipsum docs (research + plan) for testing page scrolling.
 - `beacon` — a research doc + a plan linked to it (primary ref → nests under the
   research node) + a standalone research doc with no plans + an archived plan
   (surfaces in the sidebar's collapsed "Archived" group).
@@ -37,6 +38,36 @@ def _phase(
 
 def _section(anchor: str, heading: str, body: str) -> dict[str, Any]:
     return {"anchor": anchor, "heading": heading, "body": body}
+
+
+_LOREM = (
+    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod "
+    "tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim "
+    "veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea "
+    "commodo consequat. Duis aute irure dolor in reprehenderit in voluptate "
+    "velit esse cillum dolore eu fugiat nulla pariatur."
+)
+
+
+def _lorem_sections(count: int, paragraphs: int) -> list[dict[str, Any]]:
+    """Filler sections that make a document long enough to scroll."""
+    body = "\n\n".join([_LOREM] * paragraphs)
+    return [
+        _section(f"lorem-{i}", f"Lorem section {i}", body) for i in range(1, count + 1)
+    ]
+
+
+def _lorem_phases(count: int, tasks: int) -> list[dict[str, Any]]:
+    """Filler phases with wordy tasks — the plan-page scrolling counterpart."""
+    return [
+        _phase(
+            f"phase-{i}",
+            f"Phase {i}: {_LOREM[:40].lower()}",
+            "todo",
+            [(f"{_LOREM[:120]} (task {j})", False) for j in range(1, tasks + 1)],
+        )
+        for i in range(1, count + 1)
+    ]
 
 
 # (project, display name, [DocumentCreate payloads])
@@ -77,6 +108,22 @@ SEED: list[tuple[str, str, list[dict[str, Any]]]] = [
                         "rollout", "Rollout", "todo", [("Enable behind flag", False)]
                     ),
                 ],
+            },
+            {
+                "type": "research",
+                "slug": "lorem-research",
+                "title": "Lorem Research (long)",
+                "status": "draft",
+                "description": "Long lorem-ipsum research doc for scroll testing.",
+                "sections": _lorem_sections(count=14, paragraphs=4),
+            },
+            {
+                "type": "plan",
+                "slug": "lorem-plan",
+                "title": "Lorem Plan (long)",
+                "status": "active",
+                "description": "Long lorem-ipsum plan for scroll testing.",
+                "phases": _lorem_phases(count=10, tasks=8),
             },
         ],
     ),
@@ -133,7 +180,9 @@ SEED: list[tuple[str, str, list[dict[str, Any]]]] = [
                 "slug": "legacy-migration",
                 "title": "Legacy Migration",
                 "status": "archived",
-                "description": "Retired plan — surfaces in the sidebar's Archived group.",
+                "description": (
+                    "Retired plan — surfaces in the sidebar's Archived group."
+                ),
             },
         ],
     ),

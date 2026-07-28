@@ -88,6 +88,13 @@ async def test_view_page_renders(tmp_path: Path) -> None:
         assert "unsafe-eval" not in csp
 
 
+async def test_view_page_shows_version_footer(tmp_path: Path) -> None:
+    async with _client(tmp_path) as client:
+        await client.post(DOCS, json=PLAN_BODY)
+        resp = await client.get(VIEW)
+        assert '<footer class="app-version">dev</footer>' in resp.text
+
+
 async def test_assets_served(tmp_path: Path) -> None:
     async with _client(tmp_path) as client:
         resp = await client.get("/assets/js/htmx.min.js")

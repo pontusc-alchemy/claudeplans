@@ -5,13 +5,13 @@ set -euo pipefail
 export PYTHONPATH="/work/packages/contracts/src:/work/packages/server/src:/work/packages/cli/src"
 
 echo "== ruff (lint) =="
-ruff check packages tests
+ruff check packages tests scripts
 
 echo "== ruff (format check) =="
-ruff format --check packages tests
+ruff format --check packages tests scripts
 
 echo "== ty (type check) =="
-ty check packages tests --python /opt/venv
+ty check packages tests scripts --python /opt/venv
 
 echo "== pytest =="
 pytest

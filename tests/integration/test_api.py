@@ -19,11 +19,12 @@ from claudeplans.main import create_app
 BASE = "/v1/users/dev/projects/demo/docs"
 
 
-def _client(tmp_path: Path) -> httpx.AsyncClient:
+def _client(tmp_path: Path, version: str = "dev") -> httpx.AsyncClient:
     app = create_app(
         Settings(
             auth_mode=AuthMode.noop,
             filesystem=FilesystemSettings(root=str(tmp_path)),
+            version=version,
         )
     )
     return httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
@@ -310,8 +311,14 @@ async def test_status_reports_version_and_backend(
     health_client: httpx.AsyncClient,
 ) -> None:
     body = (await health_client.get("/status")).json()
-    assert body["version"] == "0.1.0"
+    assert body["version"] == "dev"
     assert body["storage_backend"] == "filesystem"
+
+
+async def test_status_reports_configured_version(tmp_path: Path) -> None:
+    async with _client(tmp_path, version="1.2.3") as client:
+        resp = await client.get("/status")
+        assert resp.json()["version"] == "1.2.3"
 
 
 async def test_openapi_schema_has_version_and_v1_paths(tmp_path: Path) -> None:
@@ -319,7 +326,7 @@ async def test_openapi_schema_has_version_and_v1_paths(tmp_path: Path) -> None:
         resp = await client.get("/openapi.json")
         assert resp.status_code == 200
         schema = resp.json()
-        assert schema["info"]["version"] == "0.1.0"
+        assert schema["info"]["version"] == "dev"
         assert any(path.startswith("/v1/") for path in schema["paths"])
 
 

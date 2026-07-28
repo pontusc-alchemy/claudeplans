@@ -30,6 +30,9 @@
 body.md-typeset {
   margin: 0;
   padding: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   color: var(--fg);
   background: var(--bg);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
@@ -68,6 +71,7 @@ body.md-typeset {
 .layout {
   display: flex;
   align-items: flex-start;
+  flex: 1 1 auto;
 }
 
 .sidebar {
@@ -92,6 +96,17 @@ body.md-typeset {
 .content {
   flex: 1 1 auto;
   min-width: 0;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-version {
+  margin-top: auto;
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+  text-align: center;
 }
 
 .doc,

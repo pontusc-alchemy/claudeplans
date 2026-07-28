@@ -42,6 +42,10 @@ class Settings(BaseSettings):
         extra="forbid",
     )
 
+    # App version shown in /status, the OpenAPI schema, and the page footer
+    # (CLAUDEPLANS_VERSION). The serve image sets it from the release tag; every
+    # other environment defaults to "dev".
+    version: str = "dev"
     storage_backend: StorageBackend = StorageBackend.filesystem
     auth_mode: AuthMode = AuthMode.iap  # fail-closed default
     filesystem: FilesystemSettings = FilesystemSettings()
