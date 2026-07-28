@@ -3,6 +3,8 @@
 These pin the self-invalidation contract (new rev = new key), the LRU bound so a
 long-lived process can't grow the cache without limit, and tenant isolation: two
 docs sharing a slug across owners (same rev "1") must not collide on the cache key.
+`invalidate` covers the one case rev-keying can't self-invalidate: a deleted doc's
+entries must be dropped before its slug can be re-created and restart at rev "1".
 """
 
 from claudeplans.cache import FragmentCache
@@ -86,3 +88,28 @@ def test_lru_hit_refreshes_recency() -> None:
     # r2 was the oldest and got evicted, so re-asking re-renders it.
     assert cache.get_or_render("s", "r2", lambda: make("r2")) == "r2"
     assert counts["r2"] == 2
+
+
+def test_invalidate_drops_all_revs_of_the_doc_key() -> None:
+    cache = FragmentCache()
+    cache.get_or_render("s", "r1", lambda: "old-r1")
+    cache.get_or_render("s", "r2", lambda: "old-r2")
+
+    cache.invalidate("s")
+
+    # Both revs were dropped, so re-asking re-renders rather than serving the stale
+    # cached body (the delete-then-recreate scenario: the new incarnation restarts
+    # at rev "1" and must not collide with a dead incarnation's entry).
+    assert cache.get_or_render("s", "r1", lambda: "new-r1") == "new-r1"
+    assert cache.get_or_render("s", "r2", lambda: "new-r2") == "new-r2"
+
+
+def test_invalidate_leaves_other_doc_keys_untouched() -> None:
+    cache = FragmentCache()
+    cache.get_or_render("s1", "r1", lambda: "s1-body")
+    cache.get_or_render("s2", "r1", lambda: "s2-body")
+
+    cache.invalidate("s1")
+
+    # s2's entry survives untouched (still a hit — never re-rendered).
+    assert cache.get_or_render("s2", "r1", lambda: "s2-rerendered") == "s2-body"

@@ -9,6 +9,10 @@ for repeatedly (every SSE reconnect, every viewer of an unchanged doc), so memoi
 it. The cache is SELF-INVALIDATING: a write produces a new rev, hence a new key, so
 a stale body is never served; old revs simply age out by LRU. Bounding the size
 caps memory for a long-lived process churning through many docs.
+
+The one exception: rev-keying only self-invalidates across *writes*. Document
+deletion must call `invalidate()` because a re-created doc restarts its rev counter
+at "1", so the dead incarnation's entries would collide with the new one's revs.
 """
 
 from collections import OrderedDict
@@ -43,3 +47,14 @@ class FragmentCache:
         if len(self._entries) > self._maxsize:
             self._entries.popitem(last=False)
         return body
+
+    def invalidate(self, doc_key: str) -> None:
+        """Drop every cached entry for `doc_key`, at any rev.
+
+        A re-created doc restarts its rev counter at "1", so a deleted doc's
+        entries left in the cache would collide with the new incarnation's revs
+        and serve stale HTML. O(n) scan over the OrderedDict, which is fine at
+        the default maxsize — deletion is not a hot path.
+        """
+        for key in [key for key in self._entries if key[0] == doc_key]:
+            del self._entries[key]

@@ -12,6 +12,7 @@ from claudeplans_contracts import validate_rev
 
 from ..auth.provider import CurrentUser, UserProvider
 from ..auth.registry import UserRegistry
+from ..cache import FragmentCache
 from ..config import Settings
 from ..events import EventFeed
 from ..projects import ProjectRegistry
@@ -32,6 +33,11 @@ def get_feed(request: Request) -> EventFeed:
 def get_search_index(request: Request) -> SearchIndex:
     """The process-wide search index, built at startup and kept fresh via the feed."""
     return request.app.state.search_index
+
+
+def get_render_cache(request: Request) -> FragmentCache:
+    """The process-wide rendered doc-body cache, built in create_app (not lifespan)."""
+    return request.app.state.render_cache
 
 
 async def get_current_user(request: Request) -> CurrentUser:
@@ -88,6 +94,7 @@ def require_optional_if_match(
 RepoDep = Annotated[Repository, Depends(get_repo)]
 FeedDep = Annotated[EventFeed, Depends(get_feed)]
 SearchIndexDep = Annotated[SearchIndex, Depends(get_search_index)]
+RenderCacheDep = Annotated[FragmentCache, Depends(get_render_cache)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 IfMatchDep = Annotated[str, Depends(require_if_match)]
 OptionalIfMatchDep = Annotated[str | None, Depends(require_optional_if_match)]
