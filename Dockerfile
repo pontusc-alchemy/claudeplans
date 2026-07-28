@@ -27,6 +27,8 @@ RUN uv sync --locked --no-dev --no-editable --package claudeplans
 FROM python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061 AS serve
 ENV PATH=/opt/venv/bin:$PATH \
     PYTHONUNBUFFERED=1
+ARG APP_VERSION=dev
+ENV CLAUDEPLANS_VERSION=$APP_VERSION
 # Non-root runtime user; --chown gives it the venv it needs to read.
 RUN useradd --no-create-home --uid 10001 app
 # Writable state dir for the filesystem backend, owned by app. A FRESH named volume

@@ -13,6 +13,7 @@ auditable exceptions.
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any, cast
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -28,6 +29,13 @@ env = Environment(
     loader=FileSystemLoader(_TEMPLATE_DIR),
     autoescape=select_autoescape(default=True, default_for_string=True),
 )
+
+
+def set_app_version(version: str) -> None:
+    """Expose the running app version to every template as `app_version`."""
+    # cast: ty narrows `env.globals` to Jinja's default-namespace literal dict,
+    # which rejects plain-str values; the attribute is a str->Any mapping.
+    cast("dict[str, Any]", env.globals)["app_version"] = version
 
 
 def _phase_overview(doc: Document) -> list[dict[str, object]]:

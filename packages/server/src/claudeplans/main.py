@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 from starlette.types import Scope
 
+from . import templates
 from .api import install
 from .api.limits import BodySizeLimitMiddleware
 from .auth.provider import IapProvider, NoopProvider, UserProvider
@@ -78,13 +79,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     fail_closed_check(settings)
     app = FastAPI(
         title="claudeplans",
-        version="0.1.0",
+        version=settings.version,
         lifespan=lifespan,
         description="Structured CRUD plan service. Interactive API docs at /docs.",
     )
     # Build the repo and stash settings/repo on app.state so the dependency
     # accessors hand them to routes; then mount the API.
     app.state.settings = settings
+    templates.set_app_version(settings.version)
     app.state.repo = FilesystemRepository(settings.filesystem.root)
     app.state.user_provider = select_provider(settings)
     # User registry (display names for the switcher). Path is OUTSIDE the storage

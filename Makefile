@@ -10,21 +10,21 @@ venv: ## Create/refresh the local uv venv (all members, for editor + ty LSP).
 	$(UV) sync --all-packages
 
 lint: venv ## Ruff lint.
-	$(UV) run ruff check packages tests
+	$(UV) run ruff check packages tests scripts
 
 fmt: venv ## Ruff format (writes).
-	$(UV) run ruff format packages tests
+	$(UV) run ruff format packages tests scripts
 
 typecheck: venv ## ty type check.
-	$(UV) run ty check packages tests
+	$(UV) run ty check packages tests scripts
 
 test: venv ## Pytest suite.
 	$(UV) run pytest
 
 check: venv ## Full local quality gate (matches scripts/ci.sh).
-	$(UV) run ruff check packages tests
-	$(UV) run ruff format --check packages tests
-	$(UV) run ty check packages tests
+	$(UV) run ruff check packages tests scripts
+	$(UV) run ruff format --check packages tests scripts
+	$(UV) run ty check packages tests scripts
 	$(UV) run pytest
 
 bake-ci: ## Build the ci image.
