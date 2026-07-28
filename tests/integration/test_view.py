@@ -166,6 +166,42 @@ def test_research_body_has_no_phase_blocks() -> None:
     assert 'id="phase-' not in body
 
 
+def test_checklist_renders_checked_and_unchecked_inputs() -> None:
+    # The checkbox is a native disabled <input> (not a Unicode glyph, which some
+    # Chromium/Linux setups render as a checkless box regardless of state) — confirm
+    # `checked` shows up on the checked task's input and not on the unchecked one.
+    doc = Document(
+        type=DocType.plan,
+        project="demo",
+        slug="p1",
+        title="Plan One",
+        owner_id="dev",
+        phases=[
+            Phase(
+                slug="a",
+                name="Alpha",
+                tasks=[
+                    Task(text="done thing", checked=True),
+                    Task(text="todo thing", checked=False),
+                ],
+            )
+        ],
+    )
+    body = templates.render_doc_body(doc)
+    task_lines = [line for line in body.splitlines() if "task-check" in line]
+    assert len(task_lines) == 2
+    checked_line, unchecked_line = task_lines
+    assert (
+        '<label><input type="checkbox" class="task-check" checked disabled>'
+        " done thing</label>" in checked_line
+    )
+    assert (
+        '<label><input type="checkbox" class="task-check" disabled>'
+        " todo thing</label>" in unchecked_line
+    )
+    assert "checked" not in unchecked_line
+
+
 async def test_lineage_page_renders(tmp_path: Path) -> None:
     async with _client(tmp_path) as client:
         await client.post(
