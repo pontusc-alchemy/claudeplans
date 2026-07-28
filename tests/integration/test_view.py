@@ -666,6 +666,49 @@ async def test_delete_while_watching_emits_removed_frame(live_server: str) -> No
             assert any("This document was removed." in line for line in frame)
 
 
+async def test_delete_then_recreate_does_not_serve_stale_cached_rev(
+    live_server: str,
+) -> None:
+    # Regression for issue 16: the render cache keys on (doc key, rev), and a
+    # re-created doc restarts its rev counter at "1" — colliding with the deleted
+    # incarnation's cached rev-1 entry unless delete explicitly invalidates it. The
+    # two incarnations carry distinct task TEXT (not checkbox state) so this stays a
+    # pure "stale cached body served" check, independent of checkbox markup.
+    async with httpx.AsyncClient(base_url=live_server) as client:
+        first_body = {
+            "type": "plan",
+            "slug": "p1",
+            "title": "Plan One",
+            "phases": [{"slug": "a", "name": "Alpha", "tasks": [{"text": "first"}]}],
+        }
+        created = await client.post(DOCS, json=first_body)
+        rev = created.headers["etag"]
+
+        # Warm the render cache at (key, rev="1") with the first incarnation's body.
+        async with client.stream("GET", EVENTS) as r:
+            first = await asyncio.wait_for(_read_frame(r.aiter_lines()), 5)
+            assert any("first" in line for line in first)
+
+        deleted = await client.delete(f"{DOCS}/p1", headers={"If-Match": rev})
+        assert deleted.status_code == 204
+
+        second_body = {
+            "type": "plan",
+            "slug": "p1",
+            "title": "Plan One",
+            "phases": [{"slug": "a", "name": "Alpha", "tasks": [{"text": "second"}]}],
+        }
+        recreated = await client.post(DOCS, json=second_body)
+        assert recreated.headers["etag"] == "1"  # restarts at the same rev as before
+
+        # A fresh connection's snapshot must reflect the new incarnation's text, not
+        # the stale rev-1 entry left by the deleted one.
+        async with client.stream("GET", EVENTS) as r:
+            frame = await asyncio.wait_for(_read_frame(r.aiter_lines()), 5)
+            assert any("second" in line for line in frame)
+            assert not any("first" in line for line in frame)
+
+
 async def test_sidebar_collapsible_and_indicators(tmp_path: Path) -> None:
     async with _client(tmp_path) as client:
         await client.post(DOCS, json=PLAN_BODY)

@@ -17,7 +17,7 @@ from claudeplans_contracts import (
 
 from .. import core
 from ..events import Event
-from .deps import CurrentUserDep, FeedDep, IfMatchDep, RepoDep
+from .deps import CurrentUserDep, FeedDep, IfMatchDep, RenderCacheDep, RepoDep
 from .envelope import ResponseEnvelope, envelope
 
 router = APIRouter(prefix="/v1/users/{uid}/projects/{project}/docs", tags=["documents"])
@@ -78,9 +78,13 @@ async def delete(
     repo: RepoDep,
     user: CurrentUserDep,
     feed: FeedDep,
+    render_cache: RenderCacheDep,
 ) -> Response:
     key = document_key(uid, project, slug)
     await core.delete_document(repo, key, expected_rev, user=user)
+    # A re-created doc restarts revs at "1", which would collide with a dead
+    # incarnation's cached entries at the same rev — drop them all now.
+    render_cache.invalidate(key)
     # No new rev for a delete; a viewer's SSE reloads at expected_rev -> NotFound ->
     # the deleted frame.
     feed.publish(Event(key=key, rev=expected_rev))
