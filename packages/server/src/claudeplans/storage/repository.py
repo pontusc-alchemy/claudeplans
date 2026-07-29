@@ -34,8 +34,9 @@ class ListEntry:
     """One entry from a prefix listing: the key, its current rev, and metadata.
 
     `metadata` carries listing-time fields every backend must provide without a full
-    body fetch: `created_at`, `updated_at`, `title`, `type`, `status`. (The filesystem
-    backend reads them from the envelope; GCS sources them from object custom metadata.)
+    body fetch: `created_at`, `updated_at`, `title`, `type`, `status`, and
+    `primary_parent_ref` (empty string for a root). The last is what lets the lineage
+    fold, the ancestor walk and the acyclicity guard run without loading bodies.
     """
 
     key: str
