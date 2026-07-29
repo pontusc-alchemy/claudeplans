@@ -285,8 +285,22 @@ class ProjectList(BaseModel):
     items: list[ProjectEntry]
 
 
-class LineagePlanRef(BaseModel):
-    """A plan reduced to what the lineage surface needs to link and label it."""
+class LineageChildRef(BaseModel):
+    """A doc reduced to what a backlink needs to link and label it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    slug: str
+    title: str
+
+
+class LineageNode(BaseModel):
+    """A doc plus the docs nested beneath it, to any depth.
+
+    The field set must stay exactly equal to `lineage.DocNode`'s: the API validates
+    `dataclasses.asdict(...)` against this model, and `extra="forbid"` turns any
+    drift into a 422 rather than a silently dropped branch.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -296,27 +310,19 @@ class LineagePlanRef(BaseModel):
     project: str
     status: DocStatus
     type: DocType
-
-
-class LineageResearchNode(BaseModel):
-    """A research doc plus the plans related to it in the lineage tree."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    slug: str
-    title: str
-    owner_id: str
-    project: str
-    status: DocStatus
-    type: DocType
-    plans: list[LineagePlanRef]
-    backlinks: list[LineagePlanRef]
+    children: list[LineageNode] = []
+    backlinks: list[LineageChildRef] = []
 
 
 class LineageResponse(BaseModel):
-    """The full lineage tree: research roots plus orphaned plans."""
+    """The derived forest: every doc with no resolvable parent, plus its subtree."""
 
     model_config = ConfigDict(extra="forbid")
 
-    research: list[LineageResearchNode]
-    unlinked_plans: list[LineagePlanRef]
+    roots: list[LineageNode] = []
+    over_cap: list[str] = []
+
+
+# `children` is self-referential, so the annotation is a forward ref that only
+# resolves once the class exists.
+LineageNode.model_rebuild()

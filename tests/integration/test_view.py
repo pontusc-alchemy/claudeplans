@@ -228,9 +228,12 @@ async def test_lineage_page_renders(tmp_path: Path) -> None:
         assert "Plan One" in body
         # The plan link nests under the research node, so it follows it in the markup.
         assert body.index("Research One") < body.index("Plan One")
-        # Human-facing section headings (not the internal "lineage"/"Unlinked plans").
-        assert "<h2>Research</h2>" in body
-        assert "<h2>Plans</h2>" in body
+        # One recursive tree replaces the Research/Plans/unlinked tri-split, so p1
+        # nests under r1 and p2 sits beside it as a second root.
+        main = body[body.index('<main class="lineage"') : body.index("</main>")]
+        assert main.count('class="doc-node"') == 3
+        assert main.count('class="doc-tree"') == 2
+        assert "<h2>Research</h2>" not in main
         assert "Unlinked plans" not in body
 
 
@@ -443,7 +446,7 @@ async def test_view_page_shows_lineage_trail_for_child_plan(
         resp = await client.get(VIEW)
         assert resp.status_code == 200
         body = resp.text
-        assert 'class="doc-lineage-trail"' in body
+        assert "doc-lineage-trail" in body
         assert "Research One" in body  # the parent's title labels the trail
         assert "▸" in body  # the separator between parent and current
         # The parent link resolves to the research doc's own view page.
@@ -520,7 +523,7 @@ async def test_view_page_shows_subdoc_index_on_parent_research(
         resp = await client.get(f"{DOCS}/r1/view")
         assert resp.status_code == 200
         body = resp.text
-        assert 'class="doc-subdoc-index"' in body
+        assert "doc-subdoc-index" in body
         assert "Plan One" in body and "Plan Two" in body
         # Each child links to its own view page, listed in slug order.
         assert 'href="/v1/users/dev/projects/demo/docs/p1/view"' in body
@@ -806,17 +809,17 @@ async def test_sidebar_indicators_non_default_status_and_research_type(
         assert 'class="doc-type doc-type-research"' in body
 
 
-async def test_lineage_json_unlinked_plan_carries_status_and_type(
+async def test_lineage_json_root_carries_status_and_type(
     tmp_path: Path,
 ) -> None:
-    # Each unlinked-plan entry in the JSON lineage must expose `status` and `type`
-    # so callers never have to fetch the full doc to render a label.
+    # Every node in the JSON lineage exposes `status` and `type`, so callers never
+    # have to fetch the full doc to render a label.
     async with _client(tmp_path) as client:
         await client.post(DOCS, json=PLAN_BODY)  # slug=p1, type=plan, status=draft
         resp = await client.get("/v1/users/dev/projects/demo/lineage")
         assert resp.status_code == 200
         data = resp.json()
-        plan = next(p for p in data["unlinked_plans"] if p["slug"] == "p1")
+        plan = next(r for r in data["roots"] if r["slug"] == "p1")
         assert plan["type"] == "plan"
         assert plan["status"] == "draft"
 
@@ -925,7 +928,7 @@ async def test_lineage_json_excludes_archived_docs(tmp_path: Path) -> None:
         resp = await client.get("/v1/users/dev/projects/demo/lineage")
         assert resp.status_code == 200
         data = resp.json()
-        assert [p["slug"] for p in data["unlinked_plans"]] == ["p1"]
+        assert [r["slug"] for r in data["roots"]] == ["p1"]
 
 
 # --- templates: field-map rendering ------------------------------------------

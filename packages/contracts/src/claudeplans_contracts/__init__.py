@@ -19,8 +19,8 @@ from .dto import DocStatusRequest as DocStatusRequest
 from .dto import DocumentCreate as DocumentCreate
 from .dto import DriftWarning as DriftWarning
 from .dto import EditTaskRequest as EditTaskRequest
-from .dto import LineagePlanRef as LineagePlanRef
-from .dto import LineageResearchNode as LineageResearchNode
+from .dto import LineageChildRef as LineageChildRef
+from .dto import LineageNode as LineageNode
 from .dto import LineageResponse as LineageResponse
 from .dto import MovePhaseRequest as MovePhaseRequest
 from .dto import MoveSectionRequest as MoveSectionRequest

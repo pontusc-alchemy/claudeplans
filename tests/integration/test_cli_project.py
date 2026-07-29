@@ -11,7 +11,6 @@ from claudeplans_contracts import ExitCode
 
 @pytest.mark.usefixtures("patched_cli")
 def test_project_lineage_json_shape() -> None:
-    # Create a plan doc; lineage should have research+unlinked_plans keys.
     runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=VALID_CREATE
     )
@@ -21,45 +20,82 @@ def test_project_lineage_json_shape() -> None:
     assert "data" in parsed
     assert "warnings" in parsed
     lineage = parsed["data"]
-    assert "research" in lineage
-    assert "unlinked_plans" in lineage
-    # The plan (no primary_parent_ref) lands in unlinked_plans.
-    slugs = [p["slug"] for p in lineage["unlinked_plans"]]
-    assert "p1" in slugs
+    assert set(lineage) == {"roots", "over_cap"}
+    # A doc with no parent is a root of the tree.
+    assert [r["slug"] for r in lineage["roots"]] == ["p1"]
+
+
+def _create(project: str, **fields: object) -> None:
+    runner.invoke(
+        cli.app,
+        ["doc", "create", project, "--from-json", "-"],
+        input=json.dumps(fields),
+    )
 
 
 @pytest.mark.usefixtures("patched_cli")
-def test_project_lineage_linked_plan_appears_under_research_node() -> None:
-    # Create a research doc and a plan that cites it as primary; the plan must
-    # appear under the research node's `plans` list and NOT in `unlinked_plans`.
-    research_body = json.dumps({"type": "research", "slug": "r1", "title": "R One"})
-    plan_body = json.dumps(
-        {
-            "type": "plan",
-            "slug": "pl1",
-            "title": "Plan",
-            "primary_parent_ref": "r1",
-            "research_refs": ["r1"],
-        }
-    )
-    runner.invoke(
-        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=research_body
-    )
-    runner.invoke(
-        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=plan_body
+def test_project_lineage_nests_a_child_under_its_parent() -> None:
+    _create("demo", type="research", slug="r1", title="R One")
+    _create(
+        "demo",
+        type="plan",
+        slug="pl1",
+        title="Plan",
+        primary_parent_ref="r1",
+        research_refs=["r1"],
     )
     result = runner.invoke(cli.app, ["project", "lineage", "demo"])
     assert result.exit_code == 0
-    parsed = json.loads(result.stdout)
-    lineage = parsed["data"]
-    # Research node for r1 must exist and contain pl1 in plans.
-    research_nodes = {n["slug"]: n for n in lineage["research"]}
-    assert "r1" in research_nodes
-    plan_slugs_under_r1 = [p["slug"] for p in research_nodes["r1"]["plans"]]
-    assert "pl1" in plan_slugs_under_r1
-    # pl1 must NOT appear in unlinked_plans.
-    unlinked_slugs = [p["slug"] for p in lineage["unlinked_plans"]]
-    assert "pl1" not in unlinked_slugs
+    roots = json.loads(result.stdout)["data"]["roots"]
+    assert [r["slug"] for r in roots] == ["r1"]
+    assert [c["slug"] for c in roots[0]["children"]] == ["pl1"]
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_project_lineage_nests_to_depth_three() -> None:
+    """The shape a two-level fold could not express at all."""
+    _create("demo", type="research", slug="a", title="A")
+    _create(
+        "demo",
+        type="plan",
+        slug="b",
+        title="B",
+        primary_parent_ref="a",
+        research_refs=["a"],
+    )
+    _create(
+        "demo",
+        type="plan",
+        slug="c",
+        title="C",
+        primary_parent_ref="b",
+        research_refs=["b"],
+    )
+    result = runner.invoke(cli.app, ["project", "lineage", "demo"])
+    assert result.exit_code == 0
+    roots = json.loads(result.stdout)["data"]["roots"]
+    assert roots[0]["slug"] == "a"
+    assert roots[0]["children"][0]["slug"] == "b"
+    assert roots[0]["children"][0]["children"][0]["slug"] == "c"
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_project_lineage_nests_a_research_doc_under_a_plan() -> None:
+    """`type` is orthogonal to tree position — any doc may parent any doc."""
+    _create("demo", type="plan", slug="parent-plan", title="Parent")
+    _create(
+        "demo",
+        type="research",
+        slug="child-research",
+        title="Child",
+        primary_parent_ref="parent-plan",
+        research_refs=["parent-plan"],
+    )
+    result = runner.invoke(cli.app, ["project", "lineage", "demo"])
+    assert result.exit_code == 0
+    roots = json.loads(result.stdout)["data"]["roots"]
+    assert [r["slug"] for r in roots] == ["parent-plan"]
+    assert [c["slug"] for c in roots[0]["children"]] == ["child-research"]
 
 
 @pytest.mark.usefixtures("patched_cli")

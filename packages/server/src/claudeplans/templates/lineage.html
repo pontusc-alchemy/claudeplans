@@ -1,60 +1,24 @@
 {% extends "base.html" %}
+{% macro doc_tree(nodes) %}
+<ul class="doc-tree">
+  {% for n in nodes %}
+  <li class="doc-node">
+    <a class="doc-node-title" href="{{ n.view_url }}">{{ n.title }}</a>
+    {% if n.children %}{{ doc_tree(n.children) }}{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endmacro %}
 {% block content %}
 <main class="lineage" id="lineage">
   <h1>{{ title }}</h1>
-  {% if lineage.research %}
-  <h2>Research</h2>
-  <ul class="research-roots">
-    {% for r in lineage.research %}
-    <li class="research-node">
-      <a class="research-title" href="{{ r.view_url }}">{{ r.title }}</a>
-      {% if r.plans %}
-      <ul class="plans">
-        {% for p in r.plans %}
-        <li class="plan"><a href="{{ p.view_url }}">{{ p.title }}</a></li>
-        {% endfor %}
-      </ul>
-      {% endif %}
-    </li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-  {% if lineage.unlinked_plans %}
-  <h2>Plans</h2>
-  <ul class="unlinked-plans">
-    {% for p in lineage.unlinked_plans %}
-    <li class="plan"><a href="{{ p.view_url }}">{{ p.title }}</a></li>
-    {% endfor %}
-  </ul>
+  {% if lineage.roots %}
+  {{ doc_tree(lineage.roots) }}
   {% endif %}
   {% if archived %}
   <details class="archived-group">
     <summary>Archived</summary>
-    {% if archived.research %}
-    <h2>Research</h2>
-    <ul class="research-roots">
-      {% for r in archived.research %}
-      <li class="research-node">
-        <a class="research-title" href="{{ r.view_url }}">{{ r.title }}</a>
-        {% if r.plans %}
-        <ul class="plans">
-          {% for p in r.plans %}
-          <li class="plan"><a href="{{ p.view_url }}">{{ p.title }}</a></li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-      </li>
-      {% endfor %}
-    </ul>
-    {% endif %}
-    {% if archived.unlinked_plans %}
-    <h2>Plans</h2>
-    <ul class="unlinked-plans">
-      {% for p in archived.unlinked_plans %}
-      <li class="plan"><a href="{{ p.view_url }}">{{ p.title }}</a></li>
-      {% endfor %}
-    </ul>
-    {% endif %}
+    {{ doc_tree(archived.roots) }}
   </details>
   {% endif %}
 </main>

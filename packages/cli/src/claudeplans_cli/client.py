@@ -22,6 +22,7 @@ from claudeplans_contracts import (
     EditTaskRequest,
     Forbidden,
     InvalidRev,
+    LineageResponse,
     MovePhaseRequest,
     MoveSectionRequest,
     NotFound,
@@ -539,8 +540,14 @@ class PlanClient:
         return resp.json()  # type: ignore[return-value]
 
     def lineage(self, uid: str, project: str) -> object:
-        """GET /v1/users/{uid}/projects/{project}/lineage → lineage dict plain JSON."""
-        return self._get_json(f"/v1/users/{_seg(uid)}/projects/{_seg(project)}/lineage")
+        """GET /v1/users/{uid}/projects/{project}/lineage → the nested doc tree.
+
+        Parsed through LineageResponse rather than emitted raw: the model forbids
+        extra keys, so a server whose shape has drifted fails loud here instead of
+        the CLI quietly printing something its caller cannot read.
+        """
+        raw = self._get_json(f"/v1/users/{_seg(uid)}/projects/{_seg(project)}/lineage")
+        return LineageResponse.model_validate(raw).model_dump(mode="json")
 
     def get_rev(self, uid: str, project: str, slug: str) -> str:
         """HEAD the document and return its ETag (rev) without fetching the body."""
