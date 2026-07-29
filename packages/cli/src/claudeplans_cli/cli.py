@@ -35,6 +35,7 @@ from .commands import search as search_cmd
 from .config import read_config
 from .context import AppContext
 from .errors import ExitCode, _emit_error
+from .identity import resolve_uid
 
 app = typer.Typer(name="claudeplans", no_args_is_help=True)
 
@@ -99,7 +100,7 @@ def _root(
         or cfg.get("url")
         or "http://127.0.0.1:8000"
     )
-    resolved_uid = uid or os.environ.get("CLAUDEPLANS_UID") or cfg.get("uid") or "dev"
+    resolved_uid = resolve_uid(uid, cfg.get("uid"))
     try:
         client = build_client(resolved_url)
     except httpx.InvalidURL as exc:

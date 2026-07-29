@@ -12,6 +12,7 @@ domain errors map to stable process exit codes shared with the server via
 | `config.py` | XDG config file reader/writer (persistent url/uid defaults). |
 | `context.py` | The per-invocation application context carried on Typer's `ctx.obj`. |
 | `errors.py` | Domain-error → exit-code mapping and the command error boundary. |
+| `identity.py` | Which namespace an invocation targets: the uid precedence chain and the machine-derived default within it. |
 | `output.py` | Compact-JSON rendering of read/write replies. |
 | `prose.py` | Prose-field resolution: inline flag vs `--<flag>-file` vs stdin. |
 | `commands/` | One module per resource group: `doc`, `phase`, `task`, `section`, `project`, `config`, `search`, `schema`, `doctor`. |
