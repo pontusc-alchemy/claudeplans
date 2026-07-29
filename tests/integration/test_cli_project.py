@@ -20,7 +20,7 @@ def test_project_lineage_json_shape() -> None:
     assert "data" in parsed
     assert "warnings" in parsed
     lineage = parsed["data"]
-    assert set(lineage) == {"roots", "over_cap"}
+    assert set(lineage) == {"roots", "over_cap", "cycle_roots"}
     # A doc with no parent is a root of the tree.
     assert [r["slug"] for r in lineage["roots"]] == ["p1"]
 

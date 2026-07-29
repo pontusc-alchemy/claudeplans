@@ -54,14 +54,32 @@ class Lineage:
 
     `over_cap` names children elided at MAX_LINEAGE_DEPTH, so a too-deep chain is
     reportable rather than silently short.
+
+    `cycle_roots` names docs promoted to roots to break a parent cycle. A cycle has
+    no entry point, so without this its members would appear on no surface at all.
     """
 
     roots: tuple[DocNode, ...] = ()
     over_cap: tuple[str, ...] = ()
+    cycle_roots: tuple[str, ...] = ()
 
 
 def _child_ref(doc: Document) -> ChildRef:
     return ChildRef(slug=doc.slug, title=doc.title)
+
+
+def _reachable(seeds: set[str], children_of: dict[str, list[Document]]) -> set[str]:
+    """Every slug reachable downward from `seeds`. Visited-guarded, so a cycle in
+    the adjacency terminates instead of spinning."""
+    seen: set[str] = set()
+    stack = list(seeds)
+    while stack:
+        slug = stack.pop()
+        if slug in seen:
+            continue
+        seen.add(slug)
+        stack.extend(c.slug for c in children_of.get(slug, []))
+    return seen
 
 
 def build_lineage(docs: Iterable[Document]) -> Lineage:
@@ -92,6 +110,25 @@ def build_lineage(docs: Iterable[Document]) -> Lineage:
             children_of.setdefault(parent, []).append(doc)
         else:
             roots.append(doc)
+
+    # A cycle has no root, so nothing above would ever reach it. Break the lowest
+    # slug in each one and say so, rather than let a doc vanish from every surface.
+    cycle_roots: list[str] = []
+    placed = _reachable({r.slug for r in roots}, children_of)
+    for slug in sorted(set(by_slug) - placed):
+        if slug in placed:
+            continue
+        parent = by_slug[slug].primary_parent_ref
+        if parent is not None:
+            children_of[parent] = [c for c in children_of[parent] if c.slug != slug]
+        roots.append(by_slug[slug])
+        cycle_roots.append(slug)
+        logger.warning(
+            "parent cycle through %r; promoting it to a root so it stays reachable",
+            slug,
+        )
+        placed |= _reachable({slug}, children_of)
+    roots.sort(key=lambda d: d.slug)
 
     backlinks_of: dict[str, list[ChildRef]] = {}
     for doc in by_slug.values():
@@ -128,6 +165,7 @@ def build_lineage(docs: Iterable[Document]) -> Lineage:
     return Lineage(
         roots=tuple(node(d, 1) for d in roots),
         over_cap=tuple(sorted(over_cap)),
+        cycle_roots=tuple(cycle_roots),
     )
 
 

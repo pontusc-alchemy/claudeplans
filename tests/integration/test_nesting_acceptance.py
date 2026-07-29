@@ -3,6 +3,7 @@ not render, the caller shapes that asked for it, and the v1-store guarantee."""
 
 import json
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -10,6 +11,7 @@ from _view_harness import DOCS, client_for
 
 from claudeplans.storage.filesystem import FilesystemRepository
 from claudeplans.storage.repository import CREATE
+from claudeplans_contracts import MAX_LINEAGE_DEPTH
 
 PROJECT = "/v1/users/dev/projects/demo"
 
@@ -244,3 +246,127 @@ async def test_a_v1_doc_migrates_on_read(tmp_path: Path) -> None:
         body = (await client.get(f"{DOCS}/p1")).json()["data"]
         assert body["primary_parent_ref"] == "r1"
         assert "primary_research_ref" not in json.dumps(body)
+
+
+# --- the write-time depth cap ---
+
+
+async def _chain_of(client: httpx.AsyncClient, n: int, prefix: str = "d") -> None:
+    """A root plus n-1 descendants: d00 -> d01 -> ... -> d{n-1}."""
+    await _create(client, f"{prefix}00", type="research", title="Root")
+    for i in range(1, n):
+        await _create(
+            client, f"{prefix}{i:02d}", primary_parent_ref=f"{prefix}{i - 1:02d}"
+        )
+
+
+async def test_create_past_the_depth_cap_is_rejected(tmp_path: Path) -> None:
+    async with client_for(tmp_path) as client:
+        await _chain_of(client, MAX_LINEAGE_DEPTH)
+        resp = await client.post(
+            DOCS,
+            json={
+                "type": "plan",
+                "slug": "too-deep",
+                "title": "Too deep",
+                "research_refs": [f"d{MAX_LINEAGE_DEPTH - 1:02d}"],
+                "primary_parent_ref": f"d{MAX_LINEAGE_DEPTH - 1:02d}",
+            },
+        )
+        assert resp.status_code == 422
+        assert str(MAX_LINEAGE_DEPTH) in resp.text
+
+
+async def test_reparenting_a_deep_subtree_past_the_cap_is_rejected(
+    tmp_path: Path,
+) -> None:
+    """Moving a doc carries its descendants, so the check spans both directions.
+
+    Each chain alone fits; joined they would not. Validating only the moved doc's
+    own chain would let its descendants land past the cap, surfacing later only as
+    silent truncation.
+    """
+    half = MAX_LINEAGE_DEPTH // 2 + 2
+    async with client_for(tmp_path) as client:
+        await _chain_of(client, half, prefix="a")
+        await _chain_of(client, half, prefix="b")
+        resp = await client.put(
+            f"{DOCS}/b00/research-refs",
+            json={
+                "research_refs": [f"a{half - 1:02d}"],
+                "primary_parent_ref": f"a{half - 1:02d}",
+            },
+        )
+        assert resp.status_code == 422
+        assert "past the limit" in resp.text
+
+
+async def test_reparenting_a_shallow_subtree_within_the_cap_succeeds(
+    tmp_path: Path,
+) -> None:
+    """The cap must not reject a legal move — the guard is a bound, not a wall."""
+    async with client_for(tmp_path) as client:
+        await _chain_of(client, 3, prefix="a")
+        await _chain_of(client, 3, prefix="b")
+        resp = await client.put(
+            f"{DOCS}/b00/research-refs",
+            json={"research_refs": ["a02"], "primary_parent_ref": "a02"},
+        )
+        assert resp.status_code == 200
+
+
+async def test_a_pre_existing_on_disk_cycle_still_surfaces(tmp_path: Path) -> None:
+    """The base server had no acyclicity check, so a stored cycle is reachable data.
+
+    A cycle has no root, so the fold would never enter it and both docs would be
+    absent from the sidebar, the lineage page and the JSON — with no warning. They
+    are promoted to roots and named instead.
+    """
+    repo = FilesystemRepository(tmp_path)
+    for slug, other in (("a", "b"), ("b", "a")):
+        await repo.put(
+            f"dev/demo/{slug}",
+            {
+                "schema_version": 1,
+                "type": "research",
+                "project": "demo",
+                "slug": slug,
+                "title": slug.upper(),
+                "owner_id": "dev",
+                "research_refs": [other],
+                "primary_research_ref": other,
+            },
+            CREATE,
+        )
+    async with client_for(tmp_path) as client:
+        lineage = (await client.get(f"{PROJECT}/lineage")).json()
+        assert lineage["cycle_roots"] == ["a"]
+
+        def slugs(nodes: list[Any]) -> set[str]:
+            out: set[str] = set()
+            for n in nodes:
+                out.add(str(n["slug"]))
+                out |= slugs(n["children"])
+            return out
+
+        assert slugs(lineage["roots"]) == {"a", "b"}
+        # And they are reachable in the browsable surfaces, not just the JSON.
+        assert (await client.get(f"{DOCS}/a/view")).status_code == 200
+        assert "B" in (await client.get(f"{PROJECT}/")).text
+
+
+async def test_renaming_an_ancestor_reflects_in_a_descendant_trail(
+    tmp_path: Path,
+) -> None:
+    """Liveness by construction: the trail is shell chrome resolved per GET.
+
+    The FragmentCache is keyed on the doc's own rev and wraps only #doc, so a
+    stale ancestor title would otherwise survive until the descendant changed.
+    """
+    async with client_for(tmp_path) as client:
+        await _chain(client)
+        renamed = await client.put(f"{DOCS}/reviews", json={"title": "Renamed root"})
+        assert renamed.status_code == 200
+        body = (await client.get(f"{DOCS}/pr-219-mental-model/view")).text
+        assert "Renamed root" in body
+        assert "Reviews" not in body

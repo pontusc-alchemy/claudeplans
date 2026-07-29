@@ -663,6 +663,43 @@ async def test_view_page_subdoc_index_not_in_sse_morph_payload(
             assert not any("doc-subdoc-index" in line for line in first)
 
 
+async def _post_chain(client: httpx.AsyncClient) -> None:
+    """a -> b -> c, so b has both a parent and a child and c has a 3-hop trail."""
+    await client.post(DOCS, json={"type": "research", "slug": "a", "title": "A"})
+    for slug, parent in (("b", "a"), ("c", "b")):
+        await client.post(
+            DOCS,
+            json={
+                "type": "plan",
+                "slug": slug,
+                "title": slug.upper(),
+                "research_refs": [parent],
+                "primary_parent_ref": parent,
+            },
+        )
+
+
+@pytest.mark.parametrize("slug", ["b", "c"], ids=["both-chrome", "deep-breadcrumb"])
+async def test_no_chrome_reaches_the_sse_morph_payload(
+    live_server: str, slug: str
+) -> None:
+    """Both chrome blocks stay outside #doc at depth, and when they co-occur.
+
+    Dropping the type guards made "parent AND children" reachable, so the morph
+    exclusion is asserted for both blocks on both fixtures, not one block each.
+    """
+    async with httpx.AsyncClient(base_url=live_server) as client:
+        await _post_chain(client)
+        events = f"/v1/users/dev/projects/demo/docs/{slug}/events"
+        async with client.stream("GET", events) as r:
+            lines = r.aiter_lines()
+            first = await asyncio.wait_for(_read_frame(lines), 5)
+            assert "event: message" in first
+            assert not any("doc-lineage-trail" in line for line in first)
+            assert not any("doc-subdoc-index" in line for line in first)
+            assert not any("doc-chrome" in line for line in first)
+
+
 async def test_reconnect_resyncs(live_server: str) -> None:
     async with httpx.AsyncClient(base_url=live_server) as client:
         await client.post(DOCS, json=PLAN_BODY)

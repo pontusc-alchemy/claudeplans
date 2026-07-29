@@ -321,6 +321,7 @@ class LineageResponse(BaseModel):
 
     roots: list[LineageNode] = []
     over_cap: list[str] = []
+    cycle_roots: list[str] = []
 
 
 # `children` is self-referential, so the annotation is a forward ref that only
