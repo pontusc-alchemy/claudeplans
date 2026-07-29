@@ -117,6 +117,8 @@ Exit codes: `0` ok · `2` usage error (bad flag/arg — reserved, never a domain
 - Phase slugs are unique within a document.
 - Section anchors are unique within a document.
 
+`PUT /research-refs` is an absolute replace, not a merge: it sets `research_refs` and `primary_parent_ref` to exactly the payload, so a raw-API author must restate every ref they want to keep or the omitted ones drop. The `doc link` CLI verb does that read-modify-write for you.
+
 ## Rendering
 
 The service renders HTML from the model using nh3 (scripts, event handlers, and `javascript:` schemes are stripped). By convention, authors should not hand-write HTML spans or status pills — write plain markdown and let the service render it. Revision/decision admonition cards (`!!!`/`???`) belong in a phase's `notes` field, not in section bodies.
