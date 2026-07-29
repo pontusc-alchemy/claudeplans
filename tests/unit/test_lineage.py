@@ -26,7 +26,7 @@ def _plan(
         title=slug,
         owner_id="dev",
         research_refs=refs or [],
-        primary_research_ref=primary,
+        primary_parent_ref=primary,
     )
 
 
@@ -115,7 +115,7 @@ def test_lineage_carries_status_and_type() -> None:
         owner_id="dev",
         status=DocStatus.done,
         research_refs=["r1"],
-        primary_research_ref="r1",
+        primary_parent_ref="r1",
     )
     lineage = build_lineage([research, plan])
     node = lineage.research[0]

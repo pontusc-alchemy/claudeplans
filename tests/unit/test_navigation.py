@@ -39,7 +39,7 @@ def _doc(
         "owner_id": owner,
     }
     if primary is not None:
-        doc["primary_research_ref"] = primary
+        doc["primary_parent_ref"] = primary
     if refs is not None:
         doc["research_refs"] = refs
     if status is not None:
@@ -381,7 +381,7 @@ def _plan_document(
         title=f"{slug} title",
         owner_id="dev",
         research_refs=refs or [],
-        primary_research_ref=primary,
+        primary_parent_ref=primary,
     )
 
 
@@ -397,7 +397,7 @@ async def test_resolve_parent_covers_found_none_wrongtype_and_dangling(
     parent = await resolve_parent(repo, "dev", "projA", child)
     assert parent == ParentRef(slug="r1", title="r1 title")
 
-    # (b) no primary_research_ref -> None.
+    # (b) no primary_parent_ref -> None.
     standalone = _plan_document("p2")
     assert await resolve_parent(repo, "dev", "projA", standalone) is None
 

@@ -94,20 +94,20 @@ async def resolve_parent(
     repo: Repository, uid: str, project: str, doc: Document
 ) -> ParentRef | None:
     """Resolve a plan's lineage parent: the research doc it names as
-    `primary_research_ref`, read once via listing metadata (no body read). None
+    `primary_parent_ref`, read once via listing metadata (no body read). None
     when there is no research parent — the same unlinked case build_lineage folds
     away.
     """
-    if doc.type is not DocType.plan or doc.primary_research_ref is None:
+    if doc.type is not DocType.plan or doc.primary_parent_ref is None:
         return None
     prefix = f"{uid}/{project}/"
     for entry in await repo.list(prefix):
-        if entry.key.rsplit("/", 1)[1] != doc.primary_research_ref:
+        if entry.key.rsplit("/", 1)[1] != doc.primary_parent_ref:
             continue
         if entry.metadata.get("type") != "research":
             return None
         return ParentRef(
-            slug=doc.primary_research_ref,
+            slug=doc.primary_parent_ref,
             title=entry.metadata.get("title", ""),
         )
     return None
@@ -116,7 +116,7 @@ async def resolve_parent(
 async def resolve_children(
     repo: Repository, uid: str, project: str, doc: Document
 ) -> list[ChildRef]:
-    """Resolve a research doc's sub-docs: the plans whose `primary_research_ref` is
+    """Resolve a research doc's sub-docs: the plans whose `primary_parent_ref` is
     this doc, folded via build_lineage exactly as the sidebar and lineage page do —
     so the index never disagrees with them. Empty for a non-research doc or one with
     no sub-docs.
@@ -129,9 +129,9 @@ async def resolve_children(
     build_lineage can only nest a plan under a research doc when both sit in the same
     input set.
 
-    Unlike resolve_parent — which matches the in-hand doc's own primary_research_ref
+    Unlike resolve_parent — which matches the in-hand doc's own primary_parent_ref
     against listing metadata (no body read) — the nesting key lives on the other docs,
-    and primary_research_ref is not a listing-metadata field, so this reads the project
+    and primary_parent_ref is not a listing-metadata field, so this reads the project
     bodies. The sidebar build reads them too; that double read is accepted at local
     single-user scale (dedup by threading one load through the view is a later change).
     """

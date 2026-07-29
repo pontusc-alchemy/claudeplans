@@ -5,7 +5,7 @@
   "status": "draft",
   "description": "Comparative survey of secrets-management approaches, synthesizing findings from a HashiCorp Vault deep dive and a cloud KMS comparison to guide platform selection.",
   "research_refs": ["vault-deep-dive", "cloud-kms-comparison"],
-  "primary_research_ref": "vault-deep-dive",
+  "primary_parent_ref": "vault-deep-dive",
   "sections": [
     {
       "anchor": "overview",

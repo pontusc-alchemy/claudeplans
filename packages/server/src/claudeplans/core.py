@@ -145,7 +145,7 @@ async def create_document(
         description=doc_in.description,
         frontmatter=doc_in.frontmatter,
         research_refs=doc_in.research_refs,
-        primary_research_ref=doc_in.primary_research_ref,
+        primary_parent_ref=doc_in.primary_parent_ref,
         sections=doc_in.sections,
         phases=doc_in.phases,
     )

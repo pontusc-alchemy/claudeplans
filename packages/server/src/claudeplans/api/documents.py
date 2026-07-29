@@ -150,7 +150,7 @@ async def set_research_refs(
 ) -> ResponseEnvelope:
     key = document_key(uid, project, slug)
     rev, doc = await core.put_research_refs(
-        repo, key, body.research_refs, body.primary_research_ref, user=user
+        repo, key, body.research_refs, body.primary_parent_ref, user=user
     )
     response.headers["ETag"] = rev
     feed.publish(Event(key=key, rev=rev))

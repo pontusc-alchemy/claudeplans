@@ -153,7 +153,7 @@ _NO_PRECONDITION_WRITES = [
     (
         "PUT",
         f"{_FOREIGN}/p1/research-refs",
-        {"research_refs": ["r1"], "primary_research_ref": "r1"},
+        {"research_refs": ["r1"], "primary_parent_ref": "r1"},
     ),
     ("POST", f"{_FOREIGN}/p1/phases", {"slug": "b", "name": "Beta"}),
     ("POST", f"{_FOREIGN}/p1/phases/a/tasks", {"text": "t1"}),
@@ -429,16 +429,16 @@ async def test_research_refs_invariant_422_and_valid_set_200(tmp_path: Path) -> 
         # primary not among refs violates the invariant -> 422 on write-time revalidate.
         resp = await client.put(
             f"{BASE}/p1/research-refs",
-            json={"research_refs": ["r1"], "primary_research_ref": "other"},
+            json={"research_refs": ["r1"], "primary_parent_ref": "other"},
         )
         assert resp.status_code == 422
         # A consistent set with a valid research ref succeeds.
         resp = await client.put(
             f"{BASE}/p1/research-refs",
-            json={"research_refs": ["r1"], "primary_research_ref": "r1"},
+            json={"research_refs": ["r1"], "primary_parent_ref": "r1"},
         )
         assert resp.status_code == 200
-        assert resp.json()["data"]["primary_research_ref"] == "r1"
+        assert resp.json()["data"]["primary_parent_ref"] == "r1"
 
 
 async def test_move_phase_if_match_semantics(tmp_path: Path) -> None:

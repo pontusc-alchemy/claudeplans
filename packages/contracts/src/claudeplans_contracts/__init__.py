@@ -57,6 +57,7 @@ from .keys import validate_key_segment as validate_key_segment
 from .migrate import CURRENT_SCHEMA_VERSION as CURRENT_SCHEMA_VERSION
 from .migrate import migrate as migrate
 from .migrate import migrate_document as migrate_document
+from .models import MAX_LINEAGE_DEPTH as MAX_LINEAGE_DEPTH
 from .models import Document as Document
 from .models import Phase as Phase
 from .models import Section as Section

@@ -203,7 +203,7 @@ async def test_put_research_refs_accepts_research_typed_ref() -> None:
     )
     assert new_rev == "2"
     assert doc.research_refs == ["r1"]
-    assert doc.primary_research_ref == "r1"
+    assert doc.primary_parent_ref == "r1"
 
 
 async def test_put_research_refs_empty_list_succeeds() -> None:

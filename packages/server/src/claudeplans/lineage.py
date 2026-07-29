@@ -1,7 +1,7 @@
 """Derived lineage view: which plans descend from which research.
 
 A pure projection over a set of Documents — no IO, no FastAPI. Plans reference
-research by slug (`primary_research_ref` = the plan's main source; `research_refs`
+research by slug (`primary_parent_ref` = the plan's main source; `research_refs`
 = every source it cites). This folds that many-to-one graph into a render-ready
 tree the lineage page walks: each research node carries the plans it primarily
 spawned plus backlinks from plans that merely cite it, and orphans (no primary, or
@@ -52,7 +52,7 @@ class PlanRef:
 class ResearchNode:
     """A research doc plus the plans related to it.
 
-    `plans`: plans whose `primary_research_ref` is this node.
+    `plans`: plans whose `primary_parent_ref` is this node.
     `backlinks`: plans that cite this node in `research_refs` but NOT as primary.
     """
 
@@ -88,7 +88,7 @@ def _plan_ref(doc: Document) -> PlanRef:
 def build_lineage(docs: Iterable[Document]) -> Lineage:
     """Project `docs` into a lineage tree, sorted deterministically by slug.
 
-    Total: empty input -> empty Lineage. A plan whose `primary_research_ref` points
+    Total: empty input -> empty Lineage. A plan whose `primary_parent_ref` points
     at a slug with no matching research doc is treated as unlinked (dangling ref),
     same as a plan with no primary at all.
     """
@@ -100,13 +100,13 @@ def build_lineage(docs: Iterable[Document]) -> Lineage:
     nodes: list[ResearchNode] = []
     for research in sorted(research_docs, key=lambda d: d.slug):
         primary = [
-            _plan_ref(p) for p in plan_docs if p.primary_research_ref == research.slug
+            _plan_ref(p) for p in plan_docs if p.primary_parent_ref == research.slug
         ]
         backlinks = [
             _plan_ref(p)
             for p in plan_docs
             if research.slug in p.research_refs
-            and p.primary_research_ref != research.slug
+            and p.primary_parent_ref != research.slug
         ]
         nodes.append(
             ResearchNode(
@@ -124,8 +124,7 @@ def build_lineage(docs: Iterable[Document]) -> Lineage:
     unlinked = [
         _plan_ref(p)
         for p in plan_docs
-        if p.primary_research_ref is None
-        or p.primary_research_ref not in research_slugs
+        if p.primary_parent_ref is None or p.primary_parent_ref not in research_slugs
     ]
     return Lineage(
         research=tuple(nodes),

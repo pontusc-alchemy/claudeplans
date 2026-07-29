@@ -214,7 +214,7 @@ async def test_lineage_page_renders(tmp_path: Path) -> None:
                 "slug": "p1",
                 "title": "Plan One",
                 "research_refs": ["r1"],
-                "primary_research_ref": "r1",
+                "primary_parent_ref": "r1",
             },
         )
         await client.post(
@@ -437,7 +437,7 @@ async def test_view_page_shows_lineage_trail_for_child_plan(
                 "slug": "p1",
                 "title": "Plan One",
                 "research_refs": ["r1"],
-                "primary_research_ref": "r1",
+                "primary_parent_ref": "r1",
             },
         )
         resp = await client.get(VIEW)
@@ -464,7 +464,7 @@ async def test_view_page_lineage_trail_absent_for_standalone_plan(
     tmp_path: Path,
 ) -> None:
     async with _client(tmp_path) as client:
-        await client.post(DOCS, json=PLAN_BODY)  # a plan with no primary_research_ref
+        await client.post(DOCS, json=PLAN_BODY)  # a plan with no primary_parent_ref
         resp = await client.get(VIEW)
         assert resp.status_code == 200
         assert "doc-lineage-trail" not in resp.text
@@ -485,10 +485,10 @@ async def test_view_page_lineage_trail_degrades_on_dangling_ref(
                 "slug": "p1",
                 "title": "Plan One",
                 "research_refs": ["r1"],
-                "primary_research_ref": "r1",
+                "primary_parent_ref": "r1",
             },
         )
-        # Delete the parent so the plan's primary_research_ref now dangles.
+        # Delete the parent so the plan's primary_parent_ref now dangles.
         deleted = await client.delete(f"{DOCS}/r1", headers={"If-Match": rev})
         assert deleted.status_code == 204
         resp = await client.get(VIEW)
@@ -514,7 +514,7 @@ async def test_view_page_shows_subdoc_index_on_parent_research(
                     "slug": slug,
                     "title": title,
                     "research_refs": ["r1"],
-                    "primary_research_ref": "r1",
+                    "primary_parent_ref": "r1",
                 },
             )
         resp = await client.get(f"{DOCS}/r1/view")
@@ -621,7 +621,7 @@ async def test_view_page_lineage_trail_not_in_sse_morph_payload(
                 "slug": "p1",
                 "title": "Plan One",
                 "research_refs": ["r1"],
-                "primary_research_ref": "r1",
+                "primary_parent_ref": "r1",
             },
         )
         async with client.stream("GET", EVENTS) as r:
@@ -648,7 +648,7 @@ async def test_view_page_subdoc_index_not_in_sse_morph_payload(
                 "slug": "p1",
                 "title": "Plan One",
                 "research_refs": ["r1"],
-                "primary_research_ref": "r1",
+                "primary_parent_ref": "r1",
             },
         )
         async with client.stream(

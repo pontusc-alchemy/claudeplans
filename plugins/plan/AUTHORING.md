@@ -21,7 +21,7 @@ Fields:
 | `description` | str \| null | short summary, optional |
 | `frontmatter` | dict | free-form JSON-serializable metadata escape hatch |
 | `research_refs` | list[str] | slugs of linked research docs |
-| `primary_research_ref` | str \| null | must be one of `research_refs` |
+| `primary_parent_ref` | str \| null | must be one of `research_refs` |
 | `sections` | list[Section] | ordered prose sections |
 | `phases` | list[Phase] | ordered phases (plan docs only) |
 
@@ -111,7 +111,7 @@ Exit codes: `0` ok · `2` usage error (bad flag/arg — reserved, never a domain
 ## Server-side invariants (validation → exit 4)
 
 - Research docs carry no phases.
-- `primary_research_ref` must be a member of `research_refs`.
+- `primary_parent_ref` must be a member of `research_refs`.
 - Phase slugs are unique within a document.
 - Section anchors are unique within a document.
 

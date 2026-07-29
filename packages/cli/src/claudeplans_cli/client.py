@@ -243,7 +243,7 @@ class PlanClient:
         primary: str | None,
     ) -> Reply:
         body = ResearchRefsRequest(
-            research_refs=research_refs, primary_research_ref=primary
+            research_refs=research_refs, primary_parent_ref=primary
         )
         resp = self._http.put(
             f"{self._doc_base(uid, project, slug)}/research-refs",

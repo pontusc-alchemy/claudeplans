@@ -56,7 +56,7 @@ class DocumentCreate(BaseModel):
     description: str | None = None
     frontmatter: dict[str, JsonValue] = Field(default_factory=dict)
     research_refs: list[str] = Field(default_factory=list)
-    primary_research_ref: str | None = None
+    primary_parent_ref: str | None = None
     sections: list[Section] = Field(default_factory=list)
     phases: list[Phase] = Field(default_factory=list)
 
@@ -200,7 +200,7 @@ class ResearchRefsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     research_refs: list[str]
-    primary_research_ref: str | None = None
+    primary_parent_ref: str | None = None
 
 
 class SetDocumentMetaRequest(BaseModel):

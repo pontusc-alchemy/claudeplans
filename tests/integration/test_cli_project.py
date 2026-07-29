@@ -23,7 +23,7 @@ def test_project_lineage_json_shape() -> None:
     lineage = parsed["data"]
     assert "research" in lineage
     assert "unlinked_plans" in lineage
-    # The plan (no primary_research_ref) lands in unlinked_plans.
+    # The plan (no primary_parent_ref) lands in unlinked_plans.
     slugs = [p["slug"] for p in lineage["unlinked_plans"]]
     assert "p1" in slugs
 
@@ -38,7 +38,7 @@ def test_project_lineage_linked_plan_appears_under_research_node() -> None:
             "type": "plan",
             "slug": "pl1",
             "title": "Plan",
-            "primary_research_ref": "r1",
+            "primary_parent_ref": "r1",
             "research_refs": ["r1"],
         }
     )
