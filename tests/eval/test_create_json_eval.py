@@ -3,7 +3,7 @@
 The fixtures under ``fixtures/llm_create/`` are REAL payloads emitted by independent
 LLM agents during the agent-client phase: each was given only the ``DocumentCreate``
 JSON schema plus the two semantic constraints the schema cannot encode (research
-docs carry no phases; ``primary_research_ref`` must be one of ``research_refs``) and
+docs carry no phases; ``primary_parent_ref`` must be one of ``research_refs``) and
 asked to author a document. The live run scored 6/6 valid; these tests pin that so a
 later schema change that breaks LLM authorability fails CI loudly instead of silently.
 
@@ -37,7 +37,7 @@ def _accept(payload: dict) -> Document:
         description=dc.description,
         frontmatter=dc.frontmatter,
         research_refs=dc.research_refs,
-        primary_research_ref=dc.primary_research_ref,
+        primary_parent_ref=dc.primary_parent_ref,
         sections=dc.sections,
         phases=dc.phases,
     )

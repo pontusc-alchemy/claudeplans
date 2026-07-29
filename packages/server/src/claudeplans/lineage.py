@@ -1,28 +1,19 @@
-"""Derived lineage view: which plans descend from which research.
+"""Derived document tree: which docs nest under which, to any depth — a pure
+projection over Documents, no IO. See `build_lineage` for the fold and its rules."""
 
-A pure projection over a set of Documents — no IO, no FastAPI. Plans reference
-research by slug (`primary_research_ref` = the plan's main source; `research_refs`
-= every source it cites). This folds that many-to-one graph into a render-ready
-tree the lineage page walks: each research node carries the plans it primarily
-spawned plus backlinks from plans that merely cite it, and orphans (no primary, or
-a primary pointing nowhere) land in `unlinked_plans`.
-
-Standalone research (no dependents) is just a node with empty `plans`/`backlinks`,
-so it needs no separate bucket. Matching is slug-equality only; cross-namespace
-lineage (a plan citing research under another owner/project) is out of scope for
-this phase — all docs passed in come from one user+project listing.
-"""
-
-from collections.abc import Iterable
+import logging
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 
-from claudeplans_contracts import Document
+from claudeplans_contracts import MAX_LINEAGE_DEPTH, Document
 from claudeplans_contracts.enums import DocStatus, DocType
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
-class ParentRef:
-    """A plan's lineage parent: the research slug to link and the title to label."""
+class AncestorRef:
+    """One hop on a doc's upward trail: the slug to link and the title to label."""
 
     slug: str
     title: str
@@ -30,30 +21,21 @@ class ParentRef:
 
 @dataclass(frozen=True, slots=True)
 class ChildRef:
-    """A research doc's sub-doc: the slug to link and the title to label."""
+    """A doc's sub-doc: the slug to link and the title to label."""
 
     slug: str
     title: str
 
 
 @dataclass(frozen=True, slots=True)
-class PlanRef:
-    """A plan, reduced to what the lineage page needs to link and label it."""
+class DocNode:
+    """A doc plus the docs nested beneath it.
 
-    slug: str
-    title: str
-    owner_id: str
-    project: str
-    status: DocStatus
-    type: DocType
+    `children`: docs whose `primary_parent_ref` is this node, recursively.
+    `backlinks`: docs citing this node in `research_refs` but NOT as their parent.
 
-
-@dataclass(frozen=True, slots=True)
-class ResearchNode:
-    """A research doc plus the plans related to it.
-
-    `plans`: plans whose `primary_research_ref` is this node.
-    `backlinks`: plans that cite this node in `research_refs` but NOT as primary.
+    `type` is orthogonal to tree position — any doc may parent any doc. The badge
+    says what a doc is, the tree says where it lives.
     """
 
     slug: str
@@ -62,72 +44,137 @@ class ResearchNode:
     project: str
     status: DocStatus
     type: DocType
-    plans: tuple[PlanRef, ...]
-    backlinks: tuple[PlanRef, ...]
+    children: tuple[DocNode, ...] = ()
+    backlinks: tuple[ChildRef, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
 class Lineage:
-    """The full derived tree: research roots (standalone = empty plans) + orphans."""
+    """The derived forest: every doc with no resolvable parent, plus its subtree.
 
-    research: tuple[ResearchNode, ...]
-    unlinked_plans: tuple[PlanRef, ...]
+    `over_cap` names children elided at MAX_LINEAGE_DEPTH, so a too-deep chain is
+    reportable rather than silently short.
+
+    `cycle_roots` names docs promoted to roots to break a parent cycle. A cycle has
+    no entry point, so without this its members would appear on no surface at all.
+    """
+
+    roots: tuple[DocNode, ...] = ()
+    over_cap: tuple[str, ...] = ()
+    cycle_roots: tuple[str, ...] = ()
 
 
-def _plan_ref(doc: Document) -> PlanRef:
-    return PlanRef(
-        slug=doc.slug,
-        title=doc.title,
-        owner_id=doc.owner_id,
-        project=doc.project,
-        status=doc.status,
-        type=doc.type,
-    )
+def _child_ref(doc: Document) -> ChildRef:
+    return ChildRef(slug=doc.slug, title=doc.title)
+
+
+def _reachable(seeds: set[str], children_of: dict[str, list[Document]]) -> set[str]:
+    """Every slug reachable downward from `seeds`. Visited-guarded, so a cycle in
+    the adjacency terminates instead of spinning."""
+    seen: set[str] = set()
+    stack = list(seeds)
+    while stack:
+        slug = stack.pop()
+        if slug in seen:
+            continue
+        seen.add(slug)
+        stack.extend(c.slug for c in children_of.get(slug, []))
+    return seen
 
 
 def build_lineage(docs: Iterable[Document]) -> Lineage:
-    """Project `docs` into a lineage tree, sorted deterministically by slug.
+    """Project `docs` into a nested tree, sorted deterministically by slug.
 
-    Total: empty input -> empty Lineage. A plan whose `primary_research_ref` points
-    at a slug with no matching research doc is treated as unlinked (dangling ref),
-    same as a plan with no primary at all.
+    Nesting is derived here at read time and never stored as structure, so a doc
+    reparents by changing one field.
+
+    Total: empty input -> empty Lineage. A doc whose `primary_parent_ref` names a slug
+    not present is a root, exactly like a doc with no parent — a dangling pointer
+    degrades to "top level" rather than hiding the doc.
+
+    Placement keys on `primary_parent_ref` EQUALITY ONLY. The model guarantees the
+    parent is also in `research_refs`, so gathering children by `research_refs`
+    membership would place a doc under every ref it cites, and could loop where a doc
+    cites an ancestor. `research_refs` drives backlinks, never placement.
+
+    O(n): one pass builds a `parent_slug -> [child]` adjacency map, then the recursion
+    walks it. Re-scanning every doc per node would be O(n^2).
     """
-    docs = list(docs)
-    research_docs = [d for d in docs if d.type is DocType.research]
-    plan_docs = [d for d in docs if d.type is DocType.plan]
-    research_slugs = {d.slug for d in research_docs}
+    by_slug = {d.slug: d for d in sorted(docs, key=lambda d: d.slug)}
 
-    nodes: list[ResearchNode] = []
-    for research in sorted(research_docs, key=lambda d: d.slug):
-        primary = [
-            _plan_ref(p) for p in plan_docs if p.primary_research_ref == research.slug
-        ]
-        backlinks = [
-            _plan_ref(p)
-            for p in plan_docs
-            if research.slug in p.research_refs
-            and p.primary_research_ref != research.slug
-        ]
-        nodes.append(
-            ResearchNode(
-                slug=research.slug,
-                title=research.title,
-                owner_id=research.owner_id,
-                project=research.project,
-                status=research.status,
-                type=research.type,
-                plans=tuple(sorted(primary, key=lambda r: r.slug)),
-                backlinks=tuple(sorted(backlinks, key=lambda r: r.slug)),
+    children_of: dict[str, list[Document]] = {}
+    roots: list[Document] = []
+    for doc in by_slug.values():
+        parent = doc.primary_parent_ref
+        if parent is not None and parent in by_slug and parent != doc.slug:
+            children_of.setdefault(parent, []).append(doc)
+        else:
+            roots.append(doc)
+
+    # A cycle has no root, so nothing above would ever reach it. Break the lowest
+    # slug in each one and say so, rather than let a doc vanish from every surface.
+    cycle_roots: list[str] = []
+    placed = _reachable({r.slug for r in roots}, children_of)
+    for slug in sorted(set(by_slug) - placed):
+        if slug in placed:
+            continue
+        parent = by_slug[slug].primary_parent_ref
+        if parent is not None:
+            children_of[parent] = [c for c in children_of[parent] if c.slug != slug]
+        roots.append(by_slug[slug])
+        cycle_roots.append(slug)
+        logger.warning(
+            "parent cycle through %r; promoting it to a root so it stays reachable",
+            slug,
+        )
+        placed |= _reachable({slug}, children_of)
+    roots.sort(key=lambda d: d.slug)
+
+    backlinks_of: dict[str, list[ChildRef]] = {}
+    for doc in by_slug.values():
+        for ref in doc.research_refs:
+            if ref in by_slug and ref != doc.primary_parent_ref:
+                backlinks_of.setdefault(ref, []).append(_child_ref(doc))
+
+    over_cap: list[str] = []
+
+    def node(doc: Document, depth: int) -> DocNode:
+        kids: list[Document] = children_of.get(doc.slug, [])
+        if kids and depth >= MAX_LINEAGE_DEPTH:
+            # Loud, not silent: a doc dropped without a trace is indistinguishable
+            # from one that was never created.
+            over_cap.extend(k.slug for k in kids)
+            logger.warning(
+                "lineage depth cap %d reached at %r; %d subtree(s) not rendered",
+                MAX_LINEAGE_DEPTH,
+                doc.slug,
+                len(kids),
             )
+            kids = []
+        return DocNode(
+            slug=doc.slug,
+            title=doc.title,
+            owner_id=doc.owner_id,
+            project=doc.project,
+            status=doc.status,
+            type=doc.type,
+            children=tuple(node(k, depth + 1) for k in kids),
+            backlinks=tuple(backlinks_of.get(doc.slug, [])),
         )
 
-    unlinked = [
-        _plan_ref(p)
-        for p in plan_docs
-        if p.primary_research_ref is None
-        or p.primary_research_ref not in research_slugs
-    ]
     return Lineage(
-        research=tuple(nodes),
-        unlinked_plans=tuple(sorted(unlinked, key=lambda r: r.slug)),
+        roots=tuple(node(d, 1) for d in roots),
+        over_cap=tuple(sorted(over_cap)),
+        cycle_roots=tuple(cycle_roots),
     )
+
+
+def walk(nodes: Iterable[DocNode]) -> Iterator[DocNode]:
+    """Every node in the forest, depth-first.
+
+    Callers needing a flat view (counts, slug sets) use this rather than
+    re-implementing the recursion and disagreeing about it.
+    """
+    for n in nodes:
+        yield n
+        yield from walk(n.children)

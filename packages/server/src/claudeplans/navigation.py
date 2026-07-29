@@ -12,13 +12,13 @@ from dataclasses import dataclass
 
 from pydantic import ValidationError
 
-from claudeplans_contracts import Document
-from claudeplans_contracts.enums import DocStatus, DocType
+from claudeplans_contracts import MAX_LINEAGE_DEPTH, Document
+from claudeplans_contracts.enums import DocStatus
 from claudeplans_contracts.errors import PlanError
 
 from . import core
 from .auth.registry import UserRegistry
-from .lineage import ChildRef, Lineage, ParentRef, build_lineage
+from .lineage import AncestorRef, ChildRef, Lineage, build_lineage
 from .projects import ProjectRegistry
 from .storage.repository import Repository
 
@@ -90,60 +90,49 @@ async def load_project_lineage(
     return _split_lineages(await _load_documents(repo, keys))
 
 
-async def resolve_parent(
+async def resolve_ancestors(
     repo: Repository, uid: str, project: str, doc: Document
-) -> ParentRef | None:
-    """Resolve a plan's lineage parent: the research doc it names as
-    `primary_research_ref`, read once via listing metadata (no body read). None
-    when there is no research parent — the same unlinked case build_lineage folds
-    away.
-    """
-    if doc.type is not DocType.plan or doc.primary_research_ref is None:
-        return None
-    prefix = f"{uid}/{project}/"
-    for entry in await repo.list(prefix):
-        if entry.key.rsplit("/", 1)[1] != doc.primary_research_ref:
-            continue
-        if entry.metadata.get("type") != "research":
-            return None
-        return ParentRef(
-            slug=doc.primary_research_ref,
-            title=entry.metadata.get("title", ""),
-        )
-    return None
+) -> list[AncestorRef]:
+    """The doc's upward trail, root-first, excluding the doc itself. Body-free:
+    every hop reads `primary_parent_ref` out of listing metadata."""
+    if doc.primary_parent_ref is None:
+        return []
+    by_slug = {
+        entry.key.rsplit("/", 1)[1]: entry
+        for entry in await repo.list(f"{uid}/{project}/")
+    }
+    trail: list[AncestorRef] = []
+    # Belt-and-braces: the write guard rejects cycles, but a store hand-edited past
+    # it must not hang a page render.
+    seen = {doc.slug}
+    slug: str | None = doc.primary_parent_ref
+    while slug is not None and slug not in seen and len(trail) < MAX_LINEAGE_DEPTH:
+        entry = by_slug.get(slug)
+        # A dangling hop ends the walk, making the last resolvable doc the effective
+        # root — mirroring the fold's downward "dangling parent -> root" rule.
+        if entry is None:
+            break
+        seen.add(slug)
+        trail.append(AncestorRef(slug=slug, title=entry.metadata.get("title", "")))
+        slug = entry.metadata.get("primary_parent_ref") or None
+    trail.reverse()
+    return trail
 
 
 async def resolve_children(
     repo: Repository, uid: str, project: str, doc: Document
 ) -> list[ChildRef]:
-    """Resolve a research doc's sub-docs: the plans whose `primary_research_ref` is
-    this doc, folded via build_lineage exactly as the sidebar and lineage page do —
-    so the index never disagrees with them. Empty for a non-research doc or one with
-    no sub-docs.
-
-    Status-agnostic, mirroring resolve_parent: the fold is over every project doc, so
-    an archived research doc still lists its children and an archived child still
-    appears under its parent — the reciprocal of the child's upward trail, which
-    resolve_parent already renders across the archived boundary. A single fold (not
-    load_project_lineage's active/archived split) is what makes this cross-status:
-    build_lineage can only nest a plan under a research doc when both sit in the same
-    input set.
-
-    Unlike resolve_parent — which matches the in-hand doc's own primary_research_ref
-    against listing metadata (no body read) — the nesting key lives on the other docs,
-    and primary_research_ref is not a listing-metadata field, so this reads the project
-    bodies. The sidebar build reads them too; that double read is accepted at local
-    single-user scale (dedup by threading one load through the view is a later change).
-    """
-    if doc.type is not DocType.research:
-        return []
-    prefix = f"{uid}/{project}/"
-    keys = [entry.key for entry in await repo.list(prefix)]
-    lineage = build_lineage(await _load_documents(repo, keys))
-    node = next((n for n in lineage.research if n.slug == doc.slug), None)
-    if node is None:
-        return []
-    return [ChildRef(slug=plan.slug, title=plan.title) for plan in node.plans]
+    """The doc's immediate sub-docs, sorted by slug. Any doc of any type may have
+    them: `type` says what a doc is, the tree says where it lives."""
+    # Status-agnostic, mirroring resolve_ancestors: an archived parent still lists
+    # its children, and an archived child still appears under its parent.
+    children = [
+        ChildRef(slug=slug, title=entry.metadata.get("title", ""))
+        for entry in await repo.list(f"{uid}/{project}/")
+        if (slug := entry.key.rsplit("/", 1)[1]) != doc.slug
+        and entry.metadata.get("primary_parent_ref") == doc.slug
+    ]
+    return sorted(children, key=lambda c: c.slug)
 
 
 async def build_user_tree(

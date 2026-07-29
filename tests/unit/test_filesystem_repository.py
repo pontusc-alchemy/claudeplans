@@ -68,3 +68,40 @@ async def test_walk_skips_non_object_json(tmp_path: Path) -> None:
 
     entries = list(await repo.list(""))
     assert {e.key for e in entries} == {"u1/demo/plan/p1"}
+
+
+def _doc_with(**extra: JsonValue) -> dict[str, JsonValue]:
+    return _doc() | extra
+
+
+async def _parent_meta(tmp_path: Path, doc: dict[str, JsonValue]) -> str:
+    repo = FilesystemRepository(tmp_path / "data")
+    await repo.put("u1/demo/p1", doc, CREATE)
+    entry = next(iter(await repo.list("u1/")))
+    return entry.metadata["primary_parent_ref"]
+
+
+async def test_listing_projects_the_parent_ref(tmp_path: Path) -> None:
+    doc = _doc_with(research_refs=["r1"], primary_parent_ref="r1")
+    assert await _parent_meta(tmp_path, doc) == "r1"
+
+
+async def test_listing_projects_a_v1_parent_ref_under_its_old_name(
+    tmp_path: Path,
+) -> None:
+    """A stored doc not rewritten since the schema bump must still root correctly.
+
+    list() projects straight off the envelope without running migrate(), so reading
+    only the v2 key would silently re-root every un-migrated document.
+    """
+    doc = _doc_with(schema_version=1, research_refs=["r1"], primary_research_ref="r1")
+    assert await _parent_meta(tmp_path, doc) == "r1"
+
+
+async def test_listing_reports_a_root_as_empty_string(tmp_path: Path) -> None:
+    assert await _parent_meta(tmp_path, _doc()) == ""
+
+
+async def test_listing_ignores_a_non_string_parent_ref(tmp_path: Path) -> None:
+    """A hand-edited body must degrade to "root", not crash the whole index."""
+    assert await _parent_meta(tmp_path, _doc_with(primary_parent_ref=42)) == ""

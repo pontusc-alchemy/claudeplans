@@ -22,6 +22,7 @@ from typing import Final
 from pydantic import JsonValue
 
 from claudeplans_contracts import (
+    MAX_LINEAGE_DEPTH,
     Document,
     DocumentCreate,
     Forbidden,
@@ -36,7 +37,7 @@ from claudeplans_contracts.enums import DocStatus, PhaseStatus, SectionPlacement
 from . import deltas
 from .auth.authz import can_write
 from .auth.provider import CurrentUser
-from .storage.repository import CREATE, Repository
+from .storage.repository import CREATE, ListEntry, Repository
 
 # A commutative/absolute delta should never surface a false 409 to the agent just
 # because a concurrent write bumped the rev mid-flight; bound the re-read loop so a
@@ -134,6 +135,15 @@ async def create_document(
     propagates -> 409.
     """
     _require_write(user, owner_id)
+    # create bypasses put_research_refs entirely, so without this a create naming a
+    # cycle-closing parent would be admitted with no 422.
+    if doc_in.research_refs or doc_in.primary_parent_ref:
+        entries = list(await repo.list(f"{owner_id}/{project}/"))
+        _check_refs_exist(entries, doc_in.research_refs)
+        # A new doc has no descendants, so its chain to root is the whole story.
+        _check_parent_is_legal(
+            entries, doc_in.slug, doc_in.primary_parent_ref, with_subtree=False
+        )
     doc = Document(
         type=doc_in.type,
         status=doc_in.status,
@@ -145,7 +155,7 @@ async def create_document(
         description=doc_in.description,
         frontmatter=doc_in.frontmatter,
         research_refs=doc_in.research_refs,
-        primary_research_ref=doc_in.primary_research_ref,
+        primary_parent_ref=doc_in.primary_parent_ref,
         sections=doc_in.sections,
         phases=doc_in.phases,
     )
@@ -354,6 +364,84 @@ async def set_document_meta(
     )
 
 
+def _slugs_and_parents(entries: list[ListEntry]) -> dict[str, str]:
+    """slug -> parent slug ("" for a root) for every doc in one project listing."""
+    return {
+        e.key.rsplit("/", 1)[1]: e.metadata.get("primary_parent_ref", "")
+        for e in entries
+    }
+
+
+def _check_refs_exist(entries: list[ListEntry], refs: list[str]) -> None:
+    """Every ref must name a doc in the same project, of ANY type.
+
+    The research-type constraint is gone — any doc may parent any doc — but the
+    existence check is deliberately kept: without it, linking a ref that does not
+    exist would silently persist a dangling backlink.
+    """
+    known = _slugs_and_parents(entries)
+    unresolved = [r for r in refs if r not in known]
+    if unresolved:
+        raise ValidationError(
+            f"research ref(s) do not resolve to a doc in project: "
+            f"{', '.join(unresolved)}"
+        )
+
+
+def _subtree_height(parents: dict[str, str], slug: str) -> int:
+    """Levels beneath `slug`, counting itself as 1."""
+    children: dict[str, list[str]] = {}
+    for child, parent in parents.items():
+        if parent:
+            children.setdefault(parent, []).append(child)
+
+    def height(node: str, depth: int) -> int:
+        if depth > MAX_LINEAGE_DEPTH:
+            return depth
+        return max(
+            (height(k, depth + 1) for k in children.get(node, [])), default=depth
+        )
+
+    return height(slug, 1)
+
+
+def _check_parent_is_legal(
+    entries: list[ListEntry],
+    slug: str,
+    parent: str | None,
+    *,
+    with_subtree: bool,
+) -> None:
+    """Reject a parent that would close a cycle or push the tree past the cap —
+    acyclicity spans the whole project, so it cannot live on the model."""
+    if parent is None:
+        return
+    if parent == slug:
+        raise ValidationError("primary_parent_ref must not be the document itself")
+    parents = _slugs_and_parents(entries)
+
+    chain = 1
+    seen = {slug}
+    cursor: str | None = parent
+    while cursor:
+        if cursor in seen:
+            raise ValidationError(
+                f"primary_parent_ref {parent!r} would create a cycle through {cursor!r}"
+            )
+        seen.add(cursor)
+        chain += 1
+        cursor = parents.get(cursor) or None
+
+    # Moving a doc carries its subtree, so a reparent measures both directions;
+    # checking only the upward chain lets descendants land past the cap unseen.
+    depth = chain + (_subtree_height(parents, slug) - 1 if with_subtree else 0)
+    if depth > MAX_LINEAGE_DEPTH:
+        raise ValidationError(
+            f"primary_parent_ref {parent!r} would nest {slug!r} to depth {depth}, "
+            f"past the limit of {MAX_LINEAGE_DEPTH}"
+        )
+
+
 async def put_research_refs(
     repo: Repository,
     key: str,
@@ -364,19 +452,12 @@ async def put_research_refs(
 ) -> tuple[str, Document]:
     # Authz first: a cross-namespace caller must get 403 before any repo access.
     _require_write(user, owner_of(key))
-    # Validate that every ref resolves to a research-type doc in the same project.
     # key = "{owner}/{project}/{slug}"; project prefix = "{owner}/{project}/".
-    prefix = key.rsplit("/", 1)[0] + "/"
-    entries = await repo.list(prefix)
-    research_slugs = {
-        e.key.rsplit("/", 1)[1] for e in entries if e.metadata.get("type") == "research"
-    }
-    unresolved = [r for r in research_refs if r not in research_slugs]
-    if unresolved:
-        raise ValidationError(
-            f"research ref(s) do not resolve to a research doc in project: "
-            f"{', '.join(unresolved)}"
-        )
+    project_prefix, slug = key.rsplit("/", 1)
+    entries = list(await repo.list(project_prefix + "/"))
+    _check_refs_exist(entries, research_refs)
+    # Reparenting carries the whole subtree, so the depth check spans both ways.
+    _check_parent_is_legal(entries, slug, primary, with_subtree=True)
     return await read_modify_write(
         repo,
         key,

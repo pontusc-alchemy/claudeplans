@@ -20,7 +20,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from claudeplans_contracts import Document, Phase, SectionPlacement
 
 from . import render
-from .lineage import Lineage, PlanRef, ResearchNode
+from .lineage import DocNode, Lineage, walk
 from .navigation import ProjectTree, UserEntry
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
@@ -117,7 +117,7 @@ def render_page(
     doc: Document,
     events_url: str,
     sidebar: dict[str, object] | None = None,
-    lineage_trail: dict[str, object] | None = None,
+    lineage_trail: list[dict[str, object]] | None = None,
     subdoc_index: list[dict[str, object]] | None = None,
 ) -> str:
     """Render the full document page (the morph target wrapping the body)."""
@@ -134,22 +134,17 @@ def render_page(
 def _lineage_projection(
     lineage: Lineage, view_url: Callable[[str], str]
 ) -> dict[str, object]:
-    """Project a Lineage into the `{research, unlinked_plans}` shape the lineage
-    template walks. `view_url(slug)` builds each doc link."""
-    research = [
-        {
-            "title": node.title,
-            "view_url": view_url(node.slug),
-            "plans": [
-                {"title": p.title, "view_url": view_url(p.slug)} for p in node.plans
-            ],
+    """Project a Lineage into the recursive `{roots}` shape the template walks.
+    `view_url(slug)` builds each doc link."""
+
+    def node(n: DocNode) -> dict[str, object]:
+        return {
+            "title": n.title,
+            "view_url": view_url(n.slug),
+            "children": [node(c) for c in n.children],
         }
-        for node in lineage.research
-    ]
-    unlinked = [
-        {"title": p.title, "view_url": view_url(p.slug)} for p in lineage.unlinked_plans
-    ]
-    return {"research": research, "unlinked_plans": unlinked}
+
+    return {"roots": [node(r) for r in lineage.roots]}
 
 
 def render_lineage_page(
@@ -164,11 +159,7 @@ def render_lineage_page(
     `archived` is the same lineage fold over archived-status docs; it renders as a
     separate, collapsed group and is `None` in the template context when empty.
     """
-    archived_ctx = (
-        _lineage_projection(archived, view_url)
-        if archived.research or archived.unlinked_plans
-        else None
-    )
+    archived_ctx = _lineage_projection(archived, view_url) if archived.roots else None
     return env.get_template("lineage.html").render(
         title=title,
         lineage=_lineage_projection(lineage, view_url),
@@ -212,62 +203,40 @@ def build_sidebar(
     slug)` is supplied by the route layer.
     """
 
-    def _doc(project: str, ref: PlanRef | ResearchNode) -> dict[str, object]:
+    def _doc(project: str, node: DocNode) -> dict[str, object]:
         return {
-            "title": ref.title,
-            "view_url": view_url(project, ref.slug),
-            "current": project == current_project and ref.slug == current_slug,
-            "status": ref.status.value,
-            "type": ref.type.value,
+            "title": node.title,
+            "view_url": view_url(project, node.slug),
+            "current": project == current_project and node.slug == current_slug,
+            "status": node.status.value,
+            "type": node.type.value,
+            "children": [_doc(project, c) for c in node.children],
         }
 
     def _archived_slugs(lineage: Lineage) -> set[str]:
-        """Every doc slug in the archived lineage (backlinks are duplicates)."""
-        return (
-            {n.slug for n in lineage.research}
-            | {p.slug for n in lineage.research for p in n.plans}
-            | {p.slug for p in lineage.unlinked_plans}
-        )
+        """Every doc slug in the archived tree, at any depth."""
+        return {n.slug for n in walk(lineage.roots)}
 
-    def _research_and_unlinked(
-        project: str, lineage: Lineage
-    ) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
-        research = [
-            {
-                **_doc(project, n),
-                "plans": [_doc(project, p) for p in n.plans],
-            }
-            for n in lineage.research
-        ]
-        unlinked = [_doc(project, p) for p in lineage.unlinked_plans]
-        return research, unlinked
+    def _roots(project: str, lineage: Lineage) -> list[dict[str, object]]:
+        return [_doc(project, r) for r in lineage.roots]
 
     proj_ctx: list[dict[str, object]] = []
     for pt in projects:
-        research, unlinked = _research_and_unlinked(pt.project, pt.lineage)
-        archived_research, archived_unlinked = _research_and_unlinked(
-            pt.project, pt.archived
-        )
-        # Count = every archived doc (research + its primary plans + unlinked
-        # plans); backlinks are duplicates of a plan counted under its primary
-        # research node, so they are never counted here.
-        archived_count = (
-            len(pt.archived.research)
-            + sum(len(n.plans) for n in pt.archived.research)
-            + len(pt.archived.unlinked_plans)
-        )
+        roots = _roots(pt.project, pt.lineage)
+        archived_roots = _roots(pt.project, pt.archived)
+        # Every archived doc at any depth. backlinks are not counted: they are
+        # duplicates of a doc already counted at its own place in the tree.
+        archived_count = len(list(walk(pt.archived.roots)))
         proj_ctx.append(
             {
                 "project": pt.project,
                 "name": pt.name,
                 "current": pt.project == current_project,
                 "doc_count": pt.doc_count,
-                "research": research,
-                "unlinked_plans": unlinked,
+                "roots": roots,
                 "archived": (
                     {
-                        "research": archived_research,
-                        "unlinked_plans": archived_unlinked,
+                        "roots": archived_roots,
                         "count": archived_count,
                         # Auto-expand when the doc being viewed is archived;
                         # stored user intent still wins on the client (ui.js).

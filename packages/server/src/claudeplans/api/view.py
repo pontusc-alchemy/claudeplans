@@ -92,6 +92,29 @@ _UNAVAILABLE_FRAME: Final = _sse_frame(
 )
 
 
+_TRAIL_HEAD = 1
+_TRAIL_TAIL = 2
+
+
+def _collapse_trail(hops: list[dict[str, object]]) -> list[dict[str, object]] | None:
+    """Keep the root and the nearest ancestors, eliding the middle into an ellipsis.
+
+    Renders in full at `len <= head + tail + 1`, so the ellipsis always stands for
+    two or more hops — a lone hidden node never occurs. It carries the elided titles
+    as its label, so assistive tech still reaches them.
+    """
+    if not hops:
+        return None
+    if len(hops) <= _TRAIL_HEAD + _TRAIL_TAIL + 1:
+        return hops
+    elided = hops[_TRAIL_HEAD:-_TRAIL_TAIL]
+    ellipsis: dict[str, object] = {
+        "elided": True,
+        "title": ", ".join(str(h["title"]) for h in elided),
+    }
+    return [*hops[:_TRAIL_HEAD], ellipsis, *hops[-_TRAIL_TAIL:]]
+
+
 @router.get("/v1/users/{uid}/projects/{project}/docs/{slug}/view")
 async def view_document(
     uid: str,
@@ -104,11 +127,12 @@ async def view_document(
     """Render the full document page (the live-view morph target)."""
     key = document_key(uid, project, slug)
     _, doc = await core.get_document(repo, key)
-    parent = await navigation.resolve_parent(repo, uid, project, doc)
-    lineage_trail: dict[str, object] | None = (
-        {"title": parent.title, "view_url": _view_url(uid, project, parent.slug)}
-        if parent is not None
-        else None
+    ancestors = await navigation.resolve_ancestors(repo, uid, project, doc)
+    lineage_trail = _collapse_trail(
+        [
+            {"title": a.title, "view_url": _view_url(uid, project, a.slug)}
+            for a in ancestors
+        ]
     )
     children = await navigation.resolve_children(repo, uid, project, doc)
     subdoc_index: list[dict[str, object]] = [

@@ -94,7 +94,7 @@ def test_put_research_refs(client: PlanClient) -> None:
     reply = client.put_research_refs("dev", "demo", "p1", ["r1"], "r1")
     assert reply.data is not None
     assert reply.data["research_refs"] == ["r1"]
-    assert reply.data["primary_research_ref"] == "r1"
+    assert reply.data["primary_parent_ref"] == "r1"
 
 
 def test_add_and_set_phase_status_and_remove(client: PlanClient) -> None:

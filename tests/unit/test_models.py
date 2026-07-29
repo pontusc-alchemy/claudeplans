@@ -203,7 +203,7 @@ def test_primary_ref_must_be_member() -> None:
             slug="p1",
             title="Plan One",
             owner_id="u1",
-            primary_research_ref="r1",
+            primary_parent_ref="r1",
         )
     doc = Document(
         type=DocType.plan,
@@ -212,9 +212,9 @@ def test_primary_ref_must_be_member() -> None:
         title="Plan One",
         owner_id="u1",
         research_refs=["r1"],
-        primary_research_ref="r1",
+        primary_parent_ref="r1",
     )
-    assert doc.primary_research_ref == "r1"
+    assert doc.primary_parent_ref == "r1"
 
 
 def test_unlink_primary_promotes_next() -> None:

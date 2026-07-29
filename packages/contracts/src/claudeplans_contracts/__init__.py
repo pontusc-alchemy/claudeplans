@@ -19,8 +19,8 @@ from .dto import DocStatusRequest as DocStatusRequest
 from .dto import DocumentCreate as DocumentCreate
 from .dto import DriftWarning as DriftWarning
 from .dto import EditTaskRequest as EditTaskRequest
-from .dto import LineagePlanRef as LineagePlanRef
-from .dto import LineageResearchNode as LineageResearchNode
+from .dto import LineageChildRef as LineageChildRef
+from .dto import LineageNode as LineageNode
 from .dto import LineageResponse as LineageResponse
 from .dto import MovePhaseRequest as MovePhaseRequest
 from .dto import MoveSectionRequest as MoveSectionRequest
@@ -57,6 +57,7 @@ from .keys import validate_key_segment as validate_key_segment
 from .migrate import CURRENT_SCHEMA_VERSION as CURRENT_SCHEMA_VERSION
 from .migrate import migrate as migrate
 from .migrate import migrate_document as migrate_document
+from .models import MAX_LINEAGE_DEPTH as MAX_LINEAGE_DEPTH
 from .models import Document as Document
 from .models import Phase as Phase
 from .models import Section as Section

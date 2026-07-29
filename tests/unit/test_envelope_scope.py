@@ -178,16 +178,20 @@ async def test_put_research_refs_rejects_nonexistent_ref() -> None:
         await core.put_research_refs(repo, "dev/demo/p1", ["ghost"], None, user=_USER)
 
 
-async def test_put_research_refs_rejects_plan_typed_ref() -> None:
-    """A ref that resolves to a plan doc (not research) must be rejected."""
+async def test_put_research_refs_accepts_a_plan_typed_ref() -> None:
+    """Refs are type-agnostic now: any doc may reference — and parent — any doc.
+
+    The existence check above is deliberately kept; only the research-type
+    constraint was dropped.
+    """
     repo = _SimpleRepo(
         {
             "dev/demo/p1": _make_raw("p1", DocType.plan),
             "dev/demo/p2": _make_raw("p2", DocType.plan),
         }
     )
-    with pytest.raises(ValidationError, match="p2"):
-        await core.put_research_refs(repo, "dev/demo/p1", ["p2"], None, user=_USER)
+    _, doc = await core.put_research_refs(repo, "dev/demo/p1", ["p2"], "p2", user=_USER)
+    assert doc.primary_parent_ref == "p2"
 
 
 async def test_put_research_refs_accepts_research_typed_ref() -> None:
@@ -203,7 +207,7 @@ async def test_put_research_refs_accepts_research_typed_ref() -> None:
     )
     assert new_rev == "2"
     assert doc.research_refs == ["r1"]
-    assert doc.primary_research_ref == "r1"
+    assert doc.primary_parent_ref == "r1"
 
 
 async def test_put_research_refs_empty_list_succeeds() -> None:

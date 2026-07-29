@@ -350,7 +350,7 @@ def put_research_refs(
     The Document validator enforces primary∈refs and dedup on re-validate.
     """
     return doc.model_copy(
-        update={"research_refs": research_refs, "primary_research_ref": primary}
+        update={"research_refs": research_refs, "primary_parent_ref": primary}
     )
 
 

@@ -10,7 +10,7 @@
     "ticket": "PLAT-1428"
   },
   "research_refs": ["feature-flag-vendors", "rollout-strategy"],
-  "primary_research_ref": "feature-flag-vendors",
+  "primary_parent_ref": "feature-flag-vendors",
   "sections": [
     {
       "anchor": "overview",

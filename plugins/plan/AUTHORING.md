@@ -16,12 +16,12 @@ Fields:
 | `title` | str | human-readable title |
 | `owner_id` | str | user identity (dev stack default: `dev`) |
 | `status` | `draft` \| `active` \| `done` | lifecycle state |
-| `schema_version` | int | currently `1`; set by the service |
+| `schema_version` | int | currently `2`; set by the service |
 | `date` | str \| null | ISO date, optional |
 | `description` | str \| null | short summary, optional |
 | `frontmatter` | dict | free-form JSON-serializable metadata escape hatch |
-| `research_refs` | list[str] | slugs of linked research docs |
-| `primary_research_ref` | str \| null | must be one of `research_refs` |
+| `research_refs` | list[str] | slugs of linked docs, any type |
+| `primary_parent_ref` | str \| null | the doc this one nests under; any type, any depth. Must be one of `research_refs` |
 | `sections` | list[Section] | ordered prose sections |
 | `phases` | list[Phase] | ordered phases (plan docs only) |
 
@@ -111,9 +111,13 @@ Exit codes: `0` ok · `2` usage error (bad flag/arg — reserved, never a domain
 ## Server-side invariants (validation → exit 4)
 
 - Research docs carry no phases.
-- `primary_research_ref` must be a member of `research_refs`.
+- `primary_parent_ref` must be a member of `research_refs`.
+- `primary_parent_ref` must name an existing doc in the same project, must not
+  be the doc itself, and must not close a cycle or nest past 32 levels.
 - Phase slugs are unique within a document.
 - Section anchors are unique within a document.
+
+`PUT /research-refs` is an absolute replace, not a merge: it sets `research_refs` and `primary_parent_ref` to exactly the payload, so a raw-API author must restate every ref they want to keep or the omitted ones drop. The `doc link` CLI verb does that read-modify-write for you.
 
 ## Rendering
 

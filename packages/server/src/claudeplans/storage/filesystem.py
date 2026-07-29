@@ -77,6 +77,23 @@ def _create_envelope_exclusive(path: Path, envelope: dict[str, JsonValue]) -> No
         os.fsync(fh.fileno())
 
 
+def _parent_ref(doc: JsonValue) -> str:
+    """The doc's nesting parent slug, or "" for a root or unreadable body.
+
+    Reads BOTH the v2 key and its v1 spelling. list() projects fields straight off
+    the on-disk envelope without running migrate(), so a stored doc that has not
+    been rewritten since the schema bump still carries `primary_research_ref` —
+    reading only the new key would silently re-root every un-migrated document.
+    """
+    if not isinstance(doc, dict):
+        return ""
+    for key in ("primary_parent_ref", "primary_research_ref"):
+        value = doc.get(key)
+        if isinstance(value, str):
+            return value
+    return ""
+
+
 def _walk_keys(root: Path) -> list[tuple[str, dict[str, JsonValue]]]:
     """Return (key, envelope) for every *.json under `root`, keyed POSIX-relative."""
     found: list[tuple[str, dict[str, JsonValue]]] = []
@@ -233,6 +250,7 @@ class FilesystemRepository(Repository):
                         "title": title,
                         "type": doc_type,
                         "status": status,
+                        "primary_parent_ref": _parent_ref(doc),
                     },
                 )
             )
