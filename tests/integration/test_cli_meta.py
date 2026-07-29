@@ -70,6 +70,17 @@ def test_schema_conditional_writes_and_list_envelope() -> None:
 
 
 @pytest.mark.usefixtures("patched_cli")
+def test_schema_lists_set_primary_command() -> None:
+    result = runner.invoke(cli.app, ["schema"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.stdout)
+    assert "set-primary" in parsed["commands"]["doc"]
+    assert "doc set-primary" in parsed["command_flags"]
+    # No REQUIRED --rev, so it is not an unconditional conditional-write.
+    assert "doc set-primary" not in parsed["conditional_writes"]
+
+
+@pytest.mark.usefixtures("patched_cli")
 def test_schema_command_flags_and_global_flags() -> None:
     result = runner.invoke(cli.app, ["schema"])
     assert result.exit_code == 0

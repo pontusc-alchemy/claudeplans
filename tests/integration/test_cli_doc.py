@@ -51,6 +51,7 @@ def _free_port() -> int:
 
 
 _VALID_RESEARCH = json.dumps({"type": "research", "slug": "r1", "title": "R One"})
+_VALID_RESEARCH_2 = json.dumps({"type": "research", "slug": "r2", "title": "R Two"})
 
 _NESTED_CREATE = json.dumps(
     {
@@ -671,6 +672,201 @@ def test_doc_view_emits_json_with_url_key() -> None:
     parsed = json.loads(result.stdout)
     assert "url" in parsed
     assert "p1" in parsed["url"]
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_create_with_research_ref_flag_sets_refs() -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_RESEARCH
+    )
+    result = runner.invoke(
+        cli.app,
+        [
+            "doc",
+            "create",
+            "demo",
+            "--type",
+            "plan",
+            "--slug",
+            "rr1",
+            "--title",
+            "RR1",
+            "--research-ref",
+            "r1",
+        ],
+    )
+    assert result.exit_code == 0
+    doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "rr1"]).stdout)
+    assert doc["data"]["research_refs"] == ["r1"]
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_create_with_primary_research_ref_sets_primary() -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_RESEARCH
+    )
+    result = runner.invoke(
+        cli.app,
+        [
+            "doc",
+            "create",
+            "demo",
+            "--type",
+            "plan",
+            "--slug",
+            "rr2",
+            "--title",
+            "RR2",
+            "--research-ref",
+            "r1",
+            "--primary-research-ref",
+            "r1",
+        ],
+    )
+    assert result.exit_code == 0
+    doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "rr2"]).stdout)
+    assert doc["data"]["primary_research_ref"] == "r1"
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_create_multiple_research_refs_repeatable() -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_RESEARCH
+    )
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_RESEARCH_2
+    )
+    result = runner.invoke(
+        cli.app,
+        [
+            "doc",
+            "create",
+            "demo",
+            "--type",
+            "plan",
+            "--slug",
+            "rr3",
+            "--title",
+            "RR3",
+            "--research-ref",
+            "r1",
+            "--research-ref",
+            "r2",
+        ],
+    )
+    assert result.exit_code == 0
+    doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "rr3"]).stdout)
+    assert doc["data"]["research_refs"] == ["r1", "r2"]
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_create_from_json_with_research_flags_exits_validation() -> None:
+    result = runner.invoke(
+        cli.app,
+        ["doc", "create", "demo", "--from-json", "-", "--research-ref", "r1"],
+        input=VALID_CREATE,
+    )
+    assert_validation_exit(result)
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_create_primary_not_in_refs_exits_validation() -> None:
+    # Client-side pre-check: --primary-research-ref without a matching --research-ref.
+    result = runner.invoke(
+        cli.app,
+        [
+            "doc",
+            "create",
+            "demo",
+            "--type",
+            "plan",
+            "--slug",
+            "rr4",
+            "--title",
+            "RR4",
+            "--research-ref",
+            "r2",
+            "--primary-research-ref",
+            "r1",
+        ],
+    )
+    assert_validation_exit(result)
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_set_primary_on_linked_ref_repoints() -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_RESEARCH
+    )
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_RESEARCH_2
+    )
+    runner.invoke(
+        cli.app,
+        [
+            "doc",
+            "create",
+            "demo",
+            "--type",
+            "plan",
+            "--slug",
+            "sp1",
+            "--title",
+            "SP1",
+            "--research-ref",
+            "r1",
+            "--research-ref",
+            "r2",
+            "--primary-research-ref",
+            "r1",
+        ],
+    )
+    result = runner.invoke(cli.app, ["doc", "set-primary", "demo", "sp1", "r2"])
+    assert result.exit_code == 0
+    doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "sp1"]).stdout)
+    assert doc["data"]["research_refs"] == ["r1", "r2"]
+    assert doc["data"]["primary_research_ref"] == "r2"
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_set_primary_adds_absent_ref() -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_RESEARCH
+    )
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_RESEARCH_2
+    )
+    runner.invoke(
+        cli.app,
+        [
+            "doc",
+            "create",
+            "demo",
+            "--type",
+            "plan",
+            "--slug",
+            "sp2",
+            "--title",
+            "SP2",
+            "--research-ref",
+            "r1",
+        ],
+    )
+    # r2 is seeded but not yet linked; set-primary adds it and makes it primary.
+    result = runner.invoke(cli.app, ["doc", "set-primary", "demo", "sp2", "r2"])
+    assert result.exit_code == 0
+    doc = json.loads(runner.invoke(cli.app, ["doc", "get", "demo", "sp2"]).stdout)
+    assert doc["data"]["research_refs"] == ["r1", "r2"]
+    assert doc["data"]["primary_research_ref"] == "r2"
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_set_primary_nonexistent_ref_exits_validation() -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=VALID_CREATE
+    )
+    result = runner.invoke(cli.app, ["doc", "set-primary", "demo", "p1", "ghost_ref"])
+    assert_validation_exit(result)
 
 
 @pytest.mark.usefixtures("patched_cli")
