@@ -16,6 +16,7 @@ import typer
 from claudeplans_contracts import ValidationError
 
 from ..config import config_path, read_config, write_config
+from ..context import AppContext
 from ..errors import handle_errors
 
 app = typer.Typer(no_args_is_help=True)
@@ -63,19 +64,21 @@ def set(
 
 @app.command()
 @handle_errors
-def show() -> None:
+def show(ctx: typer.Context) -> None:
     """Print the effective url/uid the CLI would use (no network request)."""
     cfg = read_config()
     effective_url = (
         os.environ.get("CLAUDEPLANS_URL") or cfg.get("url") or "http://127.0.0.1:8000"
     )
-    effective_uid = os.environ.get("CLAUDEPLANS_UID") or cfg.get("uid") or "dev"
+    # Read back what the root callback resolved rather than recomputing the chain,
+    # so this window cannot drift from the uid the CLI actually writes as.
+    context: AppContext = ctx.obj
     print(
         json.dumps(
             {
                 "path": str(config_path()),
                 "url": effective_url,
-                "uid": effective_uid,
+                "uid": context.uid,
             },
             separators=(",", ":"),
         )
