@@ -49,7 +49,7 @@ def select_provider(settings: Settings) -> UserProvider:
     """
     match settings.auth_mode:
         case AuthMode.noop:
-            return NoopProvider()
+            return NoopProvider(settings.noop_uid)
         case AuthMode.iap:
             return IapProvider()
 

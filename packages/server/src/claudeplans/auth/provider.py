@@ -31,17 +31,26 @@ class UserProvider(Protocol):
     async def __call__(self, headers: Mapping[str, str]) -> CurrentUser: ...
 
 
-# Dev/local only: a single fixed, friendly trusted user. namespace == uid so its
-# write-own target is /v1/users/dev/.... The fail-closed check forbids pairing this
-# with a cloud backend.
-DEV_USER: CurrentUser = CurrentUser(uid="dev", name="dev", namespace="dev")
+# Dev/local only: the trusted user when CLAUDEPLANS_NOOP_UID is unset. namespace ==
+# uid, so write-own targets /v1/users/dev/...; fail-closed forbids a cloud backend.
+DEV_UID = "dev"
+DEV_USER: CurrentUser = CurrentUser(uid=DEV_UID, name=DEV_UID, namespace=DEV_UID)
 
 
 class NoopProvider:
-    """Returns the fixed DEV_USER. Dev/local only."""
+    """Returns one fixed trusted user, built from `uid`. Dev/local only.
+
+    The principal is configurable so a local stack can serve as the machine's own
+    user instead of a shared "dev". That is what lets a CLI deriving its uid from the
+    host write at all, since write-own compares the two. Settings charset-validates
+    the uid, so an illegal one never reaches this constructor.
+    """
+
+    def __init__(self, uid: str = DEV_UID) -> None:
+        self._user = CurrentUser(uid=uid, name=uid, namespace=uid)
 
     async def __call__(self, headers: Mapping[str, str]) -> CurrentUser:
-        return DEV_USER
+        return self._user
 
 
 class IapProvider:

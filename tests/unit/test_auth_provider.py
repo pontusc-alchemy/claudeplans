@@ -12,12 +12,22 @@ def test_dev_user_namespace_equals_uid() -> None:
 
 
 async def test_noop_provider_returns_dev_user() -> None:
-    assert await NoopProvider()({}) is DEV_USER
+    assert await NoopProvider()({}) == DEV_USER
+
+
+async def test_noop_provider_honors_configured_uid() -> None:
+    user = await NoopProvider("alek")({})
+    assert user.uid == user.name == user.namespace == "alek"
 
 
 def test_select_provider_noop() -> None:
     settings = Settings(auth_mode=AuthMode.noop)
     assert isinstance(select_provider(settings), NoopProvider)
+
+
+async def test_select_provider_passes_noop_uid_through() -> None:
+    provider = select_provider(Settings(auth_mode=AuthMode.noop, noop_uid="alek"))
+    assert (await provider({})).namespace == "alek"
 
 
 def test_select_provider_iap() -> None:

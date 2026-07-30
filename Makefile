@@ -3,6 +3,10 @@
 
 UV ?= uv
 
+# Dev-stack noop principal: the host user, slugified to the key-segment charset the
+# uid-deriving CLI produces, so the two agree. Override: make up NOOP_UID=someone
+NOOP_UID ?= $(shell id -un | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$$//g')
+
 help: ## Show this help.
 	@grep -E '^[a-zA-Z-]+:.*##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*##"}; {printf "  %-14s %s\n", $$1, $$2}'
 
@@ -39,11 +43,11 @@ serve-build: ## Build the bare serve image.
 serve: ## Bring up the stable stack (project claudeplans; run from the pinned release worktree).
 	docker compose -p claudeplans up --build -d
 
-up: ## Build + run the dev stack (default project claudeplans-dev) on 127.0.0.1:9394; waits for healthy.
-	CLAUDEPLANS_HOST_IP=127.0.0.1 CLAUDEPLANS_HOST_PORT=9394 docker compose up --build -d --wait
+up: ## Build + run the dev stack (default project claudeplans-dev) on 127.0.0.1:9394 as the host user; waits for healthy.
+	CLAUDEPLANS_HOST_IP=127.0.0.1 CLAUDEPLANS_HOST_PORT=9394 CLAUDEPLANS_NOOP_UID=$(NOOP_UID) docker compose up --build -d --wait
 
 down: ## Stop the dev stack (volumes kept; wipe: docker compose down -v).
 	docker compose down
 
 seed: venv $(if $(CLAUDEPLANS_URL),,up) ## Seed demo projects — brings the dev stack up, unless CLAUDEPLANS_URL targets elsewhere.
-	$(UV) run python scripts/seed.py
+	CLAUDEPLANS_UID=$${CLAUDEPLANS_UID:-$(NOOP_UID)} $(UV) run python scripts/seed.py
