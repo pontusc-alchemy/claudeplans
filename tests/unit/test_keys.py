@@ -125,7 +125,7 @@ def test_primary_ref_validates_against_deduped_refs() -> None:
         title="Plan One",
         owner_id="u1",
         research_refs=["a", "b", "a"],
-        primary_research_ref="b",
+        primary_parent_ref="b",
     )
     assert doc.research_refs == ["a", "b"]
-    assert doc.primary_research_ref == "b"
+    assert doc.primary_parent_ref == "b"

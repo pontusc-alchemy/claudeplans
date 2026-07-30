@@ -1,15 +1,25 @@
 {% extends "base.html" %}
 {% block content %}
 {% if lineage_trail %}
-<nav class="doc-lineage-trail" aria-label="Sub-plan lineage">
-  <a href="{{ lineage_trail.view_url }}" class="lineage-trail-parent">{{ lineage_trail.title }}</a>
-  <span class="lineage-trail-sep" aria-hidden="true">▸</span>
-  <span class="lineage-trail-current" aria-current="page">{{ title }}</span>
+<nav class="doc-chrome doc-lineage-trail" aria-label="Breadcrumb">
+  <ol class="lineage-trail-list">
+    {% for hop in lineage_trail %}
+    <li>
+      {% if hop.elided %}
+      <span class="lineage-trail-ellipsis" title="{{ hop.title }}" aria-label="{{ hop.title }}">…</span>
+      {% else %}
+      <a href="{{ hop.view_url }}">{{ hop.title }}</a>
+      {% endif %}
+      <span class="lineage-trail-sep" aria-hidden="true">▸</span>
+    </li>
+    {% endfor %}
+    <li><span class="lineage-trail-current" aria-current="page">{{ title }}</span></li>
+  </ol>
 </nav>
 {% endif %}
 {% if subdoc_index %}
-<nav class="doc-subdoc-index" aria-label="Sub-plans">
-  <span class="subdoc-index-label">Sub-plans</span>
+<nav class="doc-chrome doc-subdoc-index" aria-label="Child documents">
+  <span class="subdoc-index-label">Child documents</span>
   <ul class="subdoc-index-list">
     {% for child in subdoc_index %}
     <li><a href="{{ child.view_url }}">{{ child.title }}</a></li>

@@ -13,7 +13,7 @@ from pydantic import JsonValue
 from .errors import ValidationError
 from .models import Document
 
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
 
 
 def _v0_to_v1(raw: dict[str, JsonValue]) -> dict[str, JsonValue]:
@@ -27,8 +27,24 @@ def _v0_to_v1(raw: dict[str, JsonValue]) -> dict[str, JsonValue]:
     return data
 
 
+def _v1_to_v2(raw: dict[str, JsonValue]) -> dict[str, JsonValue]:
+    """v1 called the nesting pointer `primary_research_ref`, back when only a
+    research doc could parent one. Nesting is now type-orthogonal, so it is
+    `primary_parent_ref`.
+
+    A pure key rename with no data-dependent branch, so null, set and dangling
+    primaries all migrate 1:1. `research_refs` is deliberately left alone — its own
+    rename is deferred, and keeping them separate means the two cannot collide.
+    """
+    data = dict(raw)
+    if "primary_research_ref" in data:
+        data["primary_parent_ref"] = data.pop("primary_research_ref")
+    return data
+
+
 MIGRATIONS: dict[int, Callable[[dict[str, JsonValue]], dict[str, JsonValue]]] = {
-    0: _v0_to_v1
+    0: _v0_to_v1,
+    1: _v1_to_v2,
 }
 
 

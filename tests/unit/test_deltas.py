@@ -287,7 +287,7 @@ def test_put_research_refs() -> None:
     before = _snapshot(doc)
     out = deltas.put_research_refs(doc, ["r1", "r2"], "r1")
     assert out.research_refs == ["r1", "r2"]
-    assert out.primary_research_ref == "r1"
+    assert out.primary_parent_ref == "r1"
     assert _snapshot(doc) == before
 
 

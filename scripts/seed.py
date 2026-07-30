@@ -152,7 +152,7 @@ SEED: list[tuple[str, str, list[dict[str, Any]]]] = [
                 "status": "active",
                 "description": "Linked plan — nests under auth-review.",
                 "research_refs": ["auth-review"],
-                "primary_research_ref": "auth-review",
+                "primary_parent_ref": "auth-review",
                 "phases": [
                     _phase(
                         "provider",

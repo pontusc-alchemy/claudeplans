@@ -171,7 +171,7 @@ body.md-typeset {
   color: var(--fg);
 }
 
-.sidebar .research-title {
+.sidebar .doc-node-title {
   font-weight: 600;
 }
 
@@ -199,9 +199,46 @@ body.md-typeset {
   border: 0;
 }
 
-.sidebar details > summary.project-title {
+.sidebar details > summary.project-title,
+.sidebar details > summary.doc-twisty {
   cursor: pointer;
   list-style-position: inside;
+}
+
+/* 24x24 is the WCAG 2.2 minimum target; the marker glyph alone is well under it. */
+.sidebar details > summary.doc-twisty {
+  min-height: 1.5rem;
+}
+
+/* A closed <details> keeps its content in the DOM, and Chromium hides it with
+   content-visibility, so link-hint tools still target the anchors (issue #26). */
+.sidebar details:not([open]) > *:not(summary) {
+  display: none;
+}
+
+/* Twisty in column 1, title in column 2, the subtree spanning both. The twisty
+   holds only its marker, so the title's row is not a toggle target. */
+.sidebar .doc-node {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr;
+  align-items: baseline;
+}
+
+.sidebar .doc-node > .doc-branch {
+  grid-column: 1;
+}
+
+.sidebar .doc-node > .doc-node-title {
+  grid-column: 2;
+}
+
+.sidebar .doc-node > .doc-tree {
+  grid-column: 1 / -1;
+}
+
+/* The subtree is a sibling of the twisty, so the twisty's own state hides it. */
+.sidebar .doc-branch:not([open]) ~ .doc-tree {
+  display: none;
 }
 
 .archived-group {
@@ -252,10 +289,42 @@ body.md-typeset {
   color: var(--fg-muted);
 }
 
-/* Tighten the doc's top padding when a trail precedes it, so trail + title read
-   as one header block rather than two stacked gaps. */
-.doc-lineage-trail + .doc {
+/* Keyed on the shared .doc-chrome class, not on either block: a doc with both a
+   parent and children renders trail THEN index, so `.doc-lineage-trail + .doc`
+   would stop matching once both guards dropped. */
+.doc-chrome + .doc {
   padding-top: 0.85rem;
+}
+
+/* Both blocks present: close the gap between them. */
+.doc-lineage-trail + .doc-subdoc-index {
+  padding-top: 0.6rem;
+}
+
+.lineage-trail-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lineage-trail-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* The last hop is the current doc, which needs no trailing separator. */
+.lineage-trail-list li:last-child .lineage-trail-sep {
+  display: none;
+}
+
+.lineage-trail-ellipsis {
+  color: var(--fg-muted);
+  cursor: help;
 }
 
 .lineage-trail-sep {
@@ -604,15 +673,15 @@ details.admonition {
   padding-left: 1rem;
 }
 
-#lineage .research-roots {
+#lineage .doc-tree {
   padding-left: 0;
 }
 
-#lineage .research-node {
+#lineage .doc-node {
   margin: 0.75rem 0;
 }
 
-#lineage .research-title {
+#lineage .doc-node-title {
   font-weight: 600;
 }
 

@@ -38,7 +38,7 @@ _FROM_JSON = typer.Option(
         "Accepts the full DocumentCreate shape — express the entire scaffold "
         "in one call, including nested sections and phases-with-tasks. "
         "Shape: {type, slug, title, status?(draft), date?, description?, "
-        "frontmatter{}, research_refs[], primary_research_ref?, "
+        "frontmatter{}, research_refs[], primary_parent_ref?, "
         "sections:[{anchor, heading, body?, level?(1-6)}], "
         "phases:[{slug, name, status?(todo), tasks:[{text, checked?(false)}]}]}. "
         'Example: \'{"type":"plan","slug":"p","title":"P",'
@@ -199,7 +199,7 @@ def link(
     current = c.client.get_document(c.uid, project, slug)
     data = current.data or {}
     existing: list[str] = list(data.get("research_refs", []))
-    existing_primary: str | None = data.get("primary_research_ref")
+    existing_primary: str | None = data.get("primary_parent_ref")
     new_refs = existing if ref in existing else [*existing, ref]
     new_primary = ref if primary else existing_primary
     reply = c.client.put_research_refs(c.uid, project, slug, new_refs, new_primary)
@@ -221,7 +221,7 @@ def unlink(
     current = c.client.get_document(c.uid, project, slug)
     data = current.data or {}
     existing: list[str] = list(data.get("research_refs", []))
-    existing_primary: str | None = data.get("primary_research_ref")
+    existing_primary: str | None = data.get("primary_parent_ref")
     new_refs, new_primary = unlink_research_ref(existing, existing_primary, ref)
     reply = c.client.put_research_refs(c.uid, project, slug, new_refs, new_primary)
     emit_write(reply, full=c.full)

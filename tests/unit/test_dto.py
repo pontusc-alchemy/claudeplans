@@ -13,6 +13,7 @@ from pydantic import BaseModel, ValidationError
 
 from claudeplans_contracts import (
     AddSectionRequest,
+    LineageResponse,
     SectionPlacement,
     SetPhaseRequest,
     SetSectionRequest,
@@ -83,3 +84,37 @@ def test_dtos_forbid_unknown_fields(
     # extra="forbid" must still reject unknown keys after the field additions.
     with pytest.raises(ValidationError):
         model.model_validate(payload)
+
+
+def _node(slug: str, children: list[dict[str, object]] | None = None) -> dict:
+    return {
+        "slug": slug,
+        "title": slug.upper(),
+        "owner_id": "u",
+        "project": "p",
+        "status": "draft",
+        "type": "plan",
+        "children": children or [],
+        "backlinks": [],
+    }
+
+
+def test_lineage_response_round_trips_a_deep_tree() -> None:
+    """The self-referential field needs the forward ref resolved to nest at all."""
+    payload = {"roots": [_node("a", [_node("b", [_node("c")])])]}
+    parsed = LineageResponse.model_validate(payload)
+    assert parsed.roots[0].children[0].children[0].slug == "c"
+    assert parsed.model_dump(mode="json")["roots"] == payload["roots"]
+
+
+def test_lineage_response_rejects_an_unknown_field() -> None:
+    """extra="forbid" is what turns server-side shape drift into a loud failure."""
+    with pytest.raises(ValidationError):
+        LineageResponse.model_validate({"roots": [_node("a") | {"plans": []}]})
+
+
+def test_lineage_response_defaults_to_an_empty_forest() -> None:
+    empty = LineageResponse.model_validate({})
+    assert empty.roots == []
+    assert empty.over_cap == []
+    assert empty.cycle_roots == []

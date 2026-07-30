@@ -105,7 +105,12 @@ async def test_list_scopes_to_prefix_and_carries_metadata(repo: Repository) -> N
     for entry in entries:
         assert isinstance(entry, ListEntry)
         # Every backend must populate the full listing-time metadata contract.
-        assert {"created_at", "updated_at", "title", "type", "status"} <= set(
-            entry.metadata
-        )
+        assert {
+            "created_at",
+            "updated_at",
+            "title",
+            "type",
+            "status",
+            "primary_parent_ref",
+        } <= set(entry.metadata)
         assert entry.metadata["title"] == "Plan One"

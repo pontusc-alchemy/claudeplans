@@ -29,6 +29,10 @@ from .keys import validate_key_segment
 # chars (Cf) are left alone; the multi-line `body` is exempt entirely (raw markdown).
 _FORBIDDEN_TEXT_CATEGORIES = frozenset({"Cc", "Zl", "Zp"})
 
+# Safety bound on `primary_parent_ref` chains, not a feature limit. Shared by the
+# write guard and the read-time fold so neither accepts what the other truncates.
+MAX_LINEAGE_DEPTH = 32
+
 # A clean, routable identifier: letters, digits, '-', '_'. Excludes '/', '.', URL
 # metacharacters, and whitespace by construction (see validate_anchor).
 _ANCHOR_RE = re.compile(r"[A-Za-z0-9_-]+")
@@ -159,7 +163,7 @@ class Document(BaseModel):
 
     # Must equal migrate.CURRENT_SCHEMA_VERSION; asserted there. Set as a literal
     # here to avoid a circular import (migrate imports Document).
-    schema_version: int = 1
+    schema_version: int = 2
     type: DocType
     status: DocStatus = DocStatus.draft
     project: str
@@ -174,7 +178,9 @@ class Document(BaseModel):
     # tuple) are intentionally rejected at validation.
     frontmatter: dict[str, JsonValue] = Field(default_factory=dict)
     research_refs: list[str] = Field(default_factory=list)
-    primary_research_ref: str | None = None
+    # The nesting pointer: any doc of any type in the same project. Tree position is
+    # derived from it at read time, never stored as structure. See MAX_LINEAGE_DEPTH.
+    primary_parent_ref: str | None = None
     sections: list[Section] = Field(default_factory=list)
     phases: list[Phase] = Field(default_factory=list)
 
@@ -222,10 +228,14 @@ class Document(BaseModel):
             raise ValueError("research documents cannot carry phases")
         # The primary ref is a designation among the refs, not a standalone field.
         if (
-            self.primary_research_ref is not None
-            and self.primary_research_ref not in self.research_refs
+            self.primary_parent_ref is not None
+            and self.primary_parent_ref not in self.research_refs
         ):
-            raise ValueError("primary_research_ref must be one of research_refs")
+            raise ValueError("primary_parent_ref must be one of research_refs")
+        # Acyclicity and depth need the whole project, so they live at the write
+        # path (core.py); a model sees one doc and can only catch self-parenting.
+        if self.primary_parent_ref == self.slug:
+            raise ValueError("primary_parent_ref must not be the document itself")
         # Phase slug is the identity key for phase ops (set-status/move/rm) and the
         # locator in DriftWarning.path; duplicates make both ambiguous. Name the
         # offender so an agent can fix it without diffing the whole phase list.
@@ -245,7 +255,7 @@ class Document(BaseModel):
 
 
 def unlink_research_ref(
-    research_refs: list[str], primary_research_ref: str | None, ref: str
+    research_refs: list[str], primary_parent_ref: str | None, ref: str
 ) -> tuple[list[str], str | None]:
     """Remove `ref` from the refs, returning the new (refs, primary) pair.
 
@@ -254,8 +264,8 @@ def unlink_research_ref(
     the first remaining ref, or cleared to None if nothing remains.
     """
     new_refs = [r for r in research_refs if r != ref]
-    if primary_research_ref == ref:
+    if primary_parent_ref == ref:
         new_primary = new_refs[0] if new_refs else None
     else:
-        new_primary = primary_research_ref
+        new_primary = primary_parent_ref
     return new_refs, new_primary
