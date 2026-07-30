@@ -32,8 +32,10 @@ task is missing a target, add one rather than documenting a raw command.
 ## Local stacks
 
 - **`make up` / `make down`** — the dev stack (compose project
-  `claudeplans-dev`), served on `127.0.0.1:9394` with the noop auth provider's
-  single fixed uid `dev`. Disposable volumes; safe to cycle freely.
+  `claudeplans-dev`), served on `127.0.0.1:9394` as the host user
+  (`CLAUDEPLANS_NOOP_UID`, derived from `id -un`; unset means the fixed `dev`).
+  Writes are own-namespace, so point the CLI at the same uid or it 403s.
+  Disposable volumes; safe to cycle freely.
 - **`make seed`** populates demo projects (`empty`/`atlas`/`beacon`)
   idempotently via `scripts/seed.py`; point it elsewhere with
   `CLAUDEPLANS_URL`.

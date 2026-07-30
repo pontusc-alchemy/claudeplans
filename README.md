@@ -112,12 +112,23 @@ grab the stable address.)
 create a document with the CLI and read its rendered view in a browser:
 
 ```shell
-CLAUDEPLANS_URL=http://127.0.0.1:9394 .venv/bin/claudeplans doc create demo --type plan --slug hello --title "Hello Plan"
-# → http://127.0.0.1:9394/v1/users/dev/projects/demo/docs/hello/view
+CLAUDEPLANS_URL=http://127.0.0.1:9394 CLAUDEPLANS_UID="$(id -un)" \
+  .venv/bin/claudeplans doc create demo --type plan --slug hello --title "Hello Plan"
+# → http://127.0.0.1:9394/v1/users/<you>/projects/demo/docs/hello/view
 ```
+
+`make up` serves as the host user rather than a shared `dev` (see
+`CLAUDEPLANS_NOOP_UID` below), and writes are own-namespace only — so the CLI's uid
+has to match the server's principal or the write is a 403. Set it once with
+`claudeplans config set --uid "$(id -un)"` instead of per-call.
 
 The CLI defaults to `http://127.0.0.1:8000` and uid `dev`; override with
 `--url` / `CLAUDEPLANS_URL` and `--uid` / `CLAUDEPLANS_UID`.
+
+`CLAUDEPLANS_NOOP_UID` sets who the no-op provider authenticates as. `make up`
+derives it from `id -un`, slugified to the storage-key charset; unset (including
+`make serve`) keeps the fixed `dev`. An illegal value fails at startup, not at the
+first write.
 
 ## Serving a release while developing
 

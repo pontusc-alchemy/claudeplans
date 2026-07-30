@@ -27,6 +27,9 @@ services:
       # bare names are silently ignored and the app boots as the fail-closed iap default.
       CLAUDEPLANS_AUTH_MODE: noop
       CLAUDEPLANS_STORAGE_BACKEND: filesystem
+      # Who the noop provider authenticates as. `make up` passes the host user so a
+      # uid-deriving CLI matches; unset (e.g. `make serve`) keeps the fixed "dev".
+      CLAUDEPLANS_NOOP_UID: ${CLAUDEPLANS_NOOP_UID:-dev}
       # The image's WORKDIR /app is not writable by the non-root app user; point the
       # filesystem root at /data, owned by app and backed by the named volume below.
       CLAUDEPLANS_FILESYSTEM__ROOT: /data

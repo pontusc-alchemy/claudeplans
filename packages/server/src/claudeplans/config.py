@@ -9,8 +9,10 @@ rule and is invoked from main.py at startup, before any request is served.
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from claudeplans_contracts import validate_key_segment
 
 
 class StorageBackend(StrEnum):
@@ -48,6 +50,9 @@ class Settings(BaseSettings):
     version: str = "dev"
     storage_backend: StorageBackend = StorageBackend.filesystem
     auth_mode: AuthMode = AuthMode.iap  # fail-closed default
+    # The uid the noop provider authenticates as (CLAUDEPLANS_NOOP_UID); ignored
+    # under any other auth mode. Unset keeps the historical fixed "dev".
+    noop_uid: str = "dev"
     filesystem: FilesystemSettings = FilesystemSettings()
     # User registry path (CLAUDEPLANS_REGISTRY_PATH). MUST sit OUTSIDE filesystem.root,
     # or FilesystemRepository's rglob("*.json") walk would sweep it up as a stray key.
@@ -57,6 +62,20 @@ class Settings(BaseSettings):
     project_registry_path: str = "./projects.json"
     # 1 MiB cap on request bodies (CLAUDEPLANS_MAX_BODY_BYTES); must be positive.
     max_body_bytes: int = Field(default=1_048_576, gt=0)
+
+    @field_validator("noop_uid")
+    @classmethod
+    def _validate_noop_uid(cls, v: str) -> str:
+        """Reject a noop uid that cannot be an owner storage-key segment.
+
+        The principal becomes the owner segment of every key it writes, so an
+        illegal value would fail at first write, not at boot. Validating at load
+        turns that into a startup crash naming the env var that caused it.
+        """
+        try:
+            return validate_key_segment(v)
+        except ValueError as exc:
+            raise ValueError(f"CLAUDEPLANS_NOOP_UID: {exc}") from exc
 
 
 def load_settings() -> Settings:
