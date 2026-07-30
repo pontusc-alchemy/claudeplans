@@ -1,8 +1,19 @@
+{% macro doc_link(n) %}<a class="doc-node-title" href="{{ n.view_url }}"{% if n.current %} aria-current="page"{% endif %}><span class="status-dot status-{{ n.status }}"></span><span class="doc-type doc-type-{{ n.type }}"></span><span class="sr-only">{{ n.type }}, {{ n.status }}: </span>{{ n.title }}</a>{% endmacro %}
 {% macro doc_tree(nodes) %}
 <ul class="doc-tree">
   {% for n in nodes %}
   <li class="doc-node">
-    <a class="doc-node-title" href="{{ n.view_url }}"{% if n.current %} aria-current="page"{% endif %}><span class="status-dot status-{{ n.status }}"></span><span class="doc-type doc-type-{{ n.type }}"></span><span class="sr-only">{{ n.type }}, {{ n.status }}: </span>{{ n.title }}</a>
+    {# Only a node with children gets a twisty — one on a leaf promises a subtree
+       that is not there. data-project joins the same open-freeze + persistence
+       machinery as the project nodes (see ui.js). #}
+    {% if n.children %}
+    <details class="doc-branch" data-project="{{ n.key }}" open>
+      <summary class="doc-twisty" aria-label="Toggle {{ n.title }}"></summary>
+    </details>
+    {% endif %}
+    {# The title link is a SIBLING of the twisty, never inside its <summary>:
+       Enter on a link inside a summary both navigates and toggles the node. #}
+    {{ doc_link(n) }}
     {% if n.children %}{{ doc_tree(n.children) }}{% endif %}
   </li>
   {% endfor %}

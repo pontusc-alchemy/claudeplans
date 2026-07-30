@@ -210,6 +210,9 @@ def build_sidebar(
             "current": project == current_project and node.slug == current_slug,
             "status": node.status.value,
             "type": node.type.value,
+            # Collapse key for a node that has children. Shares the project
+            # namespace via "//", which no real project slug can contain.
+            "key": f"{project}//doc/{node.slug}",
             "children": [_doc(project, c) for c in node.children],
         }
 

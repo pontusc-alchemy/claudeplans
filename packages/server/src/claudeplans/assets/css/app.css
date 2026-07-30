@@ -199,9 +199,46 @@ body.md-typeset {
   border: 0;
 }
 
-.sidebar details > summary.project-title {
+.sidebar details > summary.project-title,
+.sidebar details > summary.doc-twisty {
   cursor: pointer;
   list-style-position: inside;
+}
+
+/* 24x24 is the WCAG 2.2 minimum target; the marker glyph alone is well under it. */
+.sidebar details > summary.doc-twisty {
+  min-height: 1.5rem;
+}
+
+/* A closed <details> keeps its content in the DOM, and Chromium hides it with
+   content-visibility, so link-hint tools still target the anchors (issue #26). */
+.sidebar details:not([open]) > *:not(summary) {
+  display: none;
+}
+
+/* Twisty in column 1, title in column 2, the subtree spanning both. The twisty
+   holds only its marker, so the title's row is not a toggle target. */
+.sidebar .doc-node {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr;
+  align-items: baseline;
+}
+
+.sidebar .doc-node > .doc-branch {
+  grid-column: 1;
+}
+
+.sidebar .doc-node > .doc-node-title {
+  grid-column: 2;
+}
+
+.sidebar .doc-node > .doc-tree {
+  grid-column: 1 / -1;
+}
+
+/* The subtree is a sibling of the twisty, so the twisty's own state hides it. */
+.sidebar .doc-branch:not([open]) ~ .doc-tree {
+  display: none;
 }
 
 .archived-group {
