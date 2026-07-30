@@ -8,6 +8,7 @@ statuses back to the shared domain errors so callers handle one error vocabulary
 """
 
 import json
+from collections.abc import Sequence
 from typing import NamedTuple
 
 import httpx
@@ -36,6 +37,7 @@ from claudeplans_contracts import (
     SetSectionRequest,
     SetTasksCheckedRequest,
     StaleRevision,
+    Task,
     ToggleTaskRequest,
     ValidationError,
     validate_key_segment,
@@ -263,11 +265,13 @@ class PlanClient:
         exit_criteria: str = "",
         notes: str = "",
         at: int | None = None,
+        tasks: Sequence[Task] = (),
     ) -> Reply:
         body = AddPhaseRequest(
             slug=phase_slug,
             name=name,
             status=PhaseStatus(status),
+            tasks=list(tasks),
             intro=intro,
             exit_criteria=exit_criteria,
             notes=notes,

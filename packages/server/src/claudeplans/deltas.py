@@ -11,6 +11,8 @@ write rather than re-checked here.
 ValidationError here is the domain error, distinct from pydantic.ValidationError.
 """
 
+from collections.abc import Sequence
+
 from pydantic import JsonValue
 
 from claudeplans_contracts import (
@@ -82,8 +84,11 @@ def add_phase(
     exit_criteria: str = "",
     notes: str = "",
     at: int | None = None,
+    # Keyword-only so every existing positional call site keeps its exact meaning.
+    *,
+    tasks: Sequence[Task] = (),
 ) -> Document:
-    """Append a phase (the plan surface is append-only; reposition is move_phase).
+    """Append a phase and its tasks (append-only; reposition is move_phase).
 
     Pre-checks slug uniqueness for a clean domain error; the Document validator would
     otherwise surface it as a pydantic ValidationError on re-validate.
@@ -94,6 +99,7 @@ def add_phase(
         slug=slug,
         name=name,
         status=status,
+        tasks=list(tasks),
         intro=intro,
         exit_criteria=exit_criteria,
         notes=notes,

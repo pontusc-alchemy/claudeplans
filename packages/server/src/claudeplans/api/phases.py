@@ -47,6 +47,7 @@ async def add_phase(
         body.exit_criteria,
         body.notes,
         body.at,
+        tasks=body.tasks,
         user=user,
     )
     response.headers["ETag"] = rev

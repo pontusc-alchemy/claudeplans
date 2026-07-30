@@ -16,7 +16,7 @@ emission is performed by the API layer — the composition point that holds both
 key and the new rev — keeping core a pure storage-orchestration layer.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Final
 
 from pydantic import JsonValue
@@ -26,6 +26,7 @@ from claudeplans_contracts import (
     DocumentCreate,
     Forbidden,
     StaleRevision,
+    Task,
     ValidationError,
     key_for_document,
     migrate_document,
@@ -199,13 +200,14 @@ async def add_phase(
     notes: str = "",
     at: int | None = None,
     *,
+    tasks: Sequence[Task] = (),
     user: CurrentUser,
 ) -> tuple[str, Document]:
     return await read_modify_write(
         repo,
         key,
         lambda doc: deltas.add_phase(
-            doc, slug, name, status, intro, exit_criteria, notes, at
+            doc, slug, name, status, intro, exit_criteria, notes, at, tasks=tasks
         ),
         user=user,
     )

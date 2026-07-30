@@ -58,6 +58,35 @@ def test_add_phase_appends() -> None:
     assert _snapshot(doc) == before
 
 
+def test_add_phase_carries_its_tasks() -> None:
+    # The point of the row: a phase and its tasks are one transform, so one rev.
+    doc = _doc()
+    before = _snapshot(doc)
+    out = deltas.add_phase(
+        doc,
+        "c",
+        "Gamma",
+        PhaseStatus.todo,
+        tasks=[Task(text="first"), Task(text="second", checked=True)],
+    )
+    phase = next(p for p in out.phases if p.slug == "c")
+    assert [(t.text, t.checked) for t in phase.tasks] == [
+        ("first", False),
+        ("second", True),
+    ]
+    assert _snapshot(doc) == before
+
+
+def test_add_phase_without_tasks_gives_each_phase_its_own_list() -> None:
+    # A mutable default would alias every task-less phase to one shared list.
+    first = deltas.add_phase(_doc(), "c", "Gamma", PhaseStatus.todo)
+    second = deltas.add_phase(first, "d", "Delta", PhaseStatus.todo)
+    phase_c = next(p for p in second.phases if p.slug == "c")
+    phase_d = next(p for p in second.phases if p.slug == "d")
+    assert phase_c.tasks == [] and phase_d.tasks == []
+    assert phase_c.tasks is not phase_d.tasks
+
+
 def test_add_phase_duplicate_slug_raises() -> None:
     with pytest.raises(ValidationError):
         deltas.add_phase(_doc(), "a", "Dup", PhaseStatus.todo)

@@ -273,3 +273,78 @@ def test_phase_complete_checks_all_and_sets_done() -> None:
     parsed = json.loads(result.stdout)
     assert parsed["phase"]["status"] == "done"
     assert all(t["checked"] is True for t in parsed["phase"]["tasks"])
+
+
+_PHASE_WITH_TASKS = json.dumps(
+    {
+        "slug": "b",
+        "name": "Beta",
+        "status": "doing",
+        "tasks": [{"text": "first"}, {"text": "second", "checked": True}],
+        "intro": "Intro prose",
+    }
+)
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_phase_add_from_json_lands_tasks_in_one_rev() -> None:
+    """Nine writes collapse to one: the phase, its prose and its tasks together."""
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app,
+        ["phase", "add", "demo", "p1", "--from-json", "-"],
+        input=_PHASE_WITH_TASKS,
+    )
+    assert result.exit_code == 0, result.stderr
+    assert json.loads(result.stdout)["rev"] == "2"
+    phases = json.loads(runner.invoke(cli.app, ["doc", "phases", "demo", "p1"]).stdout)
+    added = next(p for p in phases["phases"] if p["slug"] == "b")
+    assert added["status"] == "doing"
+    assert added["intro"] == "Intro prose"
+    assert [(t["text"], t["checked"]) for t in added["tasks"]] == [
+        ("first", False),
+        ("second", True),
+    ]
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_phase_add_without_slug_or_name_exits_validation() -> None:
+    # A domain error (exit 4) with a message, not Typer's exit-2 usage box: the
+    # args are only optional because --from-json can carry them.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=VALID_CREATE
+    )
+    result = runner.invoke(cli.app, ["phase", "add", "demo", "p1"])
+    assert_validation_exit(result)
+    assert "--from-json" in json.loads(result.stderr)["detail"]
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_phase_add_from_json_body_wins_over_positional_args() -> None:
+    # Documented in --help: the body carries everything, so the positionals are
+    # ignored rather than half-merged.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=VALID_CREATE
+    )
+    result = runner.invoke(
+        cli.app,
+        ["phase", "add", "demo", "p1", "ignored", "Ignored", "--from-json", "-"],
+        input=_PHASE_WITH_TASKS,
+    )
+    assert result.exit_code == 0, result.stderr
+    phases = json.loads(runner.invoke(cli.app, ["doc", "phases", "demo", "p1"]).stdout)
+    assert [p["slug"] for p in phases["phases"]] == ["a", "b"]
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_phase_add_from_json_rejects_an_unknown_field() -> None:
+    # AddPhaseRequest forbids extras, so a typo'd key fails client-side before any
+    # request rather than landing a phase missing what the author meant to write.
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=VALID_CREATE
+    )
+    body = json.dumps({"slug": "b", "name": "Beta", "task": [{"text": "typo"}]})
+    result = runner.invoke(cli.app, ["phase", "add", "demo", "p1", "--from-json", body])
+    assert_validation_exit(result)

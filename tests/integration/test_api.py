@@ -363,6 +363,45 @@ async def test_add_phase_to_research_doc_422_and_not_persisted(tmp_path: Path) -
         assert get.json()["data"]["phases"] == []
 
 
+async def test_add_phase_with_tasks_is_one_write_one_rev(tmp_path: Path) -> None:
+    """Eight tasks alongside their phase must cost one rev, not nine.
+
+    A doc at rev 1 goes to rev 2, not rev 10 — which is what makes the phase appear
+    complete to a concurrent reader instead of stuttering into place.
+    """
+    tasks = [{"text": f"t{i}", "checked": i % 2 == 0} for i in range(8)]
+    async with _client(tmp_path) as client:
+        created = await _create_plan(client)
+        assert created.headers["ETag"] == "1"
+        resp = await client.post(
+            f"{BASE}/p1/phases", json={"slug": "b", "name": "Beta", "tasks": tasks}
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.headers["ETag"] == "2"
+
+        phases = (await client.get(f"{BASE}/p1")).json()["data"]["phases"]
+        added = next(p for p in phases if p["slug"] == "b")
+        assert [(t["text"], t["checked"]) for t in added["tasks"]] == [
+            (t["text"], t["checked"]) for t in tasks
+        ]
+
+
+async def test_add_phase_with_a_bad_task_422s_and_persists_nothing(
+    tmp_path: Path,
+) -> None:
+    # The tasks ride the same write, so an invalid one must take the phase with it
+    # rather than leaving a phase whose tasks silently went missing.
+    async with _client(tmp_path) as client:
+        await _create_plan(client)
+        resp = await client.post(
+            f"{BASE}/p1/phases",
+            json={"slug": "b", "name": "Beta", "tasks": [{"text": "   "}]},
+        )
+        assert resp.status_code == 422
+        phases = (await client.get(f"{BASE}/p1")).json()["data"]["phases"]
+        assert [p["slug"] for p in phases] == ["a"]
+
+
 async def test_add_phase_duplicate_slug_422_and_doc_readable(tmp_path: Path) -> None:
     async with _client(tmp_path) as client:
         await _create_plan(client)

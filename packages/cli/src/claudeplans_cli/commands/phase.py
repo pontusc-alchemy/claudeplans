@@ -5,11 +5,12 @@ gates with If-Match; the other phase mutations are stable-key and retry-safe.
 Typer descriptors are module-level singletons to satisfy ruff B008.
 """
 
+import sys
 from typing import Annotated
 
 import typer
 
-from claudeplans_contracts import PhaseStatus
+from claudeplans_contracts import AddPhaseRequest, PhaseStatus, ValidationError
 
 from ..context import AppContext
 from ..errors import handle_errors
@@ -19,6 +20,8 @@ from ..prose import resolve_prose
 app = typer.Typer(no_args_is_help=True)
 
 _NAME = typer.Argument()
+# Positional, but optional: --from-json carries the slug and name itself.
+_ADD_PHASE_SLUG = typer.Argument()
 _ADD_STATUS = typer.Option(help="phase lifecycle status; defaults to todo")
 _STATUS = typer.Argument()
 _TO_INDEX = typer.Argument()
@@ -63,18 +66,37 @@ _AT = typer.Option(
     "--at",
     help="0-based insert position; appends if omitted. Unconditional (no --rev).",
 )
+_ADD_FROM_JSON = typer.Option(
+    "--from-json",
+    help=(
+        "'-' for stdin, or a literal JSON string. The whole AddPhaseRequest body: "
+        "{slug, name, status?(todo), tasks:[{text, checked?(false)}], intro?, "
+        "exit_criteria?, notes?, at?}. The only way to land a phase AND its tasks "
+        "in one call — one request, one rev, one event, applied atomically. The "
+        "positional args and prose flags are ignored when this is given."
+    ),
+)
+_ADD_HELP = (
+    "Append a phase (or insert at --at), with its tasks and prose, in one call.\n\n"
+    "Prose flags accept inline text or a --<flag>-file path ('-' = stdin); omitted "
+    "prose defaults to empty.\n\n"
+    "Tasks arrive only through --from-json: the shell form has no --task flag, "
+    "because a repeatable flag cannot express a task's checked state without "
+    "inventing a second mini-syntax the JSON body already has."
+)
 
 
-@app.command()
+@app.command(help=_ADD_HELP)
 @handle_errors
 def add(
     ctx: typer.Context,
     project: str,
     slug: str,
-    phase_slug: str,
-    name: Annotated[str, _NAME],
+    phase_slug: Annotated[str | None, _ADD_PHASE_SLUG] = None,
+    name: Annotated[str | None, _NAME] = None,
     status: Annotated[PhaseStatus, _ADD_STATUS] = PhaseStatus.todo,
     at: Annotated[int | None, _AT] = None,
+    from_json: Annotated[str | None, _ADD_FROM_JSON] = None,
     intro: Annotated[str | None, _ADD_INTRO] = None,
     exit_criteria: Annotated[str | None, _ADD_EXIT] = None,
     notes: Annotated[str | None, _ADD_NOTES] = None,
@@ -82,28 +104,39 @@ def add(
     exit_criteria_file: Annotated[str | None, _SET_EXIT_FILE] = None,
     notes_file: Annotated[str | None, _SET_NOTES_FILE] = None,
 ) -> None:
-    """Append a phase (or insert at --at), optionally with prose, in one call.
-
-    Prose flags accept inline text or a --<flag>-file path ('-' = stdin);
-    omitted prose defaults to empty.
-    """
     c: AppContext = ctx.obj
-    intro = resolve_prose(intro, intro_file, "intro") or ""
-    exit_criteria = (
-        resolve_prose(exit_criteria, exit_criteria_file, "exit-criteria") or ""
-    )
-    notes = resolve_prose(notes, notes_file, "notes") or ""
+    if from_json is not None:
+        raw = sys.stdin.read() if from_json == "-" else from_json
+        body = AddPhaseRequest.model_validate_json(raw)
+    else:
+        if phase_slug is None or name is None:
+            raise ValidationError(
+                "phase_slug and name are required unless --from-json is given"
+            )
+        body = AddPhaseRequest(
+            slug=phase_slug,
+            name=name,
+            status=status,
+            intro=resolve_prose(intro, intro_file, "intro") or "",
+            exit_criteria=resolve_prose(
+                exit_criteria, exit_criteria_file, "exit-criteria"
+            )
+            or "",
+            notes=resolve_prose(notes, notes_file, "notes") or "",
+            at=at,
+        )
     reply = c.client.add_phase(
         c.uid,
         project,
         slug,
-        phase_slug,
-        name,
-        status.value,
-        intro,
-        exit_criteria,
-        notes,
-        at,
+        body.slug,
+        body.name,
+        body.status.value,
+        body.intro,
+        body.exit_criteria,
+        body.notes,
+        body.at,
+        body.tasks,
     )
     emit_write(reply, full=c.full)
 

@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
 
 from .enums import DocStatus, DocType, PhaseStatus, SectionPlacement
-from .models import Phase, Section, validate_text_field
+from .models import Phase, Section, Task, validate_text_field
 
 
 class ProjectName(BaseModel):
@@ -70,13 +70,19 @@ class DocStatusRequest(BaseModel):
 
 
 class AddPhaseRequest(BaseModel):
-    """Add a phase (appended, or at a specific index)."""
+    """Add a phase (appended, or at a specific index), with its tasks.
+
+    Carrying `tasks` is what makes a phase that arrives mid-life cost one write: a
+    phase and its eight tasks are one request, one rev and one SSE event, not an add
+    plus eight appends that a concurrent reader watches stutter into place.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     slug: str
     name: str
     status: PhaseStatus = PhaseStatus.todo
+    tasks: list[Task] = Field(default_factory=list)
     # Prose fields; default "" matches the Phase model (set at creation).
     intro: str = ""
     exit_criteria: str = ""

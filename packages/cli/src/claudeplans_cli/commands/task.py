@@ -55,8 +55,9 @@ def add(
     """Append a task to a phase, or insert at --at if given.
 
     Use --checked/--unchecked to set the initial state; defaults to unchecked.
-    For bulk authoring (many tasks, or whole phases-with-tasks at once) there is
-    no per-task bulk verb — pass the full body via `doc create --from-json`.
+    For many tasks at once there is no per-task bulk verb: land them with their
+    phase via `phase add --from-json`, or with the whole document via
+    `doc create --from-json`. Both are one request and one rev.
     """
     c: AppContext = ctx.obj
     reply = c.client.add_task(c.uid, project, slug, phase_slug, text, at, checked)
