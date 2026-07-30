@@ -96,7 +96,28 @@ def test_handle_errors_stale_rev_carries_current_rev(
         boom()
     assert excinfo.value.exit_code == int(ExitCode.STALE_REV)
     err = json.loads(capsys.readouterr().err)
-    assert err == {"error": "stale_rev", "current_rev": "7"}
+    assert err == {"error": "stale_rev", "current_rev": "7", "detail": "lost race"}
+
+
+def test_handle_errors_stale_rev_marks_a_create_collision(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # The one 409 with no rev to retry against: the payload must say so and name the
+    # key, or the agent is pointed at a retry that can never succeed.
+    @handle_errors
+    def boom() -> None:
+        raise StaleRevision("dev/demo/p1", conflict="exists")
+
+    with pytest.raises(typer.Exit) as excinfo:
+        boom()
+    assert excinfo.value.exit_code == int(ExitCode.STALE_REV)
+    err = json.loads(capsys.readouterr().err)
+    assert err == {
+        "error": "stale_rev",
+        "conflict": "exists",
+        "current_rev": "",
+        "detail": "dev/demo/p1",
+    }
 
 
 # Every request-side httpx failure must map to a structured transport error, not

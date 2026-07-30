@@ -185,6 +185,23 @@ async def test_toggle_with_stale_if_match_returns_409(tmp_path: Path) -> None:
         assert resp.status_code == 409
 
 
+async def test_duplicate_create_409_body_marks_the_collision(tmp_path: Path) -> None:
+    # The wire half of the discriminator, pinned independently of the CLI that
+    # lifts it: a stale-rev 409 on the same status must stay unmarked.
+    async with _client(tmp_path) as client:
+        await _create_plan(client)
+        resp = await _create_plan(client)
+        assert resp.status_code == 409
+        assert resp.json()["conflict"] == "exists"
+        assert resp.json()["detail"].endswith("/demo/p1")
+
+        stale = await client.request(
+            "DELETE", f"{BASE}/p1", headers={"If-Match": "999999999"}
+        )
+        assert stale.status_code == 409
+        assert "conflict" not in stale.json()
+
+
 async def test_delete_with_wrong_if_match_returns_409(tmp_path: Path) -> None:
     async with _client(tmp_path) as client:
         await _create_plan(client)

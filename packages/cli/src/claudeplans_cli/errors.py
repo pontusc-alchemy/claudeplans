@@ -76,8 +76,11 @@ def handle_errors[**P, R](func: Callable[P, R]) -> Callable[P, R]:
     so an agent can branch on the failure without parsing prose — and never sees a
     traceback.
 
-    - StaleRevision -> `{"error":"stale_rev","current_rev":"<N>"}`, exit STALE_REV
-      (the rev lets the agent retry without a re-read).
+    - StaleRevision -> `{"error":"stale_rev","current_rev":"<N>","detail":…}`, exit
+      STALE_REV (the rev lets the agent retry without a re-read; `detail` names the
+      key, which is the only identification a create collision gets since it has no
+      rev). A create that lost to an existing key adds `"conflict":"exists"` — the
+      one 409 where retrying is futile rather than the documented remedy.
     - any other domain `PlanError` -> `{"error":"<kind>","detail":…}`, its mapped exit.
     - client-side pydantic `ValidationError` (a malformed create body) ->
       `{"error":"validation","detail":…}`, exit VALIDATION.
@@ -98,7 +101,12 @@ def handle_errors[**P, R](func: Callable[P, R]) -> Callable[P, R]:
         try:
             return func(*args, **kwargs)
         except StaleRevision as exc:
-            _emit_error({"error": "stale_rev", "current_rev": exc.current_rev})
+            payload: dict[str, object] = {"error": "stale_rev"}
+            if exc.conflict:
+                payload["conflict"] = exc.conflict
+            payload["current_rev"] = exc.current_rev
+            payload["detail"] = str(exc)
+            _emit_error(payload)
             raise typer.Exit(ExitCode.STALE_REV) from exc
         except PlanError as exc:
             _emit_error({"error": kind_for(exc), "detail": str(exc)})

@@ -51,6 +51,38 @@ async def test_create_when_key_exists_is_stale(repo: Repository) -> None:
         await _create(repo, "u1/demo/plan/p1", _doc())
 
 
+async def test_create_collision_is_marked_exists(repo: Repository) -> None:
+    # Every backend must mark it: the marker is the only thing that says "this slug
+    # is taken", where the documented re-read-and-retry remedy cannot succeed.
+    await _create(repo, "u1/demo/plan/p1", _doc())
+    with pytest.raises(StaleRevision) as excinfo:
+        await _create(repo, "u1/demo/plan/p1", _doc())
+    assert excinfo.value.conflict == "exists"
+    assert excinfo.value.current_rev == ""
+
+
+async def test_write_to_vanished_key_is_unmarked_despite_empty_rev(
+    repo: Repository,
+) -> None:
+    # The twin the marker exists to separate: also a 409, also no current rev, but
+    # here the key is gone rather than taken. Unmarked, so it stays retryable.
+    with pytest.raises(StaleRevision) as excinfo:
+        await repo.put("u1/demo/plan/gone", _doc(), "1")
+    assert excinfo.value.current_rev == ""
+    assert excinfo.value.conflict == ""
+
+
+async def test_rev_mismatch_carries_no_conflict_marker(repo: Repository) -> None:
+    # A plain CAS loss hands back the current rev and no marker, so an agent can
+    # branch on the marker's presence rather than on the empty-rev coincidence.
+    rev1 = await _create(repo, "u1/demo/plan/p1", _doc())
+    await repo.put("u1/demo/plan/p1", _doc(), rev1)
+    with pytest.raises(StaleRevision) as excinfo:
+        await repo.put("u1/demo/plan/p1", _doc(), rev1)
+    assert excinfo.value.conflict == ""
+    assert excinfo.value.current_rev != ""
+
+
 async def test_get_missing_raises_not_found(repo: Repository) -> None:
     with pytest.raises(NotFound):
         await repo.get("u1/demo/plan/missing")

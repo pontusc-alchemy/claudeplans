@@ -142,17 +142,20 @@ class PlanClient:
                     # Extract the current server rev so the caller can retry without
                     # a re-read. Prefer the ETag header; fall back to body field.
                     current_rev = resp.headers.get("ETag", "")
+                    try:
+                        body = resp.json()
+                    except ValueError:
+                        body = None
+                    if not isinstance(body, dict):
+                        body = {}
                     if not current_rev:
-                        try:
-                            body = resp.json()
-                            current_rev = (
-                                body.get("current_rev", "")
-                                if isinstance(body, dict)
-                                else ""
-                            )
-                        except ValueError:
-                            current_rev = ""
-                    raise StaleRevision(detail, current_rev=current_rev)
+                        current_rev = str(body.get("current_rev", ""))
+                    # The server's sub-kind for a 409 that carries no rev; absent
+                    # means the plain rev mismatch (see StaleRevision.conflict).
+                    conflict = str(body.get("conflict", ""))
+                    raise StaleRevision(
+                        detail, current_rev=current_rev, conflict=conflict
+                    )
                 raise error_cls(detail)
             # Any unmapped error status (including a non-InvalidRev 400) stays
             # inside PlanError so the CLI's error boundary catches it (-> generic

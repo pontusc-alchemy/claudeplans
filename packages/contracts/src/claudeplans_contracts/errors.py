@@ -23,11 +23,19 @@ class StaleRevision(PlanError):
 
     `current_rev` is the server-side revision at the time of rejection; the
     caller can retry immediately without a re-read.
+
+    `conflict` names the sub-kind when the plain rev mismatch is not what
+    happened. `"exists"` means a create-if-absent lost to an existing key: retry
+    is futile there, whereas every other 409 invites one. Empty is the rev
+    mismatch, so a reader that ignores this field keeps today's meaning.
     """
 
-    def __init__(self, key: str = "", current_rev: str = "") -> None:
+    def __init__(
+        self, key: str = "", current_rev: str = "", conflict: str = ""
+    ) -> None:
         super().__init__(key)
         self.current_rev = current_rev
+        self.conflict = conflict
 
 
 class CorruptDocument(PlanError):

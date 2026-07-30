@@ -40,9 +40,13 @@ async def _handle_not_found(request: Request, exc: Exception) -> JSONResponse:
 
 
 async def _handle_stale_revision(request: Request, exc: Exception) -> JSONResponse:
+    # A create losing to an existing key and a write whose target vanished are
+    # byte-identical 409s; `conflict` marks the create collision server-side.
     assert isinstance(exc, StaleRevision)
     current_rev = exc.current_rev
     body: dict[str, object] = {"detail": str(exc) or "revision conflict"}
+    if exc.conflict:
+        body["conflict"] = exc.conflict
     headers: dict[str, str] = {}
     if current_rev:
         body["current_rev"] = current_rev

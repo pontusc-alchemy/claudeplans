@@ -128,7 +128,11 @@ def schema(ctx: typer.Context) -> None:
                     "{url, uid, reachable, version?, storage_backend?, "
                     "auth_mode?, detail?}"
                 ),
-                "error_stderr": ("{error, detail}  (stale_rev: {error, current_rev})"),
+                "error_stderr": (
+                    "{error, detail}  (stale_rev adds current_rev, and conflict "
+                    '"exists" when a create lost to an existing slug — that one '
+                    "is not retryable; detail names the key)"
+                ),
                 "full_flag": (
                     "--full/-v restores {rev, data, warnings} on writes; "
                     "also switches `doc rev` to the {rev} envelope"

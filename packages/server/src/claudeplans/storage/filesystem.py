@@ -152,7 +152,9 @@ class FilesystemRepository(Repository):
                     # Create-if-absent lost: another writer created the key first.
                     # No current rev is available for a key that now exists but
                     # whose rev we haven't read; pass empty so the contract is met.
-                    raise StaleRevision(key, current_rev="") from None
+                    raise StaleRevision(
+                        key, current_rev="", conflict="exists"
+                    ) from None
                 return "1"
 
             try:
