@@ -31,6 +31,17 @@ app = typer.Typer(no_args_is_help=True)
 
 _TYPE = typer.Option("--type")
 _LIST_STATUS = typer.Option("--status")
+_LIST_PARENT = typer.Option(
+    "--parent", help="only docs naming this slug as their primary parent"
+)
+_LIST_SINCE = typer.Option(
+    "--since",
+    help=(
+        "only docs whose updated_at is >= this ISO-8601 timestamp, compared as text "
+        "(pass a prefix like 2026-07-30 for that day onward). A doc with no "
+        "updated_at is dropped: an unknown time cannot be shown to fall in range."
+    ),
+)
 _FROM_JSON = typer.Option(
     "--from-json",
     help=(
@@ -277,11 +288,16 @@ def list_(
     project: str,
     type_: Annotated[DocType | None, _TYPE] = None,
     status: Annotated[DocStatus | None, _LIST_STATUS] = None,
+    parent: Annotated[str | None, _LIST_PARENT] = None,
+    since: Annotated[str | None, _LIST_SINCE] = None,
 ) -> None:
-    """List all documents in a project, optionally filtered by --type/--status."""
+    """List a project's documents, filtered by --type/--status/--parent/--since."""
     c: AppContext = ctx.obj
     raw = c.client.list_docs(c.uid, project)
-    if (type_ is not None or status is not None) and isinstance(raw, dict):
+    # Every filter is client-side over the one listing call, so combining them
+    # costs the same single request as listing everything.
+    wanted = (type_, status, parent, since) != (None, None, None, None)
+    if wanted and isinstance(raw, dict):
         items = raw.get("items", [])
         filtered = [
             item
@@ -289,6 +305,8 @@ def list_(
             if isinstance(item, dict)
             and (type_ is None or item.get("type") == type_.value)
             and (status is None or item.get("status") == status.value)
+            and (parent is None or item.get("primary_research_ref") == parent)
+            and (since is None or str(item.get("updated_at") or "") >= since)
         ]
         result: object = {"project": raw.get("project"), "items": filtered}
     else:

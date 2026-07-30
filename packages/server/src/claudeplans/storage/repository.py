@@ -34,8 +34,13 @@ class ListEntry:
     """One entry from a prefix listing: the key, its current rev, and metadata.
 
     `metadata` carries listing-time fields every backend must provide without a full
-    body fetch: `created_at`, `updated_at`, `title`, `type`, `status`. (The filesystem
-    backend reads them from the envelope; GCS sources them from object custom metadata.)
+    body fetch: `created_at`, `updated_at`, `title`, `type`, `status`,
+    `primary_research_ref`. (The filesystem backend reads them from the envelope; GCS
+    sources them from object custom metadata.)
+
+    `primary_research_ref` is the only entry sourced from the document body rather
+    than the envelope, and it is empty for a doc that names no parent — so a backend
+    still supplies the key when there is no parent to report.
     """
 
     key: str

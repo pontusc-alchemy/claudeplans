@@ -31,6 +31,10 @@ def _doc_row(entry: ListEntry) -> DocListEntry | None:
     Skips entries whose key is not exactly uid/project/slug (3 segments), or
     whose type/status metadata fails enum coercion — so a corrupt on-disk
     envelope is silently omitted from both doc list and project counts.
+
+    rev/updated_at/primary_research_ref ride along from data the listing already
+    holds, so they cost no extra read. They are read with `.get(...) or None`, never
+    subscripted: an absent or empty value must degrade to null, not skip the row.
     """
     parts = entry.key.split("/")
     if len(parts) != 3:
@@ -43,7 +47,15 @@ def _doc_row(entry: ListEntry) -> DocListEntry | None:
     except KeyError, ValueError:  # unparenthesized multi-except: PEP 758 (3.14)
         # Missing or invalid enum value: skip rather than 500.
         return None
-    return DocListEntry(slug=slug, title=title, type=doc_type, status=status)
+    return DocListEntry(
+        slug=slug,
+        title=title,
+        type=doc_type,
+        status=status,
+        rev=entry.rev or None,
+        updated_at=entry.metadata.get("updated_at") or None,
+        primary_research_ref=entry.metadata.get("primary_research_ref") or None,
+    )
 
 
 @router.get("/v1/users/{uid}/projects")

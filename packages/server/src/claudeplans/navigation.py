@@ -129,11 +129,12 @@ async def resolve_children(
     build_lineage can only nest a plan under a research doc when both sit in the same
     input set.
 
-    Unlike resolve_parent — which matches the in-hand doc's own primary_research_ref
-    against listing metadata (no body read) — the nesting key lives on the other docs,
-    and primary_research_ref is not a listing-metadata field, so this reads the project
-    bodies. The sidebar build reads them too; that double read is accepted at local
-    single-user scale (dedup by threading one load through the view is a later change).
+    Unlike resolve_parent — which matches against listing metadata (no body read) —
+    this folds the whole project through build_lineage, so it reads the project
+    bodies. The nesting key itself is listing metadata now, so a listing-only fold is
+    available as a later change. The sidebar build reads the bodies too; that double
+    read is accepted at local single-user scale (dedup by threading one load through
+    the view is a later change).
     """
     if doc.type is not DocType.research:
         return []

@@ -105,7 +105,25 @@ async def test_list_scopes_to_prefix_and_carries_metadata(repo: Repository) -> N
     for entry in entries:
         assert isinstance(entry, ListEntry)
         # Every backend must populate the full listing-time metadata contract.
-        assert {"created_at", "updated_at", "title", "type", "status"} <= set(
-            entry.metadata
-        )
+        assert {
+            "created_at",
+            "updated_at",
+            "title",
+            "type",
+            "status",
+            "primary_research_ref",
+        } <= set(entry.metadata)
         assert entry.metadata["title"] == "Plan One"
+        # Present-but-empty for a doc naming no parent: the key is never absent.
+        assert entry.metadata["primary_research_ref"] == ""
+
+
+async def test_list_metadata_carries_the_parent_ref(repo: Repository) -> None:
+    # Sourced from the document, not the envelope — the one metadata field that is,
+    # so a backend cannot populate the contract from envelope keys alone.
+    child = _doc("p2") | {"research_refs": ["p1"], "primary_research_ref": "p1"}
+    await _create(repo, "u1/demo/plan/p1", _doc("p1"))
+    await _create(repo, "u1/demo/plan/p2", child)
+
+    by_key = {e.key: e for e in await repo.list("u1/")}
+    assert by_key["u1/demo/plan/p2"].metadata["primary_research_ref"] == "p1"

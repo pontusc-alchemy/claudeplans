@@ -105,6 +105,67 @@ async def test_doc_list_returns_slugs_title_type_status_sorted(
         assert items[1]["status"] == "draft"
 
 
+async def test_doc_list_carries_rev_updated_at_and_parent(tmp_path: Path) -> None:
+    """The three fields that make "what changed" and "what hangs off what" readable.
+
+    All three ride on data the listing already holds, so answering those questions
+    costs one request rather than one per document.
+    """
+    child: dict[str, object] = PLAN_BODY | {
+        "research_refs": ["r1"],
+        "primary_research_ref": "r1",
+    }
+    async with _client(tmp_path) as client:
+        await client.post(_docs_url("dev", "projA"), json=RESEARCH_BODY)
+        await client.post(_docs_url("dev", "projA"), json=child)
+
+        items = (await client.get(_doc_list_url("dev", "projA"))).json()["items"]
+        rows = {i["slug"]: i for i in items}
+        assert rows["p1"]["rev"] == "1"
+        assert rows["p1"]["updated_at"].startswith("20")
+        assert rows["p1"]["primary_research_ref"] == "r1"
+        # A root reports null rather than omitting the key, so the shape is uniform.
+        assert rows["r1"]["primary_research_ref"] is None
+
+
+async def test_doc_without_updated_at_is_listed_and_counted(tmp_path: Path) -> None:
+    """A required non-empty updated_at would drop this row from BOTH endpoints.
+
+    The backend coerces a missing envelope key to "", and pydantic's ValidationError
+    is a ValueError — so _doc_row's skip-on-corrupt guard would swallow the failure
+    and the doc would vanish silently rather than erroring.
+    """
+    import json
+
+    async with _client(tmp_path) as client:
+        await client.post(_docs_url("dev", "projA"), json=RESEARCH_BODY)
+        legacy = tmp_path / "dev/projA/legacy.json"
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_text(
+            json.dumps(
+                {
+                    "rev": "1",
+                    "created_at": "2024-01-01T00:00:00+00:00",
+                    "document": {
+                        "type": "plan",
+                        "slug": "legacy",
+                        "title": "Legacy",
+                        "status": "active",
+                    },
+                }
+            )
+        )
+
+        items = (await client.get(_doc_list_url("dev", "projA"))).json()["items"]
+        rows = {i["slug"]: i for i in items}
+        assert "legacy" in rows
+        assert rows["legacy"]["updated_at"] is None
+        assert rows["legacy"]["rev"] == "1"
+
+        projects = (await client.get(_projects_url("dev"))).json()["items"]
+        assert {p["project"]: p["docs"] for p in projects}["projA"] == len(items)
+
+
 async def test_empty_project_returns_200_empty_list(tmp_path: Path) -> None:
     """Unknown/empty project returns 200 with empty items, not 404."""
     async with _client(tmp_path) as client:

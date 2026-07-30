@@ -223,6 +223,10 @@ class FilesystemRepository(Repository):
             title = raw_title if isinstance(raw_title, str) else ""
             doc_type = str(doc.get("type", "")) if isinstance(doc, dict) else ""
             status = str(doc.get("status", "")) if isinstance(doc, dict) else ""
+            raw_parent = (
+                doc.get("primary_research_ref") if isinstance(doc, dict) else None
+            )
+            parent = raw_parent if isinstance(raw_parent, str) else ""
             entries.append(
                 ListEntry(
                     key=key,
@@ -233,6 +237,7 @@ class FilesystemRepository(Repository):
                         "title": title,
                         "type": doc_type,
                         "status": status,
+                        "primary_research_ref": parent,
                     },
                 )
             )

@@ -506,6 +506,38 @@ def test_doc_list_status_filter() -> None:
 
 
 @pytest.mark.usefixtures("patched_cli")
+def test_doc_list_parent_filter_selects_direct_children() -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_VALID_RESEARCH
+    )
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=VALID_CREATE
+    )
+    runner.invoke(cli.app, ["doc", "link", "demo", "p1", "r1", "--primary"])
+    result = runner.invoke(cli.app, ["doc", "list", "demo", "--parent", "r1"])
+    assert result.exit_code == 0
+    slugs = [i["slug"] for i in json.loads(result.stdout)["data"]["items"]]
+    assert slugs == ["p1"]
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_list_since_filter_bounds_on_updated_at() -> None:
+    """--since answers "what changed while I was away" from the listing alone."""
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=VALID_CREATE
+    )
+    listed = json.loads(runner.invoke(cli.app, ["doc", "list", "demo"]).stdout)["data"][
+        "items"
+    ]
+    stamp = listed[0]["updated_at"]
+    kept = runner.invoke(cli.app, ["doc", "list", "demo", "--since", stamp])
+    assert [i["slug"] for i in json.loads(kept.stdout)["data"]["items"]] == ["p1"]
+    # The bound is inclusive at the row's own stamp and excludes anything older.
+    dropped = runner.invoke(cli.app, ["doc", "list", "demo", "--since", "9999-01-01"])
+    assert json.loads(dropped.stdout)["data"]["items"] == []
+
+
+@pytest.mark.usefixtures("patched_cli")
 def test_create_reply_includes_type() -> None:
     result = runner.invoke(
         cli.app, ["doc", "create", "demo", "--from-json", "-"], input=VALID_CREATE

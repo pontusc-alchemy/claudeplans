@@ -248,7 +248,13 @@ class SearchResults(BaseModel):
 
 
 class DocListEntry(BaseModel):
-    """One document in a project listing."""
+    """One document in a project listing.
+
+    `rev` and `updated_at` are what make "what changed since I looked" answerable
+    from the listing alone. Both are `str | None`: a backend that cannot supply the
+    envelope timestamp must report the row rather than drop it, since a required
+    field would fail validation and silently shrink the listing and its counts.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -256,6 +262,9 @@ class DocListEntry(BaseModel):
     title: str
     type: DocType
     status: DocStatus
+    rev: str | None = None
+    updated_at: str | None = None
+    primary_research_ref: str | None = None
 
 
 class DocList(BaseModel):
