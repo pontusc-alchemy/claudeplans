@@ -9,7 +9,12 @@ from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
 from claudeplans_cli.client import PlanClient
-from claudeplans_cli.errors import exit_code_for, handle_errors, kind_for
+from claudeplans_cli.errors import (
+    describe_error,
+    exit_code_for,
+    handle_errors,
+    kind_for,
+)
 from claudeplans_contracts import (
     CorruptDocument,
     ExitCode,
@@ -97,6 +102,32 @@ def test_handle_errors_stale_rev_carries_current_rev(
     assert excinfo.value.exit_code == int(ExitCode.STALE_REV)
     err = json.loads(capsys.readouterr().err)
     assert err == {"error": "stale_rev", "current_rev": "7", "detail": "lost race"}
+
+
+# `doc create-many` embeds describe_error's payload as each failed op's error. If
+# handle_errors regrows its own copy of the mapping, this fails — which is the point.
+@pytest.mark.parametrize(
+    "exc",
+    [
+        StaleRevision("dev/demo/p1", conflict="exists"),
+        StaleRevision("lost race", current_rev="7"),
+        NotFound("dev/demo/ghost"),
+        Forbidden("not your namespace"),
+        httpx.ConnectError("connection refused"),
+    ],
+)
+def test_describe_error_is_exactly_what_handle_errors_emits(
+    exc: Exception, capsys: pytest.CaptureFixture[str]
+) -> None:
+    @handle_errors
+    def boom() -> None:
+        raise exc
+
+    with pytest.raises(typer.Exit) as excinfo:
+        boom()
+    payload, code = describe_error(exc)
+    assert json.loads(capsys.readouterr().err) == payload
+    assert excinfo.value.exit_code == code
 
 
 def test_handle_errors_stale_rev_marks_a_create_collision(

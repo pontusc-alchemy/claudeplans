@@ -34,7 +34,7 @@ from .commands import schema as schema_cmd
 from .commands import search as search_cmd
 from .config import read_config
 from .context import AppContext
-from .errors import ExitCode, _emit_error
+from .errors import ExitCode, emit_error
 
 app = typer.Typer(name="claudeplans", no_args_is_help=True)
 
@@ -106,7 +106,7 @@ def _root(
         # InvalidURL is not a RequestError subclass; it fires at Client construction
         # when the URL is structurally invalid (NUL byte, etc.). Emit a structured
         # transport error so the caller never sees a traceback.
-        _emit_error({"error": "transport", "detail": str(exc)})
+        emit_error({"error": "transport", "detail": str(exc)})
         raise typer.Exit(ExitCode.TRANSPORT) from exc
     ctx.obj = AppContext(
         client=client,

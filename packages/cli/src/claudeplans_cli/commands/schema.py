@@ -117,6 +117,13 @@ def schema(ctx: typer.Context) -> None:
                 ),
                 "write_default": "{rev, warnings}",
                 "write_create": "{slug, type, rev, warnings}",
+                "write_create_many": (
+                    "{created, failed, skipped, ops:[{i, slug, result}]} where "
+                    "result is created|failed|skipped; a created op adds "
+                    "{rev, view_url, warnings} and a failed op adds {error}, "
+                    "carrying the same object `doc create` writes to stderr. "
+                    "Applied ops are always a prefix of the input array"
+                ),
                 "write_task_add": (
                     "{rev, warnings, task:{phase, index, text, checked}}"
                 ),

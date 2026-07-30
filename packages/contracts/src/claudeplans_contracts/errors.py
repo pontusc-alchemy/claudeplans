@@ -89,6 +89,10 @@ class ExitCode(IntEnum):
     arg, bad enum, misplaced global option) and is never raised by us, so domain
     failures avoid it: NOT_FOUND lives at `5` so a genuine not-found is
     distinguishable from a usage error.
+
+    Every other nonzero code carries the meaning "nothing landed". PARTIAL is the
+    sole exception, which is why it needs a code of its own: overloading an existing
+    one for a batch that applied a prefix would falsify that reading everywhere else.
     """
 
     OK = 0
@@ -98,4 +102,5 @@ class ExitCode(IntEnum):
     VALIDATION = 4
     NOT_FOUND = 5
     TRANSPORT = 6  # the service could not be reached (connect/timeout/DNS failure)
+    PARTIAL = 7  # a batch applied a prefix, then stopped; read its ops[] for which
     STALE_REV = 9

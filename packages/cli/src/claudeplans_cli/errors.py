@@ -65,7 +65,39 @@ def kind_for(exc: PlanError) -> str:
     return "error"
 
 
-def _emit_error(payload: dict[str, object]) -> None:
+def describe_error(exc: Exception) -> tuple[dict[str, object], int]:
+    """Map one handled failure to its error payload and exit code.
+
+    Shared rather than inlined in `handle_errors` so a batch verb reports a per-op
+    failure with the exact bytes the single-op verb would have written to stderr. A
+    second copy of this mapping would drift, and a batch is only worth piping if the
+    same branch logic reads both.
+    """
+    if isinstance(exc, StaleRevision):
+        payload: dict[str, object] = {"error": "stale_rev"}
+        if exc.conflict:
+            payload["conflict"] = exc.conflict
+        payload["current_rev"] = exc.current_rev
+        payload["detail"] = str(exc)
+        return payload, int(ExitCode.STALE_REV)
+    if isinstance(exc, PlanError):
+        return {"error": kind_for(exc), "detail": str(exc)}, exit_code_for(exc)
+    if isinstance(exc, PydanticValidationError):
+        return {"error": "validation", "detail": str(exc)}, int(ExitCode.VALIDATION)
+    return {"error": "transport", "detail": str(exc)}, int(ExitCode.TRANSPORT)
+
+
+# The failures handle_errors converts, and the exact set describe_error maps.
+# InvalidURL is named separately: it subclasses Exception, not RequestError.
+HANDLED_ERRORS = (
+    PlanError,
+    PydanticValidationError,
+    httpx.InvalidURL,
+    httpx.RequestError,
+)
+
+
+def emit_error(payload: dict[str, object]) -> None:
     """Print a compact, single-line JSON error object to stderr (never a traceback)."""
     typer.echo(json.dumps(payload, separators=(",", ":")), err=True)
 
@@ -100,26 +132,9 @@ def handle_errors[**P, R](func: Callable[P, R]) -> Callable[P, R]:
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         try:
             return func(*args, **kwargs)
-        except StaleRevision as exc:
-            payload: dict[str, object] = {"error": "stale_rev"}
-            if exc.conflict:
-                payload["conflict"] = exc.conflict
-            payload["current_rev"] = exc.current_rev
-            payload["detail"] = str(exc)
-            _emit_error(payload)
-            raise typer.Exit(ExitCode.STALE_REV) from exc
-        except PlanError as exc:
-            _emit_error({"error": kind_for(exc), "detail": str(exc)})
-            raise typer.Exit(exit_code_for(exc)) from exc
-        except PydanticValidationError as exc:
-            _emit_error({"error": "validation", "detail": str(exc)})
-            raise typer.Exit(ExitCode.VALIDATION) from exc
-        except httpx.InvalidURL as exc:
-            # InvalidURL is not a RequestError subclass; must be caught separately.
-            _emit_error({"error": "transport", "detail": str(exc)})
-            raise typer.Exit(ExitCode.TRANSPORT) from exc
-        except httpx.RequestError as exc:
-            _emit_error({"error": "transport", "detail": str(exc)})
-            raise typer.Exit(ExitCode.TRANSPORT) from exc
+        except HANDLED_ERRORS as exc:
+            payload, code = describe_error(exc)
+            emit_error(payload)
+            raise typer.Exit(code) from exc
 
     return wrapper

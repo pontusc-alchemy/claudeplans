@@ -14,17 +14,20 @@ import sys
 from typing import Annotated
 
 import typer
+from pydantic import TypeAdapter
+from pydantic import ValidationError as PydanticValidationError
 
 from claudeplans_contracts import (
     DocStatus,
     DocType,
     DocumentCreate,
+    ExitCode,
     ValidationError,
     unlink_research_ref,
 )
 
 from ..context import AppContext
-from ..errors import handle_errors
+from ..errors import HANDLED_ERRORS, describe_error, emit_error, handle_errors
 from ..output import emit, emit_obj, emit_phases, emit_write
 
 app = typer.Typer(no_args_is_help=True)
@@ -45,6 +48,29 @@ _FROM_JSON = typer.Option(
         '"sections":[{"anchor":"intro","heading":"Intro"}],'
         '"phases":[{"slug":"ph1","name":"Phase 1","tasks":[{"text":"do x"}]}]}\''
     ),
+)
+_CREATE_MANY_FROM_JSON = typer.Option(
+    "--from-json",
+    help=(
+        "'-' for stdin, or a literal JSON string. A bare JSON ARRAY of the same "
+        "DocumentCreate bodies `doc create --from-json` takes — no wrapper object. "
+        "Order is significant: a body may name only slugs that already exist or "
+        "appear earlier in the array. Links are fields (research_refs / "
+        "primary_research_ref), so a parent and its children are one call, not one "
+        "call plus N links."
+    ),
+)
+_CREATE_MANY_HELP = (
+    "Create many documents in ONE process, applied in array order.\n\n"
+    "What this buys is process count, not request count: N cold starts collapse to "
+    "one, and the N POSTs still happen.\n\n"
+    "Every body is validated before the first request, so a shape error anywhere "
+    "costs zero writes and zero calls (exit 4, nothing landed).\n\n"
+    "Fail-fast: the first failure stops the run and every later op reports "
+    '"skipped", guaranteed unattempted, so the applied set is always a PREFIX of '
+    "the array and resuming is a tail of it. Exit 7 means exactly that; every other "
+    "nonzero exit still means nothing landed. Each failed op's error object is "
+    "byte-identical to what `doc create` writes to stderr for the same failure."
 )
 _SLUG = typer.Option(help="required unless --from-json (which carries its own slug)")
 _TITLE = typer.Option()
@@ -122,6 +148,83 @@ def create(
         payload = DocumentCreate.model_validate(fields)
     reply = c.client.create_document(c.uid, project, payload.model_dump(mode="json"))
     emit_write(reply, full=c.full, slice_="create")
+
+
+def _view_url(c: AppContext, project: str, slug: str) -> str:
+    """The rendered view URL for a document, derived from context with no request."""
+    base = c.base_url.rstrip("/")
+    return f"{base}/v1/users/{c.uid}/projects/{project}/docs/{slug}/view"
+
+
+def _first_op_index(exc: PydanticValidationError) -> int | None:
+    """Which array element failed pre-flight, read off the first error's loc."""
+    for err in exc.errors():
+        loc = err.get("loc") or ()
+        if loc and isinstance(loc[0], int):
+            return loc[0]
+    return None
+
+
+@app.command("create-many", help=_CREATE_MANY_HELP)
+@handle_errors
+def create_many(
+    ctx: typer.Context,
+    project: str,
+    from_json: Annotated[str, _CREATE_MANY_FROM_JSON],
+) -> None:
+    c: AppContext = ctx.obj
+    raw = sys.stdin.read() if from_json == "-" else from_json
+    try:
+        bodies = TypeAdapter(list[DocumentCreate]).validate_json(raw)
+    except PydanticValidationError as exc:
+        payload, code = describe_error(exc)
+        emit_error({"op_index": _first_op_index(exc), **payload})
+        raise typer.Exit(code) from exc
+
+    ops: list[dict[str, object]] = []
+    created = 0
+    failed = 0
+    exit_code = int(ExitCode.OK)
+    for i, body in enumerate(bodies):
+        if failed:
+            ops.append({"i": i, "slug": body.slug, "result": "skipped"})
+            continue
+        try:
+            reply = c.client.create_document(
+                c.uid, project, body.model_dump(mode="json")
+            )
+        except HANDLED_ERRORS as exc:
+            payload, code = describe_error(exc)
+            ops.append(
+                {"i": i, "slug": body.slug, "result": "failed", "error": payload}
+            )
+            failed = 1
+            # Op 0 failing means nothing landed, so it reports the op's own code —
+            # identical semantics to the single-op verb.
+            exit_code = int(ExitCode.PARTIAL) if created else code
+            continue
+        created += 1
+        ops.append(
+            {
+                "i": i,
+                "slug": body.slug,
+                "result": "created",
+                "rev": reply.rev,
+                "view_url": _view_url(c, project, body.slug),
+                "warnings": reply.warnings,
+            }
+        )
+
+    emit_obj(
+        {
+            "created": created,
+            "failed": failed,
+            "skipped": len(bodies) - created - failed,
+            "ops": ops,
+        }
+    )
+    if exit_code:
+        raise typer.Exit(exit_code)
 
 
 @app.command()
@@ -324,5 +427,4 @@ def rev(
 def view(ctx: typer.Context, project: str, slug: str) -> None:
     """Print the rendered view URL for a document (no network request)."""
     c: AppContext = ctx.obj
-    base = c.base_url.rstrip("/")
-    emit_obj({"url": f"{base}/v1/users/{c.uid}/projects/{project}/docs/{slug}/view"})
+    emit_obj({"url": _view_url(c, project, slug)})
