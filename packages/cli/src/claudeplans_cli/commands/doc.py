@@ -51,6 +51,14 @@ _TITLE = typer.Option()
 _FIELDS = typer.Option(help="comma-separated")
 _SECTION = typer.Option()
 _PHASE = typer.Option()
+_OUTLINE = typer.Option(
+    "--outline",
+    help=(
+        "structure only, no prose: section headings with their anchor/level/"
+        "placement, phases with task counts, and the doc's refs. Same single "
+        "request as a full get — the body is dropped client-side, not unfetched."
+    ),
+)
 _REV = typer.Option(
     "--rev",
     help="current rev; this write is position-sensitive (see 'doc rev')",
@@ -133,14 +141,18 @@ def get(
     fields: Annotated[str | None, _FIELDS] = None,
     section: Annotated[str | None, _SECTION] = None,
     phase: Annotated[str | None, _PHASE] = None,
+    outline: Annotated[bool, _OUTLINE] = False,
 ) -> None:
-    """Fetch a document, optionally projecting fields / a section / a phase."""
+    """Fetch a document, projecting fields / a section / a phase / the outline."""
     c: AppContext = ctx.obj
-    if sum(x is not None for x in (fields, section, phase)) > 1:
-        raise ValidationError("choose at most one of --fields/--section/--phase")
+    chosen = [fields is not None, section is not None, phase is not None, outline]
+    if sum(chosen) > 1:
+        raise ValidationError(
+            "choose at most one of --fields/--section/--phase/--outline"
+        )
     reply = c.client.get_document(c.uid, project, slug)
     field_list = [f.strip() for f in fields.split(",")] if fields is not None else None
-    emit(reply, fields=field_list, section=section, phase=phase)
+    emit(reply, fields=field_list, section=section, phase=phase, outline=outline)
 
 
 @app.command()

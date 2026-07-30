@@ -146,3 +146,102 @@ def test_emit_write_create_full_prints_full_envelope(
     emit_write(_REPLY, full=True, slice_="create")
     parsed = _captured(capsys)
     assert parsed["data"] == _DATA
+
+
+_OUTLINE_DATA = {
+    "slug": "p1",
+    "type": "plan",
+    "title": "Plan One",
+    "status": "draft",
+    "description": "a description",
+    "primary_research_ref": "r1",
+    "research_refs": ["r1", "r2"],
+    "sections": [
+        {
+            "anchor": "intro",
+            "heading": "Intro",
+            "level": 2,
+            "placement": "lead",
+            "body": "a very long body " * 200,
+        },
+        {
+            "anchor": "outro",
+            "heading": "Outro",
+            "level": 3,
+            "placement": "trail",
+            "body": "more prose " * 200,
+        },
+    ],
+    "phases": [
+        {
+            "slug": "a",
+            "name": "Alpha",
+            "status": "doing",
+            "intro": "phase prose " * 100,
+            "tasks": [
+                {"text": "t1", "checked": True},
+                {"text": "t2", "checked": False},
+                {"text": "t3", "checked": True},
+            ],
+        }
+    ],
+}
+
+
+def test_emit_outline_keeps_structure_and_drops_prose(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    emit(Reply(rev="7", data=_OUTLINE_DATA, warnings=[]), outline=True)
+    data = _captured(capsys)["data"]
+    assert data["sections"] == [
+        {"anchor": "intro", "heading": "Intro", "level": 2, "placement": "lead"},
+        {"anchor": "outro", "heading": "Outro", "level": 3, "placement": "trail"},
+    ]
+    assert data["phases"] == [
+        {
+            "slug": "a",
+            "name": "Alpha",
+            "status": "doing",
+            "tasks": {"total": 3, "checked": 2},
+        }
+    ]
+    assert data["primary_research_ref"] == "r1"
+    assert data["research_refs"] == ["r1", "r2"]
+
+
+def test_emit_outline_carries_no_prose_anywhere(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # The whole point is that the body never reaches the reader. A key added to
+    # Section or Phase later must not silently start smuggling prose through.
+    emit(Reply(rev="7", data=_OUTLINE_DATA, warnings=[]), outline=True)
+    raw = capsys.readouterr().out
+    assert "a very long body" not in raw
+    assert "phase prose" not in raw
+    assert "a description" not in raw
+    assert len(raw) < 400
+
+
+def test_emit_outline_states_render_order_not_just_membership(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # placement decides whether a section renders before or after the phases, so an
+    # outline without it describes a document that renders in a different order.
+    emit(Reply(rev="7", data=_OUTLINE_DATA, warnings=[]), outline=True)
+    placements = [s["placement"] for s in _captured(capsys)["data"]["sections"]]
+    assert placements == ["lead", "trail"]
+
+
+def test_emit_outline_on_a_doc_with_no_structure(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # A research doc has no phases; the keys are still present so a reader branches
+    # on emptiness, never on key presence.
+    emit(
+        Reply(rev="1", data={"slug": "r1", "type": "research"}, warnings=[]),
+        outline=True,
+    )
+    data = _captured(capsys)["data"]
+    assert data["sections"] == [] and data["phases"] == []
+    assert data["research_refs"] == []
+    assert data["primary_research_ref"] is None

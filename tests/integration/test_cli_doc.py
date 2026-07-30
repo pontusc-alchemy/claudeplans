@@ -715,3 +715,61 @@ def test_doc_create_date_rejects_non_iso() -> None:
         ],
     )
     assert result.exit_code == ExitCode.VALIDATION
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_get_outline_is_one_request_and_drops_the_body() -> None:
+    """Same single GET as a full read; the body is dropped client-side."""
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_NESTED_CREATE
+    )
+    added = runner.invoke(
+        cli.app,
+        ["section", "add", "demo", "nested", "body", "Body", "--body", "x" * 4000],
+    )
+    assert added.exit_code == 0, added.stderr
+    full = runner.invoke(cli.app, ["doc", "get", "demo", "nested"])
+    outline = runner.invoke(cli.app, ["doc", "get", "demo", "nested", "--outline"])
+    assert outline.exit_code == 0, outline.stderr
+    data = json.loads(outline.stdout)["data"]
+    assert [s["anchor"] for s in data["sections"]] == ["intro", "body"]
+    assert data["sections"][0]["placement"] == "lead"
+    assert data["phases"] == [
+        {
+            "slug": "ph1",
+            "name": "Phase 1",
+            "status": "todo",
+            "tasks": {"total": 2, "checked": 0},
+        }
+    ]
+    assert "x" * 4000 not in outline.stdout
+    assert len(outline.stdout) * 4 < len(full.stdout)
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_get_outline_counts_checked_tasks() -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_NESTED_CREATE
+    )
+    rev = runner.invoke(cli.app, ["doc", "rev", "demo", "nested"]).stdout.strip()
+    toggled = runner.invoke(
+        cli.app, ["task", "toggle", "demo", "nested", "ph1", "0", "--rev", rev]
+    )
+    assert toggled.exit_code == 0, toggled.stderr
+    outline = runner.invoke(cli.app, ["doc", "get", "demo", "nested", "--outline"])
+    assert json.loads(outline.stdout)["data"]["phases"][0]["tasks"] == {
+        "total": 2,
+        "checked": 1,
+    }
+
+
+@pytest.mark.usefixtures("patched_cli")
+def test_doc_get_outline_excludes_the_other_projections() -> None:
+    runner.invoke(
+        cli.app, ["doc", "create", "demo", "--from-json", "-"], input=_NESTED_CREATE
+    )
+    result = runner.invoke(
+        cli.app, ["doc", "get", "demo", "nested", "--outline", "--fields", "slug"]
+    )
+    assert_validation_exit(result)
+    assert "--outline" in json.loads(result.stderr)["detail"]

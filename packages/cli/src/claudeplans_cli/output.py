@@ -30,25 +30,70 @@ def _compact(obj: object) -> None:
     print(json.dumps(obj, separators=(",", ":")))
 
 
+def _outline(data: dict) -> dict[str, object]:
+    """Structure without prose: what a document contains, not what it says.
+
+    `placement` rides along because it decides whether a section renders before or
+    after the phases — an outline that omits it states the wrong order. Task counts
+    replace the task list: how much is left is the question an outline answers.
+    """
+    sections = [
+        {
+            "anchor": s.get("anchor"),
+            "heading": s.get("heading"),
+            "level": s.get("level"),
+            "placement": s.get("placement"),
+        }
+        for s in data.get("sections", [])
+    ]
+    phases = []
+    for p in data.get("phases", []):
+        tasks = p.get("tasks", [])
+        phases.append(
+            {
+                "slug": p.get("slug"),
+                "name": p.get("name"),
+                "status": p.get("status"),
+                "tasks": {
+                    "total": len(tasks),
+                    "checked": sum(1 for t in tasks if t.get("checked")),
+                },
+            }
+        )
+    return {
+        "slug": data.get("slug"),
+        "type": data.get("type"),
+        "status": data.get("status"),
+        "title": data.get("title"),
+        "sections": sections,
+        "phases": phases,
+        "primary_research_ref": data.get("primary_research_ref"),
+        "research_refs": data.get("research_refs", []),
+    }
+
+
 def emit(
     reply: Reply,
     *,
     fields: list[str] | None = None,
     section: str | None = None,
     phase: str | None = None,
+    outline: bool = False,
 ) -> None:
     """Print a read reply as compact JSON, optionally projecting the document.
 
-    fields/section/phase are mutually exclusive; the command layer passes at most
-    one. With none, the full `{"rev", "data", "warnings"}` envelope is printed.
+    fields/section/phase/outline are mutually exclusive; the command layer passes at
+    most one. With none, the full `{"rev", "data", "warnings"}` envelope is printed.
     This function is for READ paths only; write paths use `emit_write`.
     """
     data = reply.data
-    if fields is not None and data is not None:
+    if outline and data is not None:
+        projected: object = _outline(data)
+    elif fields is not None and data is not None:
         missing = [k for k in fields if k not in data]
         if missing:
             raise ValidationError(f"unknown field(s): {', '.join(missing)}")
-        projected: object = {k: data[k] for k in fields}
+        projected = {k: data[k] for k in fields}
     elif section is not None and data is not None:
         found_section = next(
             (s for s in data.get("sections", []) if s.get("anchor") == section),
